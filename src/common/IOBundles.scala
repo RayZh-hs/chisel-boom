@@ -6,6 +6,14 @@ import Configurables._
 import Configurables.Derived._
 
 /**
+  * Instruction Fetch output bundle definition.
+  */
+class IfOutBundle extends Bundle {
+    val pc = UInt(32.W)
+    val inst = UInt(32.W)
+}
+
+/**
   * Micro-operation bundle definition.
   *
   * Full uop structure, used in Decode -> Dispatch stage. Broken up when pushed to IQ and ROB.
