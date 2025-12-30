@@ -10,24 +10,12 @@ This repository is organized as follows:
 ├── notes/                   # Personal/internal notes
 ├── src/                     # Chisel/Scala sources
 │   ├── common/              # Shared types/config/bundles
-│   │   ├── Configurables.scala
-│   │   ├── IOBundles.scala
-│   │   └── MicroOps.scala
 │   ├── components/          # Core microarchitecture components
-│   │   ├── backend/
-│   │   ├── frontend/
-│   │   │   ├── InstDecoder.scala
-│   │   │   └── InstFetcher.scala
-│   │   ├── structures/
-│   │   └── wrappers/        # Memory/regfile wrappers + local docs
-│   │       ├── InstructionMemory.scala
-│   │       ├── Memory.scala
-│   │       ├── PhysicalRegisterFile.scala
-│   │       └── README.md
+│   │   ├── backend/         # Backend components
+│   │   ├── frontend/        # Frontend components
+│   │   ├── structures/      # Structural components that build on predefined data structures
+│   │   └── wrappers/        # Wrapper modules around external components like memories
 │   ├── core/                # Top-level core integration
-│   │   ├── BoomCore.scala
-│   │   └── BoomCoreSections.scala
-│   └── utility/             # Utilities/helpers
-│       └── CycleAwareModule.scala
+│   └── utility/             # Utilities/helpers: things that can be reused across projects
 └── test/                    # Tests
 ```
