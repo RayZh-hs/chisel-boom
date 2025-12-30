@@ -1,4 +1,4 @@
-# Project structure
+# Project Structure
 
 This repository is organized as follows:
 
