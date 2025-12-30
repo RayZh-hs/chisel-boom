@@ -12,7 +12,7 @@ Originally part of the Integer Issue Queue (IIQ) in BOOM, the ALQ has been separ
 
 Originally part of the Integer Issue Queue (IIQ) in BOOM, the BRU has been separated to handle all branch and comparison operations since in the simulation system the small instruction window size means and low memory latency means that stress will be placed on IIQ entries.
 
-### Memory Control Unit (MCU)
+### Load Store Queue (LSQ)
 
 Responsible for handling all memory-related operations. Includes:
 
