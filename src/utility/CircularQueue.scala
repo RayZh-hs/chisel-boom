@@ -4,66 +4,68 @@ import chisel3._
 import chisel3.util._
 
 class CircularQueue[T <: Data](gen: T, entries: Int) extends Module {
-  val io = IO(new Bundle {
-    val enq = Flipped(Decoupled(gen))
-    val deq = Decoupled(gen)
-    val count = Output(UInt(log2Ceil(entries + 1).W))
-    
-    // Pointers are useful for ROBs to use as IDs (ROB Tags)
-    val headPtr = Output(UInt(log2Ceil(entries).W))
-    val tailPtr = Output(UInt(log2Ceil(entries).W))
-    val flush = Input(Bool())
-  })
+    val io = IO(new Bundle {
+        val enq = Flipped(Decoupled(gen))
+        val deq = Decoupled(gen)
+        val count = Output(UInt(log2Ceil(entries + 1).W))
 
-  val ram = Reg(Vec(entries, gen))
-  val head = RegInit(0.U(log2Ceil(entries).W))
-  val tail = RegInit(0.U(log2Ceil(entries).W))
-  val maybeFull = RegInit(false.B)
+        // Pointers are useful for ROBs to use as IDs (ROB Tags)
+        val headPtr = Output(UInt(log2Ceil(entries).W))
+        val tailPtr = Output(UInt(log2Ceil(entries).W))
+        val flush = Input(Bool())
+    })
 
-  val ptrMatch = head === tail
-  val empty = ptrMatch && !maybeFull
-  val full = ptrMatch && maybeFull
+    val ram = Reg(Vec(entries, gen))
+    val head = RegInit(0.U(log2Ceil(entries).W))
+    val tail = RegInit(0.U(log2Ceil(entries).W))
+    val maybeFull = RegInit(false.B)
 
-  val doEnq = io.enq.ready && io.enq.valid
-  val doDeq = io.deq.ready && io.deq.valid
+    val ptrMatch = head === tail
+    val empty = ptrMatch && !maybeFull
+    val full = ptrMatch && maybeFull
 
-  // Enqueue logic
-  when(doEnq) {
-    ram(tail) := io.enq.bits
-    tail := Mux(tail === (entries - 1).U, 0.U, tail + 1.U)
-  }
+    val doEnq = io.enq.ready && io.enq.valid
+    val doDeq = io.deq.ready && io.deq.valid
 
-  // Dequeue logic
-  when(doDeq) {
-    head := Mux(head === (entries - 1).U, 0.U, head + 1.U)
-  }
+    // Enqueue logic
+    when(doEnq) {
+        ram(tail) := io.enq.bits
+        tail := Mux(tail === (entries - 1).U, 0.U, tail + 1.U)
+    }
 
-  // Full/Empty state update
-  when(doEnq =/= doDeq) {
-    maybeFull := doEnq
-  }
+    // Dequeue logic
+    when(doDeq) {
+        head := Mux(head === (entries - 1).U, 0.U, head + 1.U)
+    }
 
-  // Flush logic
-  when(io.flush) {
-    head := 0.U
-    tail := 0.U
-    maybeFull := false.B
-  }
+    // Full/Empty state update
+    when(doEnq =/= doDeq) {
+        maybeFull := doEnq
+    }
 
-  io.enq.ready := !full
-  io.deq.valid := !empty
-  io.deq.bits := ram(head)
+    // Flush logic
+    when(io.flush) {
+        head := 0.U
+        tail := 0.U
+        maybeFull := false.B
+    }
 
-  io.headPtr := head
-  io.tailPtr := tail
+    io.enq.ready := !full
+    io.deq.valid := !empty
+    io.deq.bits := ram(head)
 
-  // Calculate count
-  val ptrDiff = tail - head
-  if (isPow2(entries)) {
-    io.count := Mux(full, entries.U, ptrDiff)
-  } else {
-    io.count := Mux(full, entries.U,
-      Mux(tail >= head, ptrDiff, entries.U + ptrDiff))
-  }
+    io.headPtr := head
+    io.tailPtr := tail
+
+    // Calculate count
+    val ptrDiff = tail - head
+    if (isPow2(entries)) {
+        io.count := Mux(full, entries.U, ptrDiff)
+    } else {
+        io.count := Mux(
+          full,
+          entries.U,
+          Mux(tail >= head, ptrDiff, entries.U + ptrDiff)
+        )
+    }
 }
-

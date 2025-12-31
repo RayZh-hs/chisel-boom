@@ -2,13 +2,13 @@ import mill._
 import mill.scalalib._
 
 object `package` extends RootModule with ScalaModule {
-  def scalaVersion = "2.13.18"
+    def scalaVersion = "2.13.18"
 
-  def ivyDeps = Agg(
-    ivy"org.chipsalliance::chisel:7.4.0"
-  )
+    def ivyDeps = Agg(
+      ivy"org.chipsalliance::chisel:7.4.0"
+    )
 
-  def scalacPluginIvyDeps = Agg(
-    ivy"org.chipsalliance:chisel-plugin_2.13.18:7.4.0"
-  )
+    def scalacPluginIvyDeps = Agg(
+      ivy"org.chipsalliance:chisel-plugin_2.13.18:7.4.0"
+    )
 }

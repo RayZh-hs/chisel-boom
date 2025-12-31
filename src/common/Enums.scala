@@ -5,35 +5,33 @@ import chisel3.util._
 import Configurables._
 import Configurables.Derived._
 
-/**
- * Functional unit types.
- * 
- * Includes: `ALU`, `BRU`, `MEM`.
- */
+/** Functional unit types.
+  *
+  * Includes: `ALU`, `BRU`, `MEM`.
+  */
 object FunUnitType extends ChiselEnum {
     val ALU, BRU, MEM = Value
 }
 
-/**
- * ALU operation types.
- * 
- * Includes: `ADD`, `SUB`, `AND`, `OR`, `XOR`, `SLL`, `SRL`, `SRA`, `SLT`, `SLTU`, `LUI`.
-*/
+/** ALU operation types.
+  *
+  * Includes: `ADD`, `SUB`, `AND`, `OR`, `XOR`, `SLL`, `SRL`, `SRA`, `SLT`,
+  * `SLTU`, `LUI`.
+  */
 object ALUOpType extends ChiselEnum {
     val ADD, SUB, AND, OR, XOR, SLL, SRL, SRA, SLT, SLTU, LUI = Value
 }
 
-/**
-  * Branch unit operation types.
-  * 
-  * Includes: `CBR` (conditional branch), `JAL` (jump and link), `JALR` (jump and link register), `AUIPC` (add upper immediate to PC).
+/** Branch unit operation types.
+  *
+  * Includes: `CBR` (conditional branch), `JAL` (jump and link), `JALR` (jump
+  * and link register), `AUIPC` (add upper immediate to PC).
   */
 object BRUOpType extends ChiselEnum {
     val CBR, JAL, JALR, AUIPC = Value
 }
 
-/**
-  * Comparison operation types.
+/** Comparison operation types.
   *
   * Includes: `EQ`, `NEQ`, `LT`, `LTU`, `GE`, `GEU`.
   */
@@ -41,8 +39,7 @@ object CmpOpType extends ChiselEnum {
     val EQ, NEQ, LT, LTU, GE, GEU = Value
 }
 
-/**
-  * Memory operation width types.
+/** Memory operation width types.
   *
   * Includes: `BYTE`, `HALF`, `WORD`, `DWORD`.
   */

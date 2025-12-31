@@ -16,24 +16,30 @@ class InstDecoder extends Module {
 
     // Extract fields
     val opcode = inst(6, 0)
-    val rd     = inst(11, 7)
+    val rd = inst(11, 7)
     val funct3 = inst(14, 12)
-    val rs1    = inst(19, 15)
-    val rs2    = inst(24, 20)
+    val rs1 = inst(19, 15)
+    val rs2 = inst(24, 20)
     val funct7 = inst(31, 25)
 
     // Immediates
     private def signExt(x: UInt, len: Int): UInt = {
         val w = x.getWidth
-        if (w >= len) x(len-1, 0)
-        else Cat(Fill(len - w, x(w-1)), x)
+        if (w >= len) x(len - 1, 0)
+        else Cat(Fill(len - w, x(w - 1)), x)
     }
 
     val iImm = signExt(inst(31, 20), 32)
     val sImm = signExt(inst(31, 25) ## inst(11, 7), 32)
-    val bImm = signExt(inst(31) ## inst(7) ## inst(30, 25) ## inst(11, 8) ## 0.U(1.W), 32)
+    val bImm = signExt(
+      inst(31) ## inst(7) ## inst(30, 25) ## inst(11, 8) ## 0.U(1.W),
+      32
+    )
     val uImm = signExt(inst(31, 12) ## 0.U(12.W), 32)
-    val jImm = signExt(inst(31) ## inst(19, 12) ## inst(20) ## inst(30, 21) ## 0.U(1.W), 32)
+    val jImm = signExt(
+      inst(31) ## inst(19, 12) ## inst(20) ## inst(30, 21) ## 0.U(1.W),
+      32
+    )
 
     // Default signals
     val fUnitType = Wire(FunUnitType())
@@ -58,118 +64,118 @@ class InstDecoder extends Module {
     imm := 0.U
 
     // Decoding logic
-    when (opcode === "b0110111".U) { // LUI
+    when(opcode === "b0110111".U) { // LUI
         fUnitType := FunUnitType.ALU
         aluOpType := ALUOpType.LUI
         useImm := true.B
         imm := uImm
-    } .elsewhen (opcode === "b0010111".U) { // AUIPC
+    }.elsewhen(opcode === "b0010111".U) { // AUIPC
         fUnitType := FunUnitType.BRU
         bruOpType := BRUOpType.AUIPC
         useImm := true.B
         imm := uImm
-    } .elsewhen (opcode === "b1101111".U) { // JAL
+    }.elsewhen(opcode === "b1101111".U) { // JAL
         fUnitType := FunUnitType.BRU
         bruOpType := BRUOpType.JAL
         useImm := true.B
         imm := jImm
-    } .elsewhen (opcode === "b1100111".U) { // JALR
+    }.elsewhen(opcode === "b1100111".U) { // JALR
         fUnitType := FunUnitType.BRU
         bruOpType := BRUOpType.JALR
         useImm := true.B
         imm := iImm
-    } .elsewhen (opcode === "b1100011".U) { // BRANCH
+    }.elsewhen(opcode === "b1100011".U) { // BRANCH
         fUnitType := FunUnitType.BRU
         bruOpType := BRUOpType.CBR
         useImm := true.B
         imm := bImm
-        switch (funct3) {
-            is (0.U) { cmpOpType := CmpOpType.EQ }
-            is (1.U) { cmpOpType := CmpOpType.NEQ }
-            is (4.U) { cmpOpType := CmpOpType.LT }
-            is (5.U) { cmpOpType := CmpOpType.GE }
-            is (6.U) { cmpOpType := CmpOpType.LTU }
-            is (7.U) { cmpOpType := CmpOpType.GEU }
+        switch(funct3) {
+            is(0.U) { cmpOpType := CmpOpType.EQ }
+            is(1.U) { cmpOpType := CmpOpType.NEQ }
+            is(4.U) { cmpOpType := CmpOpType.LT }
+            is(5.U) { cmpOpType := CmpOpType.GE }
+            is(6.U) { cmpOpType := CmpOpType.LTU }
+            is(7.U) { cmpOpType := CmpOpType.GEU }
         }
-    } .elsewhen (opcode === "b0000011".U) { // LOAD
+    }.elsewhen(opcode === "b0000011".U) { // LOAD
         fUnitType := FunUnitType.MEM
         isLoad := true.B
         useImm := true.B
         imm := iImm
-        switch (funct3) {
-            is (0.U) { memOpWidth := MemOpWidth.BYTE }
-            is (1.U) { memOpWidth := MemOpWidth.HALF }
-            is (2.U) { memOpWidth := MemOpWidth.WORD }
-            is (4.U) { memOpWidth := MemOpWidth.BYTE } // LBU
-            is (5.U) { memOpWidth := MemOpWidth.HALF } // LHU
+        switch(funct3) {
+            is(0.U) { memOpWidth := MemOpWidth.BYTE }
+            is(1.U) { memOpWidth := MemOpWidth.HALF }
+            is(2.U) { memOpWidth := MemOpWidth.WORD }
+            is(4.U) { memOpWidth := MemOpWidth.BYTE } // LBU
+            is(5.U) { memOpWidth := MemOpWidth.HALF } // LHU
         }
-    } .elsewhen (opcode === "b0100011".U) { // STORE
+    }.elsewhen(opcode === "b0100011".U) { // STORE
         fUnitType := FunUnitType.MEM
         isStore := true.B
         useImm := true.B
         imm := sImm
-        switch (funct3) {
-            is (0.U) { memOpWidth := MemOpWidth.BYTE }
-            is (1.U) { memOpWidth := MemOpWidth.HALF }
-            is (2.U) { memOpWidth := MemOpWidth.WORD }
+        switch(funct3) {
+            is(0.U) { memOpWidth := MemOpWidth.BYTE }
+            is(1.U) { memOpWidth := MemOpWidth.HALF }
+            is(2.U) { memOpWidth := MemOpWidth.WORD }
         }
-    } .elsewhen (opcode === "b0010011".U) { // ALU I-Type
+    }.elsewhen(opcode === "b0010011".U) { // ALU I-Type
         fUnitType := FunUnitType.ALU
         useImm := true.B
         imm := iImm
-        switch (funct3) {
-            is (0.U) { aluOpType := ALUOpType.ADD } // ADDI
-            is (2.U) { aluOpType := ALUOpType.SLT } // SLTI
-            is (3.U) { aluOpType := ALUOpType.SLTU } // SLTIU
-            is (4.U) { aluOpType := ALUOpType.XOR } // XORI
-            is (6.U) { aluOpType := ALUOpType.OR } // ORI
-            is (7.U) { aluOpType := ALUOpType.AND } // ANDI
-            is (1.U) { aluOpType := ALUOpType.SLL } // SLLI
-            is (5.U) { 
-                when (funct7(5)) { aluOpType := ALUOpType.SRA } // SRAI
-                .otherwise { aluOpType := ALUOpType.SRL } // SRLI
+        switch(funct3) {
+            is(0.U) { aluOpType := ALUOpType.ADD } // ADDI
+            is(2.U) { aluOpType := ALUOpType.SLT } // SLTI
+            is(3.U) { aluOpType := ALUOpType.SLTU } // SLTIU
+            is(4.U) { aluOpType := ALUOpType.XOR } // XORI
+            is(6.U) { aluOpType := ALUOpType.OR } // ORI
+            is(7.U) { aluOpType := ALUOpType.AND } // ANDI
+            is(1.U) { aluOpType := ALUOpType.SLL } // SLLI
+            is(5.U) {
+                when(funct7(5)) { aluOpType := ALUOpType.SRA } // SRAI
+                    .otherwise { aluOpType := ALUOpType.SRL } // SRLI
             }
         }
-    } .elsewhen (opcode === "b0110011".U) { // ALU R-Type
+    }.elsewhen(opcode === "b0110011".U) { // ALU R-Type
         fUnitType := FunUnitType.ALU
         useImm := false.B
-        switch (funct3) {
-            is (0.U) { 
-                when (funct7(5)) { aluOpType := ALUOpType.SUB }
-                .otherwise { aluOpType := ALUOpType.ADD }
+        switch(funct3) {
+            is(0.U) {
+                when(funct7(5)) { aluOpType := ALUOpType.SUB }
+                    .otherwise { aluOpType := ALUOpType.ADD }
             }
-            is (1.U) { aluOpType := ALUOpType.SLL }
-            is (2.U) { aluOpType := ALUOpType.SLT }
-            is (3.U) { aluOpType := ALUOpType.SLTU }
-            is (4.U) { aluOpType := ALUOpType.XOR }
-            is (5.U) { 
-                when (funct7(5)) { aluOpType := ALUOpType.SRA }
-                .otherwise { aluOpType := ALUOpType.SRL }
+            is(1.U) { aluOpType := ALUOpType.SLL }
+            is(2.U) { aluOpType := ALUOpType.SLT }
+            is(3.U) { aluOpType := ALUOpType.SLTU }
+            is(4.U) { aluOpType := ALUOpType.XOR }
+            is(5.U) {
+                when(funct7(5)) { aluOpType := ALUOpType.SRA }
+                    .otherwise { aluOpType := ALUOpType.SRL }
             }
-            is (6.U) { aluOpType := ALUOpType.OR }
-            is (7.U) { aluOpType := ALUOpType.AND }
+            is(6.U) { aluOpType := ALUOpType.OR }
+            is(7.U) { aluOpType := ALUOpType.AND }
         }
     }
 
     // Register indices
     val validLdst = opcode === "b0110111".U || // LUI
-                    opcode === "b0010111".U || // AUIPC
-                    opcode === "b1101111".U || // JAL
-                    opcode === "b1100111".U || // JALR
-                    opcode === "b0000011".U || // LOAD
-                    opcode === "b0010011".U || // ALU I
-                    opcode === "b0110011".U    // ALU R
+        opcode === "b0010111".U || // AUIPC
+        opcode === "b1101111".U || // JAL
+        opcode === "b1100111".U || // JALR
+        opcode === "b0000011".U || // LOAD
+        opcode === "b0010011".U || // ALU I
+        opcode === "b0110011".U // ALU R
 
     val validLrs1 = opcode === "b1100111".U || // JALR
-                    opcode === "b1100011".U || // BRANCH
-                    opcode === "b0000011".U || // LOAD
-                    opcode === "b0100011".U || // STORE
-                    opcode === "b0010011".U || // ALU I
-                    opcode === "b0110011".U    // ALU R
+        opcode === "b1100011".U || // BRANCH
+        opcode === "b0000011".U || // LOAD
+        opcode === "b0100011".U || // STORE
+        opcode === "b0010011".U || // ALU I
+        opcode === "b0110011".U // ALU R
 
     val validLrs2 = opcode === "b1100011".U || // BRANCH
-                    opcode === "b0100011".U || // STORE
-                    opcode === "b0110011".U    // ALU R
+        opcode === "b0100011".U || // STORE
+        opcode === "b0110011".U // ALU R
 
     val ldst = Mux(validLdst, rd, 0.U)
     val lrs1 = Mux(validLrs1, rs1, 0.U)

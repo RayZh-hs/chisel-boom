@@ -5,24 +5,25 @@ import chisel3.util._
 import Configurables._
 import Configurables.Derived._
 
-/**
-  * Instruction Fetch output bundle definition.
+/** Instruction Fetch output bundle definition.
   */
 class FetchToDecodeBundle extends Bundle {
     val pc = UInt(32.W)
     val inst = UInt(32.W)
 }
 
-/**
-  * Micro-operation bundle definition.
+/** Micro-operation bundle definition.
   *
-  * Full uop structure, used in Decode -> Dispatch stage. Broken up when pushed to IQ and ROB.
-  * 
-  * @note Memory access uops assume: `paddr` is `prs1`, `psrc` is `prs2`, `pdst` is `pdst`.
+  * Full uop structure, used in Decode -> Dispatch stage. Broken up when pushed
+  * to IQ and ROB.
+  *
+  * @note
+  *   Memory access uops assume: `paddr` is `prs1`, `psrc` is `prs2`, `pdst` is
+  *   `pdst`.
   */
 class DecodeToDispatchBundle extends BrFlagBundle {
     // - categorizing operation
-    val fUnitType = FunUnitType()   // functional unit type
+    val fUnitType = FunUnitType() // functional unit type
     val aluOpType = ALUOpType()
     val bruOpType = BRUOpType()
     val cmpOpType = CmpOpType()
@@ -33,7 +34,7 @@ class DecodeToDispatchBundle extends BrFlagBundle {
     // - register renaming info
     val lrs1, lrs2, ldst = UInt(5.W) // logical registers
     val prs1, prs2, pdst = UInt(PREG_WIDTH.W) // physical registers
-    val stalePdst = UInt(PREG_WIDTH.W)  // stale physical destination
+    val stalePdst = UInt(PREG_WIDTH.W) // stale physical destination
     val useImm = Bool()
     val imm = UInt(32.W)
     // - memory access info
