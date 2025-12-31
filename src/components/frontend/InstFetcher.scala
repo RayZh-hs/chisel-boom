@@ -11,7 +11,7 @@ class InstFetcher extends CycleAwareModule {
         // PC overwrite logic
         val pcOverwrite = Input(Valid(UInt(32.W))) 
         // Inst outputs
-        val ifOut = Decoupled(new IfOutBundle())
+        val ifOut = Decoupled(new FetchToDecodeBundle())
 
         // Memory interface
         val instAddr = Output(UInt(32.W))
@@ -22,7 +22,7 @@ class InstFetcher extends CycleAwareModule {
 
     val pc = RegInit(0.U(32.W))
 
-    val queue = Module(new Queue(new IfOutBundle, entries = 3, pipe = true, flow = true))
+    val queue = Module(new Queue(new FetchToDecodeBundle, entries = 3, pipe = true, flow = true))
 
     val can_fetch = queue.io.count <= 1.U
     

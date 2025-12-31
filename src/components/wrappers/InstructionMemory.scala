@@ -9,6 +9,4 @@ class InstructionMemory extends Module {
         val addr = Input(UInt(32.W))
         val inst = Output(UInt(32.W))
     })
-
-    
 }

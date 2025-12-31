@@ -8,7 +8,7 @@ import Configurables.Derived._
 /**
   * Instruction Fetch output bundle definition.
   */
-class IfOutBundle extends Bundle {
+class FetchToDecodeBundle extends Bundle {
     val pc = UInt(32.W)
     val inst = UInt(32.W)
 }
@@ -20,7 +20,7 @@ class IfOutBundle extends Bundle {
   * 
   * @note Memory access uops assume: `paddr` is `prs1`, `psrc` is `prs2`, `pdst` is `pdst`.
   */
-class UOpBundle extends BrFlagBundle {
+class DecodeToDispatchBundle extends BrFlagBundle {
     // - categorizing operation
     val fUnitType = FunUnitType()   // functional unit type
     val aluOpType = ALUOpType()
@@ -43,20 +43,20 @@ class UOpBundle extends BrFlagBundle {
     // pdst is assumed to be pdst
 }
 
-class UOpToROBBundle extends BrFlagBundle {
+class DispatchToROBBundle extends BrFlagBundle {
     val ldst = UInt(5.W)
     val pdst = UInt(PREG_WIDTH.W)
     val stalePdst = UInt(PREG_WIDTH.W)
 }
 
-class UOpToALQBundle extends BrFlagBundle {
+class DispatchToALQBundle extends BrFlagBundle {
     val aluOpType = ALUOpType()
     val prs1, prs2 = UInt(PREG_WIDTH.W)
     val (useImm, imm) = (Bool(), UInt(32.W))
     val pdst = UInt(PREG_WIDTH.W)
 }
 
-class UOPToBRUBundle extends BrFlagBundle {
+class DispatchToBRQBundle extends BrFlagBundle {
     val bruOpType = BRUOpType()
     val cmpOpType = CmpOpType()
     val prs1, prs2 = UInt(PREG_WIDTH.W)
@@ -64,7 +64,7 @@ class UOPToBRUBundle extends BrFlagBundle {
     val pcId = UInt(FTQ_WIDTH.W)
 }
 
-class UOpToLSQBundle extends BrFlagBundle {
+class DispatchToLSQBundle extends BrFlagBundle {
     val isLoad = Bool() // differentiate load/store
     val opWidth = MemOpWidth()
     val paddr = UInt(PREG_WIDTH.W)
