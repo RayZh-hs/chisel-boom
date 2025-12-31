@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import common._
 import utility.CycleAwareModule
-import components.wrappers.InstructionMemory
+import components.structures.InstructionMemory
 
 class InstFetcher extends CycleAwareModule {
     val io = IO(new Bundle {
