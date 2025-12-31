@@ -10,6 +10,7 @@ import Configurables.Derived._
 class FetchToDecodeBundle extends Bundle {
     val pc = UInt(32.W)
     val inst = UInt(32.W)
+    val predict = Bool()
 }
 
 /** Micro-operation bundle definition.

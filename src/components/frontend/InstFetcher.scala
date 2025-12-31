@@ -18,6 +18,7 @@ class InstFetcher extends CycleAwareModule {
         val instData = Input(UInt(32.W))
 
         // TODO branch predictor interface
+        val targetPC = Input(Valid(UInt(32.W)))
     })
 
     val pc = RegInit(0.U(32.W))
@@ -44,7 +45,8 @@ class InstFetcher extends CycleAwareModule {
     val was_fetching = RegNext(fetch_allowed, false.B)
     queue.io.enq.valid := was_fetching && !io.pcOverwrite.valid
     queue.io.enq.bits.inst := io.instData
-    queue.io.enq.bits.pc := pc_delayed
+    queue.io.enq.bits.pc   := pc_delayed
+    queue.io.enq.bits.predict := io.targetPC.valid
 
     queue.reset := reset.asBool || io.pcOverwrite.valid
 
