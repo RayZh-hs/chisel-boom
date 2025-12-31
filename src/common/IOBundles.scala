@@ -48,6 +48,7 @@ class DispatchToROBBundle extends BrFlagBundle {
     val ldst = UInt(5.W)
     val pdst = UInt(PREG_WIDTH.W)
     val stalePdst = UInt(PREG_WIDTH.W)
+    val isStore = Bool()
 }
 
 class DispatchToALQBundle extends BrFlagBundle {
@@ -72,4 +73,9 @@ class DispatchToLSQBundle extends BrFlagBundle {
     val (useImm, imm) = (Bool(), UInt(32.W))
     val psrc = UInt(PREG_WIDTH.W)
     val pdst = UInt(PREG_WIDTH.W)
+}
+
+class BroadcastBundle extends Bundle {
+    val pdst = UInt(PREG_WIDTH.W)
+    val robTag = UInt(ROB_WIDTH.W)
 }

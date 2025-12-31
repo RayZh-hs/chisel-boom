@@ -13,6 +13,12 @@ class CircularQueue[T <: Data](gen: T, entries: Int) extends Module {
         val headPtr = Output(UInt(log2Ceil(entries).W))
         val tailPtr = Output(UInt(log2Ceil(entries).W))
         val flush = Input(Bool())
+
+        // Random Access
+        val raccessIdx = Input(UInt(log2Ceil(entries).W))
+        val raccessOut = Output(gen)
+        val raccessIn = Input(gen)
+        val raccessWEn = Input(Bool())
     })
 
     val ram = Reg(Vec(entries, gen))
@@ -31,6 +37,12 @@ class CircularQueue[T <: Data](gen: T, entries: Int) extends Module {
     when(doEnq) {
         ram(tail) := io.enq.bits
         tail := Mux(tail === (entries - 1).U, 0.U, tail + 1.U)
+    }
+
+    // Random Access Write
+    io.raccessOut := ram(io.raccessIdx)
+    when(io.raccessWEn) {
+        ram(io.raccessIdx) := io.raccessIn
     }
 
     // Dequeue logic
