@@ -13,8 +13,7 @@ This repository is organized as follows:
 │   ├── components/          # Core microarchitecture components
 │   │   ├── backend/         # Backend components
 │   │   ├── frontend/        # Frontend components
-│   │   ├── structures/      # Structural components that build on predefined data structures
-│   │   └── wrappers/        # Wrapper modules around external components like memories
+│   │   └── structures/      # Structural components that build on predefined data structures
 │   ├── core/                # Top-level core integration
 │   └── utility/             # Utilities/helpers: things that can be reused across projects
 └── test/                    # Tests
