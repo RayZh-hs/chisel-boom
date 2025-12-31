@@ -22,10 +22,10 @@ class IfOutBundle extends Bundle {
   */
 class UOpBundle extends BrFlagBundle {
     // - categorizing operation
-    val fUnitType = new FunUnitType()   // functional unit type
-    val aluOpType = new ALUOpType()
-    val bruOpType = new BRUOpType()
-    val cmpOpType = new CmpOpType()
+    val fUnitType = FunUnitType()   // functional unit type
+    val aluOpType = ALUOpType()
+    val bruOpType = BRUOpType()
+    val cmpOpType = CmpOpType()
     val isLoad = Bool()
     val isStore = Bool()
     // - id to pc (needed if it is a branching instruction or AUIPC)
@@ -37,7 +37,7 @@ class UOpBundle extends BrFlagBundle {
     val useImm = Bool()
     val imm = UInt(32.W)
     // - memory access info
-    val opWidth = new MemOpWidth()
+    val opWidth = MemOpWidth()
     // paddr is assumed to be prs1
     // psrc is assumed to be prs2
     // pdst is assumed to be pdst
@@ -50,15 +50,15 @@ class UOpToROBBundle extends BrFlagBundle {
 }
 
 class UOpToALQBundle extends BrFlagBundle {
-    val aluOpType = new ALUOpType()
+    val aluOpType = ALUOpType()
     val prs1, prs2 = UInt(PREG_WIDTH.W)
     val (useImm, imm) = (Bool(), UInt(32.W))
     val pdst = UInt(PREG_WIDTH.W)
 }
 
 class UOPToBRUBundle extends BrFlagBundle {
-    val bruOpType = new BRUOpType()
-    val cmpOpType = new CmpOpType()
+    val bruOpType = BRUOpType()
+    val cmpOpType = CmpOpType()
     val prs1, prs2 = UInt(PREG_WIDTH.W)
     val (useImm, imm) = (Bool(), UInt(32.W))
     val pcId = UInt(FTQ_WIDTH.W)
@@ -66,7 +66,7 @@ class UOPToBRUBundle extends BrFlagBundle {
 
 class UOpToLSQBundle extends BrFlagBundle {
     val isLoad = Bool() // differentiate load/store
-    val opWidth = new MemOpWidth()
+    val opWidth = MemOpWidth()
     val paddr = UInt(PREG_WIDTH.W)
     val (useImm, imm) = (Bool(), UInt(32.W))
     val psrc = UInt(PREG_WIDTH.W)

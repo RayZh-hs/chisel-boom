@@ -10,7 +10,7 @@ import Configurables.Derived._
  * 
  * Includes: `ALU`, `BRU`, `MEM`.
  */
-class FunUnitType extends ChiselEnum {
+object FunUnitType extends ChiselEnum {
     val ALU, BRU, MEM = Value
 }
 
@@ -19,7 +19,7 @@ class FunUnitType extends ChiselEnum {
  * 
  * Includes: `ADD`, `SUB`, `AND`, `OR`, `XOR`, `SLL`, `SRL`, `SRA`, `SLT`, `SLTU`, `LUI`.
 */
-class ALUOpType extends ChiselEnum {
+object ALUOpType extends ChiselEnum {
     val ADD, SUB, AND, OR, XOR, SLL, SRL, SRA, SLT, SLTU, LUI = Value
 }
 
@@ -28,7 +28,7 @@ class ALUOpType extends ChiselEnum {
   * 
   * Includes: `CBR` (conditional branch), `JAL` (jump and link), `JALR` (jump and link register), `AUIPC` (add upper immediate to PC).
   */
-class BRUOpType extends ChiselEnum {
+object BRUOpType extends ChiselEnum {
     val CBR, JAL, JALR, AUIPC = Value
 }
 
@@ -37,7 +37,7 @@ class BRUOpType extends ChiselEnum {
   *
   * Includes: `EQ`, `NEQ`, `LT`, `LTU`, `GE`, `GEU`.
   */
-class CmpOpType extends ChiselEnum {
+object CmpOpType extends ChiselEnum {
     val EQ, NEQ, LT, LTU, GE, GEU = Value
 }
 
@@ -46,6 +46,6 @@ class CmpOpType extends ChiselEnum {
   *
   * Includes: `BYTE`, `HALF`, `WORD`, `DWORD`.
   */
-class MemOpWidth extends ChiselEnum {
+object MemOpWidth extends ChiselEnum {
     val BYTE, HALF, WORD, DWORD = Value
 }
