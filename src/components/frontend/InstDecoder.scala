@@ -191,7 +191,7 @@ class InstDecoder extends Module {
     io.out.bits.cmpOpType := cmpOpType
     io.out.bits.isLoad := isLoad
     io.out.bits.isStore := isStore
-    io.out.bits.pcId := 0.U // TODO: Implement FTQ
+    io.out.bits.pc := pc
     io.out.bits.lrs1 := lrs1
     io.out.bits.lrs2 := lrs2
     io.out.bits.ldst := ldst

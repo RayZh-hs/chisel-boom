@@ -31,7 +31,7 @@ class DecodeToDispatchBundle extends BrFlagBundle {
     val isLoad = Bool()
     val isStore = Bool()
     // - id to pc (needed if it is a branching instruction or AUIPC)
-    val pcId = UInt(FTQ_WIDTH.W)
+    val pc = UInt(32.W)
     // - register renaming info
     val lrs1, lrs2, ldst = UInt(5.W) // logical registers
     val prs1, prs2, pdst = UInt(PREG_WIDTH.W) // physical registers
@@ -64,7 +64,7 @@ class DispatchToBRQBundle extends BrFlagBundle {
     val cmpOpType = CmpOpType()
     val prs1, prs2 = UInt(PREG_WIDTH.W)
     val (useImm, imm) = (Bool(), UInt(32.W))
-    val pcId = UInt(FTQ_WIDTH.W)
+    val pc = UInt(32.W)
 }
 
 class DispatchToLSQBundle extends BrFlagBundle {
