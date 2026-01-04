@@ -61,10 +61,11 @@ class ReOrderBuffer extends Module {
     // Commit Logic
     val headEntry = robEntries.io.deq.bits
     val canCommit = robEntries.io.deq.valid && headEntry.ready
+    val isP0 = headEntry.stalePdst === 0.U
 
-    io.commit.valid := canCommit
+    io.commit.valid := canCommit && !isP0
     io.commit.bits := headEntry
 
     // Only dequeue if the consumer is ready AND the instruction is ready to commit
-    robEntries.io.deq.ready := io.commit.ready && headEntry.ready
+    robEntries.io.deq.ready := headEntry.ready && (io.commit.ready || isP0)
 }

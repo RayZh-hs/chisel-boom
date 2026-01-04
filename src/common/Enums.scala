@@ -46,3 +46,11 @@ object CmpOpType extends ChiselEnum {
 object MemOpWidth extends ChiselEnum {
     val BYTE, HALF, WORD, DWORD = Value
 }
+
+/** Physical Register Busy Status
+  *
+  * Includes: `free`, `busy`, `ready`.
+  */
+object RegBusyStatus extends ChiselEnum {
+    val free, busy, ready = Value
+}
