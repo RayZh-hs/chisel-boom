@@ -11,7 +11,7 @@ class BroadcastChannel extends Module {
         val bruResult = Flipped(Decoupled(new BroadcastBundle))
         val memResult = Flipped(Decoupled(new BroadcastBundle))
 
-        val broadcastOut = Decoupled(new BroadcastBundle)
+        val broadcastOut = Valid(new BroadcastBundle)
     })
 
     val arbiter = Module(new RRArbiter(new BroadcastBundle, 3))
