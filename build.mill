@@ -14,6 +14,7 @@ object `package` extends RootModule with ScalaModule {
     )
 
     object test extends ScalaTests with TestModule.ScalaTest {
+        def sources = T.sources(millSourcePath)
         def ivyDeps = Agg(
             ivy"org.scalatest::scalatest:3.2.19"
         )
