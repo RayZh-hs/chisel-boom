@@ -9,9 +9,8 @@ class FreeList(numRegs: Int, numArchRegs: Int) extends Module {
 
     val io = IO(new Bundle {
         val allocate = Decoupled(UInt(width.W)) // Dequeue: Get a free register
-        val free = Flipped(
-          Decoupled(UInt(width.W))
-        ) // Enqueue: Return a register to free list
+        val free = Flipped(Decoupled(UInt(width.W))) // Enqueue: Return a register to free list
+        val rollbackFree = Flipped(Decoupled(UInt(width.W))) // Enqueue: Return a register to free list during rollback
         val count = Output(UInt(log2Ceil(capacity + 1).W))
     })
 
@@ -39,15 +38,28 @@ class FreeList(numRegs: Int, numArchRegs: Int) extends Module {
 
     // Freeing (Enqueue) logic
     io.free.ready := !full
+    io.rollbackFree.ready := !full && (io.free.ready && !io.free.valid || tail =/= Mux(head === 0.U, (capacity - 1).U, head - 1.U)) // Simplified check for 2 spaces
+
     val doFree = io.free.ready && io.free.valid
+    val doRollbackFree = io.rollbackFree.ready && io.rollbackFree.valid
+
     when(doFree) {
         ram(tail) := io.free.bits
-        tail := Mux(tail === (capacity - 1).U, 0.U, tail + 1.U)
+    }
+    when(doRollbackFree) {
+        val targetIdx = Mux(doFree, Mux(tail === (capacity - 1).U, 0.U, tail + 1.U), tail)
+        ram(targetIdx) := io.rollbackFree.bits
     }
 
+    val numFreed = doFree.asUInt +& doRollbackFree.asUInt
+    val nextTail = tail +& numFreed
+    tail := Mux(nextTail >= capacity.U, nextTail - capacity.U, nextTail)
+
     // Update full/empty state
-    when(doFree =/= doAlloc) {
-        maybeFull := doFree
+    when(numFreed > doAlloc.asUInt) {
+        maybeFull := true.B
+    }.elsewhen(doAlloc && numFreed === 0.U) {
+        maybeFull := false.B
     }
 
     // Calculate count

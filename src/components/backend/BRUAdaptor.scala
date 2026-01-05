@@ -31,6 +31,8 @@ class BRUAdaptor extends Module {
             val target = UInt(32.W)
             val pc = UInt(32.W)
             val robTag = UInt(ROB_WIDTH.W)
+            val predict = Bool()
+            val predictedTarget = UInt(32.W)
         })
     })
 
@@ -64,4 +66,6 @@ class BRUAdaptor extends Module {
     io.brUpdate.target := bru.io.target
     io.brUpdate.pc := io.issueIn.bits.info.pc
     io.brUpdate.robTag := io.issueIn.bits.robTag
+    io.brUpdate.predict := io.issueIn.bits.info.predict
+    io.brUpdate.predictedTarget := io.issueIn.bits.info.predictedTarget
 }

@@ -13,6 +13,7 @@ class CircularQueue[T <: Data](gen: T, entries: Int) extends Module {
         val headPtr = Output(UInt(log2Ceil(entries).W))
         val tailPtr = Output(UInt(log2Ceil(entries).W))
         val flush = Input(Bool())
+        val popTail = Input(Bool())
 
         // Random Access
         val raccessIdx = Input(UInt(log2Ceil(entries).W))
@@ -21,7 +22,7 @@ class CircularQueue[T <: Data](gen: T, entries: Int) extends Module {
         val raccessWEn = Input(Bool())
     })
 
-    val ram = Reg(Vec(entries, gen))
+    val ram = RegInit(VecInit(Seq.fill(entries)(0.U.asTypeOf(gen))))
     val head = RegInit(0.U(log2Ceil(entries).W))
     val tail = RegInit(0.U(log2Ceil(entries).W))
     val maybeFull = RegInit(false.B)
@@ -50,8 +51,15 @@ class CircularQueue[T <: Data](gen: T, entries: Int) extends Module {
         head := Mux(head === (entries - 1).U, 0.U, head + 1.U)
     }
 
+    // Pop Tail logic (for rollback)
+    when(io.popTail) {
+        tail := Mux(tail === 0.U, (entries - 1).U, tail - 1.U)
+    }
+
     // Full/Empty state update
-    when(doEnq =/= doDeq) {
+    when(io.popTail) {
+        maybeFull := false.B
+    }.elsewhen(doEnq =/= doDeq) {
         maybeFull := doEnq
     }
 

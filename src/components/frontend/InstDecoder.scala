@@ -192,6 +192,8 @@ class InstDecoder extends Module {
     io.out.bits.isLoad := isLoad
     io.out.bits.isStore := isStore
     io.out.bits.pc := pc
+    io.out.bits.predict := io.in.bits.predict
+    io.out.bits.predictedTarget := io.in.bits.predictedTarget
     io.out.bits.lrs1 := lrs1
     io.out.bits.lrs2 := lrs2
     io.out.bits.ldst := ldst
@@ -202,5 +204,5 @@ class InstDecoder extends Module {
     io.out.bits.useImm := useImm
     io.out.bits.imm := imm
     io.out.bits.opWidth := memOpWidth
-    io.out.bits.brFlag := 0.U // TODO: Implement branch prediction
+    io.out.bits.brFlag := fUnitType === FunUnitType.BRU
 }

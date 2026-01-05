@@ -18,6 +18,11 @@ class InstDispatcher extends Module {
 
         val robOutput = Decoupled(new DispatchToROBBundle)
         val commit = Flipped(Valid(new ROBEntry))
+        val rollback = Flipped(Valid(new Bundle {
+            val ldst = UInt(5.W)
+            val pdst = UInt(PREG_WIDTH.W)
+            val stalePdst = UInt(PREG_WIDTH.W)
+        }))
     })
 
     // Map Table: Logical to Physical Register Mapping
@@ -29,6 +34,10 @@ class InstDispatcher extends Module {
     // When ROB commits an instruction, the stale physical register is freed.
     freeList.io.free.valid := io.commit.valid
     freeList.io.free.bits := io.commit.bits.stalePdst
+
+    // When ROB rolls back, the pdst that was allocated is freed.
+    freeList.io.rollbackFree.valid := io.rollback.valid && io.rollback.bits.pdst =/= 0.U
+    freeList.io.rollbackFree.bits := io.rollback.bits.pdst
 
     val inst = io.instInput.bits
     val needAlloc = inst.ldst =/= 0.U
@@ -55,7 +64,9 @@ class InstDispatcher extends Module {
     val stalePdst = mapTable(inst.ldst)
 
     // Update Map Table
-    when(canDispatch && needAlloc) {
+    when(io.rollback.valid) {
+        mapTable(io.rollback.bits.ldst) := io.rollback.bits.stalePdst
+    }.elsewhen(canDispatch && needAlloc) {
         mapTable(inst.ldst) := allocPdst
     }
 
@@ -65,6 +76,8 @@ class InstDispatcher extends Module {
     io.instOutput.bits.prs2 := prs2
     io.instOutput.bits.pdst := currentPdst
     io.instOutput.bits.stalePdst := stalePdst
+    io.instOutput.bits.predict := inst.predict
+    io.instOutput.bits.predictedTarget := inst.predictedTarget
 
     io.robOutput.bits.ldst := inst.ldst
     io.robOutput.bits.pdst := currentPdst

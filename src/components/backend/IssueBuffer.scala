@@ -13,6 +13,8 @@ class BRUInfo extends Bundle {
     val bruOp = BRUOpType()
     val cmpOp = CmpOpType()
     val pc = UInt(32.W)
+    val predict = Bool()
+    val predictedTarget = UInt(32.W)
 }
 
 class IssueBufferEntry[T <: Data](gen: T) extends Bundle {
@@ -32,12 +34,19 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int) extends Module {
         val in = Flipped(Decoupled(new IssueBufferEntry(gen)))
         val broadcast = Input(Valid(new BroadcastBundle()))
         val out = Decoupled(new IssueBufferEntry(gen))
+        val flush = Input(Bool())
     })
     val buffer = RegInit(VecInit(Seq.fill(numEntries)(0.U.asTypeOf(new IssueBufferEntry(gen)))))
     val valid = RegInit(0.U(numEntries.W))
     
+    when(io.flush) {
+        valid := 0.U
+    }
+
+    io.in.ready := !valid.andR && !io.flush
+
     // Enqueue logic
-    when(io.in.valid && io.in.ready) {
+    when(io.in.valid && io.in.ready && !io.flush) {
         val emptyIndex = PriorityEncoder(~valid)
         buffer(emptyIndex) := io.in.bits
         valid := valid | (1.U << emptyIndex)

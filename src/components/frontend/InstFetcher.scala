@@ -1,4 +1,4 @@
-package components
+package components.frontend
 
 import chisel3._
 import chisel3.util._
@@ -47,6 +47,7 @@ class InstFetcher extends CycleAwareModule {
     queue.io.enq.bits.inst := io.instData
     queue.io.enq.bits.pc   := pc_delayed
     queue.io.enq.bits.predict := io.targetPC.valid
+    queue.io.enq.bits.predictedTarget := io.targetPC.bits
 
     queue.reset := reset.asBool || io.pcOverwrite.valid
 

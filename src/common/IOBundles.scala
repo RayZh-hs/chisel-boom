@@ -11,6 +11,7 @@ class FetchToDecodeBundle extends Bundle {
     val pc = UInt(32.W)
     val inst = UInt(32.W)
     val predict = Bool()
+    val predictedTarget = UInt(32.W)
 }
 
 /** Micro-operation bundle definition.
@@ -32,6 +33,8 @@ class DecodeToDispatchBundle extends BrFlagBundle {
     val isStore = Bool()
     // - id to pc (needed if it is a branching instruction or AUIPC)
     val pc = UInt(32.W)
+    val predict = Bool()
+    val predictedTarget = UInt(32.W)
     // - register renaming info
     val lrs1, lrs2, ldst = UInt(5.W) // logical registers
     val prs1, prs2, pdst = UInt(PREG_WIDTH.W) // physical registers
