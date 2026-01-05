@@ -24,18 +24,12 @@ class BRUAdaptor extends Module {
             val en = Output(Bool())
         }
 
-        // FTQ interface (to get PC)
-        val ftqRead = new Bundle {
-            val addr = Output(UInt(FTQ_WIDTH.W))
-            val pc = Input(UInt(32.W))
-        }
-
         // Branch update (to frontend/ROB)
         val brUpdate = Output(new Bundle {
             val valid = Bool()
             val taken = Bool()
             val target = UInt(32.W)
-            val pcId = UInt(FTQ_WIDTH.W)
+            val pc = UInt(32.W)
             val robTag = UInt(ROB_WIDTH.W)
         })
     })
@@ -47,11 +41,10 @@ class BRUAdaptor extends Module {
     
     io.prfRead.addr1 := io.issueIn.bits.src1
     io.prfRead.addr2 := io.issueIn.bits.src2
-    io.ftqRead.addr := io.issueIn.bits.info.pcId
 
     bru.io.inA := io.prfRead.data1
     bru.io.inB := io.prfRead.data2
-    bru.io.pc := io.ftqRead.pc
+    bru.io.pc := io.issueIn.bits.info.pc
     bru.io.imm := io.issueIn.bits.imm
     bru.io.bruOp := io.issueIn.bits.info.bruOp
     bru.io.cmpOp := io.issueIn.bits.info.cmpOp
@@ -69,6 +62,6 @@ class BRUAdaptor extends Module {
     io.brUpdate.valid := io.issueIn.valid && io.issueIn.ready
     io.brUpdate.taken := bru.io.taken
     io.brUpdate.target := bru.io.target
-    io.brUpdate.pcId := io.issueIn.bits.info.pcId
+    io.brUpdate.pc := io.issueIn.bits.info.pc
     io.brUpdate.robTag := io.issueIn.bits.robTag
 }

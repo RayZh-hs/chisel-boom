@@ -12,7 +12,7 @@ class ALUInfo extends Bundle {
 class BRUInfo extends Bundle {
     val bruOp = BRUOpType()
     val cmpOp = CmpOpType()
-    val pcId = UInt(FTQ_WIDTH.W)
+    val pc = UInt(32.W)
 }
 
 class IssueBufferEntry[T <: Data](gen: T) extends Bundle {
