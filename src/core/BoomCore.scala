@@ -14,7 +14,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     val fetcher = Module(new InstFetcher)
     val decoder = Module(new InstDecoder)
     val dispatcher = Module(new InstDispatcher)
-    val rat = Module(new RegisterAliasTable)
+    val rat = Module(new RegisterAliasTable(3, 1, 1))
     val freeList = Module(new FreeList(Derived.PREG_COUNT, 32))
     val imem = Module(new InstructionMemory(hexFile))
     val btb = Module(new BranchTargetBuffer)
@@ -44,13 +44,13 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     dispatcher.io.instInput <> decoder.io.out
     
     // RAT and FreeList connections
-    rat.io.lrs1 := dispatcher.io.rat.lrs1
-    rat.io.lrs2 := dispatcher.io.rat.lrs2
-    rat.io.ldst := dispatcher.io.rat.ldst
-    dispatcher.io.rat.prs1 := rat.io.prs1
-    dispatcher.io.rat.prs2 := rat.io.prs2
-    dispatcher.io.rat.stalePdst := rat.io.stalePdst
-    rat.io.update <> dispatcher.io.rat.update
+    rat.io.readL(0) := dispatcher.io.rat.lrs1
+    rat.io.readL(1) := dispatcher.io.rat.lrs2
+    rat.io.readL(2) := dispatcher.io.rat.ldst
+    dispatcher.io.rat.prs1 := rat.io.readP(0)
+    dispatcher.io.rat.prs2 := rat.io.readP(1)
+    dispatcher.io.rat.stalePdst := rat.io.readP(2)
+    rat.io.update(0) <> dispatcher.io.rat.update
 
     dispatcher.io.freeList.allocate <> freeList.io.allocate
 
@@ -174,9 +174,9 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     freeList.io.free.bits := commit.bits.stalePdst
     commit.ready := freeList.io.free.ready
 
-    rat.rollback.valid := rollback.valid
-    rat.rollback.bits.ldst := rollback.bits.ldst
-    rat.rollback.bits.stalePdst := rollback.bits.stalePdst
+    rat.rollback(0).valid := rollback.valid
+    rat.rollback(0).bits.ldst := rollback.bits.ldst
+    rat.rollback(0).bits.stalePdst := rollback.bits.stalePdst
 
     freeList.io.rollbackFree.valid := rollback.valid
     freeList.io.rollbackFree.bits := rollback.bits.pdst
