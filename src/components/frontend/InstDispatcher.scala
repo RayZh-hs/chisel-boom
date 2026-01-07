@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import common._
 import common.Configurables._
-import components.structures.FreeList
+import components.structures.{FreeList, RegisterAliasTable}
 import components.backend.ROBEntry
 
 /** Instruction Dispatcher
@@ -17,58 +17,58 @@ class InstDispatcher extends Module {
         val instOutput = Decoupled(new DecodeToDispatchBundle)
 
         val robOutput = Decoupled(new DispatchToROBBundle)
-        val commit = Flipped(Valid(new ROBEntry))
-        val rollback = Flipped(Valid(new Bundle {
-            val ldst = UInt(5.W)
-            val pdst = UInt(PREG_WIDTH.W)
-            val stalePdst = UInt(PREG_WIDTH.W)
-        }))
+        
+        // New interfaces for external RAT and FreeList
+        val rat = new Bundle {
+            val lrs1 = Output(UInt(5.W))
+            val lrs2 = Output(UInt(5.W))
+            val ldst = Output(UInt(5.W))
+            val prs1 = Input(UInt(PREG_WIDTH.W))
+            val prs2 = Input(UInt(PREG_WIDTH.W))
+            val stalePdst = Input(UInt(PREG_WIDTH.W))
+            val update = Valid(new Bundle {
+                val ldst = UInt(5.W)
+                val pdst = UInt(PREG_WIDTH.W)
+            })
+        }
+
+        val freeList = new Bundle {
+            val allocate = Flipped(Decoupled(UInt(PREG_WIDTH.W)))
+        }
     })
-
-    // Map Table: Logical to Physical Register Mapping
-    val mapTable = RegInit(VecInit(Seq.tabulate(32)(i => i.U(PREG_WIDTH.W))))
-
-    // Free List: Manages free physical registers
-    val freeList = Module(new FreeList(Derived.PREG_COUNT, 32))
-
-    // When ROB commits an instruction, the stale physical register is freed.
-    freeList.io.free.valid := io.commit.valid
-    freeList.io.free.bits := io.commit.bits.stalePdst
-
-    // When ROB rolls back, the pdst that was allocated is freed.
-    freeList.io.rollbackFree.valid := io.rollback.valid && io.rollback.bits.pdst =/= 0.U
-    freeList.io.rollbackFree.bits := io.rollback.bits.pdst
 
     val inst = io.instInput.bits
     val needAlloc = inst.ldst =/= 0.U
     val canDispatch = io.instInput.valid &&
         io.instOutput.ready &&
         io.robOutput.ready &&
-        (!needAlloc || freeList.io.allocate.valid)
+        (!needAlloc || io.freeList.allocate.valid)
 
     // Consume input and allocate from free list
     io.instInput.ready := canDispatch
-    freeList.io.allocate.ready := canDispatch && needAlloc
+    io.freeList.allocate.ready := canDispatch && needAlloc
 
     // Outputs
     io.instOutput.valid := canDispatch
     io.robOutput.valid := canDispatch
 
     // Renaming Logic
-    val allocPdst = freeList.io.allocate.bits
+    val allocPdst = io.freeList.allocate.bits
     val currentPdst = Mux(needAlloc, allocPdst, 0.U) // If x0, pdst is 0
 
-    // Read source operands from Map Table
-    val prs1 = mapTable(inst.lrs1)
-    val prs2 = mapTable(inst.lrs2)
-    val stalePdst = mapTable(inst.ldst)
+    // Connect RAT
+    io.rat.lrs1 := inst.lrs1
+    io.rat.lrs2 := inst.lrs2
+    io.rat.ldst := inst.ldst
 
-    // Update Map Table
-    when(io.rollback.valid) {
-        mapTable(io.rollback.bits.ldst) := io.rollback.bits.stalePdst
-    }.elsewhen(canDispatch && needAlloc) {
-        mapTable(inst.ldst) := allocPdst
-    }
+    io.rat.update.valid := canDispatch && needAlloc
+    io.rat.update.bits.ldst := inst.ldst
+    io.rat.update.bits.pdst := allocPdst
+
+    // Read source operands from RAT
+    val prs1 = io.rat.prs1
+    val prs2 = io.rat.prs2
+    val stalePdst = io.rat.stalePdst
 
     // Fill Output Bundles
     io.instOutput.bits := inst
