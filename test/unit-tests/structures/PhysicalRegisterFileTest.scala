@@ -7,7 +7,7 @@ import org.scalatest.matchers.should.Matchers
 
 class PhysicalRegisterFileTest extends AnyFlatSpec with Matchers {
     "PhysicalRegisterFile" should "write and read data correctly" in {
-        simulate(new PhysicalRegisterFile(64)) { dut =>
+        simulate(new PhysicalRegisterFile(64, 4, 2, 32)) { dut =>
             // Initial state: all ready
             dut.io.readyAddrs(0).poke(1.U)
             dut.io.isReady(0).expect(true.B)
@@ -40,7 +40,7 @@ class PhysicalRegisterFileTest extends AnyFlatSpec with Matchers {
     }
 
     it should "always have register 0 as 0 and ready" in {
-        simulate(new PhysicalRegisterFile(64)) { dut =>
+        simulate(new PhysicalRegisterFile(64, 4, 2, 32)) { dut =>
             dut.io.readyAddrs(0).poke(0.U)
             dut.io.isReady(0).expect(true.B)
 

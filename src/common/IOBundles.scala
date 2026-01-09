@@ -83,3 +83,9 @@ class BroadcastBundle extends Bundle {
     val pdst = UInt(PREG_WIDTH.W)
     val robTag = UInt(ROB_WIDTH.W)
 }
+
+class RollbackBundle extends Bundle {
+    val ldst = UInt(5.W)
+    val pdst = UInt(PREG_WIDTH.W)
+    val stalePdst = UInt(PREG_WIDTH.W)
+}
