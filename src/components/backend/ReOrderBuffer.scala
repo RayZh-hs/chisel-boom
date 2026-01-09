@@ -28,6 +28,8 @@ class ReOrderBuffer extends Module {
             val mispredict = Bool()
         }))
         val rollback = Output(Valid(new RollbackBundle))
+
+        val head = Output(UInt(ROB_WIDTH.W)) // used to determine whether a robTag is older
     })
 
     // --- Internal Storage ---
@@ -110,6 +112,8 @@ class ReOrderBuffer extends Module {
     io.rollback.bits.ldst      := entryToRollback.ldst
     io.rollback.bits.pdst      := entryToRollback.pdst
     io.rollback.bits.stalePdst := entryToRollback.stalePdst
+
+    io.head := head
 
     // 4. Commit (Dequeue)
     val headEntry = robRam(head)

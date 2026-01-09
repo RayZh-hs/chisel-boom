@@ -34,47 +34,68 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int) extends Module {
         val in = Flipped(Decoupled(new IssueBufferEntry(gen)))
         val broadcast = Input(Valid(new BroadcastBundle()))
         val out = Decoupled(new IssueBufferEntry(gen))
+
         val flush = Input(Bool())
+        val flushTag = Input(UInt(ROB_WIDTH.W))
+        val robHead = Input(UInt(ROB_WIDTH.W))
     })
-    val buffer = RegInit(VecInit(Seq.fill(numEntries)(0.U.asTypeOf(new IssueBufferEntry(gen)))))
-    val valid = RegInit(0.U(numEntries.W))
+
+    val buffer = Reg(Vec(numEntries, new IssueBufferEntry(gen)))
+    val valid  = RegInit(VecInit(Seq.fill(numEntries)(false.B)))
     
     when(io.flush) {
-        valid := 0.U
+        val head_le_flush = io.robHead <= io.flushTag
+
+        for (i <- 0 until numEntries) {
+            when(valid(i)) {
+                val tag = buffer(i).robTag
+                val is_older = Mux(head_le_flush, (tag >= io.robHead && tag < io.flushTag), 
+                                      (tag >= io.robHead || tag < io.flushTag))
+                when(io.flush && !is_older) {
+                    valid(i) := false.B
+                }
+            }
+        }
     }
 
-    io.in.ready := !valid.andR && !io.flush
+    // 3. Enqueue Logic
+    val canEnqueue = !valid.asUInt.andR
+    io.in.ready := canEnqueue && !io.flush
 
-    // Enqueue logic
-    when(io.in.valid && io.in.ready && !io.flush) {
-        val emptyIndex = PriorityEncoder(~valid)
+    val emptyIndex = PriorityEncoder(valid.map(!_))
+
+    when(io.in.fire) {
         buffer(emptyIndex) := io.in.bits
-        valid := valid | (1.U << emptyIndex)
+        valid(emptyIndex)  := true.B
     }
 
-    // Update source readiness based on broadcasts
+    // 4. Update Readiness (Snoop/Broadcast)
+    // This happens every cycle an entry is valid
     for (i <- 0 until numEntries) {
-        when(valid(i)) {
-            when(buffer(i).src1 === io.broadcast.bits.pdst && io.broadcast.valid) {
+        when(valid(i) && io.broadcast.valid) {
+            val resPdst = io.broadcast.bits.pdst
+            when(buffer(i).src1 === resPdst) {
                 buffer(i).src1Ready := true.B
             }
-            when(buffer(i).src2 === io.broadcast.bits.pdst && io.broadcast.valid) {
+            when(buffer(i).src2 === resPdst) {
                 buffer(i).src2Ready := true.B
             }
         }
     }
 
-    // Issue logic
+    // 5. Issue Logic (Out-of-Order selection)
     val readyEntries = Wire(Vec(numEntries, Bool()))
     for (i <- 0 until numEntries) {
         readyEntries(i) := valid(i) && buffer(i).src1Ready && buffer(i).src2Ready
     }
-    val issueIndex = PriorityEncoder(readyEntries.asUInt)
-    val canIssue = readyEntries.asUInt.orR
-    io.out.valid := canIssue
-    io.out.bits := buffer(issueIndex)
 
-    when(io.out.valid && io.out.ready) {
-        valid := valid & ~(1.U << issueIndex)
+    val issueIndex = PriorityEncoder(readyEntries)
+    val canIssue   = readyEntries.asUInt.orR
+
+    io.out.valid := canIssue && !io.flush
+    io.out.bits  := buffer(issueIndex)
+
+    when(io.out.fire) {
+        valid(issueIndex) := false.B
     }
 }
