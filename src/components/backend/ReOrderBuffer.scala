@@ -18,78 +18,66 @@ class ReOrderBuffer extends Module {
         val dispatch = Flipped(Decoupled(new DispatchToROBBundle))
         val broadcastInput = Flipped(Decoupled(new BroadcastBundle))
         val commit = Decoupled(new ROBEntry)
-
         val robTag = Output(UInt(ROB_WIDTH.W))
         val flush = Input(Bool())
-
         val brUpdate = Flipped(Valid(new Bundle {
             val robTag = UInt(ROB_WIDTH.W)
             val mispredict = Bool()
         }))
         val rollback = Output(Valid(new RollbackBundle))
-
-        val head = Output(
-          UInt(ROB_WIDTH.W)
-        ) // used to determine whether a robTag is older
+        val head = Output(UInt(ROB_WIDTH.W))
     })
 
-    // --- Internal Storage ---
     private val entries = Derived.ROB_COUNT
     private val robRam = Reg(Vec(entries, new ROBEntry))
     private val head = RegInit(0.U(ROB_WIDTH.W))
     private val tail = RegInit(0.U(ROB_WIDTH.W))
     private val maybeFull = RegInit(false.B)
-
-    // --- Private Helper Functions ---
+    
     private def nextPtr(p: UInt): UInt =
         Mux(p === (entries - 1).U, 0.U, p + 1.U)
     private def prevPtr(p: UInt): UInt =
         Mux(p === 0.U, (entries - 1).U, p - 1.U)
-    private def isFull: Bool = (head === tail) && maybeFull
-    private def isEmpty: Bool = (head === tail) && !maybeFull
 
-    // --- Rollback Control ---
+    val tailPrev = prevPtr(tail)
+    val tailNext = nextPtr(tail)
+
+    io.dispatch.ready := !isFull && !isRollingBack
+    io.broadcastInput.ready := true.B // Always ready to accept broadcasts
+
     val isRollingBack = RegInit(false.B)
-    val rollbackTag = Reg(UInt(ROB_WIDTH.W))
-
-    // Logic: stop when tail points to the instruction AFTER the branch
-    val targetTail = nextPtr(rollbackTag)
-    val rollbackDone = tail === targetTail
-    val doPopTail = isRollingBack && !rollbackDone
+    val targetTail = Reg(UInt(ROB_WIDTH.W))
 
     when(io.brUpdate.valid && io.brUpdate.bits.mispredict) {
         isRollingBack := true.B
-        rollbackTag := io.brUpdate.bits.robTag
+        targetTail := nextPtr(io.brUpdate.bits.robTag)
     }
+
+    val rollbackDone = tail === targetTail
+    val doPopTail = isRollingBack && !rollbackDone
+
     when(isRollingBack && rollbackDone) {
         isRollingBack := false.B
     }
 
-    // --- Queue Management Logic ---
+    val ptrMatch = head === tail
+    val isFull = ptrMatch && maybeFull
+    val isEmpty = ptrMatch && !maybeFull
+
     val doEnq = io.dispatch.fire && !isRollingBack
     val doDeq = io.commit.fire
 
-    when(io.flush) {
-        head := 0.U
-        tail := 0.U
-        maybeFull := false.B
-    }.otherwise {
-        // Pointer updates
-        when(doEnq) { tail := nextPtr(tail) }
-        when(doDeq) { head := nextPtr(head) }
-        when(doPopTail) { tail := prevPtr(tail) }
+    when(doEnq) { tail := tailNext }
+    when(doDeq) { head := nextPtr(head) }
+    when(doPopTail) { tail := tailPrev }
 
-        // Full/Empty state update
-        when(doPopTail) {
-            maybeFull := false.B
-        }.elsewhen(doEnq =/= doDeq) {
-            maybeFull := doEnq
-        }
+    when(doEnq && !doDeq) {
+        maybeFull := tailNext === head
+    }.elsewhen((doDeq || doPopTail) && !doEnq) {
+        maybeFull := false.B
     }
 
-    // --- ROB Business Logic ---
-
-    // 1. Dispatch (Enqueue)
+    // Dispatch
     when(doEnq) {
         val entry = Wire(new ROBEntry)
         entry.ldst := io.dispatch.bits.ldst
@@ -99,33 +87,28 @@ class ReOrderBuffer extends Module {
         entry.ready := false.B
         robRam(tail) := entry
     }
-    io.dispatch.ready := !isFull && !isRollingBack
-    io.robTag := tail // The current tail is the tag for the incoming instr
+    io.robTag := tail
 
-    // 2. Broadcast (Writeback - Random Access)
+    // Broadcast
     when(io.broadcastInput.valid) {
         robRam(io.broadcastInput.bits.robTag).ready := true.B
     }
-    io.broadcastInput.ready := !isRollingBack
-
-    // 3. Rollback (Read-while-popping)
-    // We read the entry that is currently at the "end" before decrementing tail
-    val entryToRollback = robRam(prevPtr(tail))
+    // Rollback Output
+    val entryToRollback = robRam(tailPrev)
     io.rollback.valid := doPopTail
     io.rollback.bits.ldst := entryToRollback.ldst
     io.rollback.bits.pdst := entryToRollback.pdst
     io.rollback.bits.stalePdst := entryToRollback.stalePdst
 
-    io.head := head
-
-    // 4. Commit (Dequeue)
+    // Commit
     val headEntry = robRam(head)
-    val isP0 = headEntry.stalePdst === 0.U
-    val canCommit = !isEmpty && headEntry.ready && !isRollingBack
+    // We can commit if: Not empty AND ready AND (not rolling back OR hasn't reached the bad instructions)
+    val headReachedTarget = isRollingBack && (head === targetTail)
+    val canCommit = !isEmpty && headEntry.ready && !headReachedTarget
 
-    io.commit.valid := canCommit && !isP0
+    io.commit.valid := canCommit
     io.commit.bits := headEntry
+    io.commit.ready := true.B
 
-    // Dequeue logic: logic is ready AND (consumer is ready OR it's a register-zero bypass)
-    io.commit.ready := true.B // Placeholder: Connect to MapTable/FreeList ready
+    io.head := head
 }

@@ -179,8 +179,8 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     val commit = rob.io.commit
     val rollback = rob.io.rollback
 
-    freeList.io.free.valid := commit.valid
-    freeList.io.free.bits := commit.bits.stalePdst
+    freeList.io.free.valid := rob.io.commit.valid && (rob.io.commit.bits.ldst =/= 0.U)
+    freeList.io.free.bits  := rob.io.commit.bits.stalePdst
     commit.ready := freeList.io.free.ready
 
     rat.rollback(0).valid := rollback.valid
