@@ -5,6 +5,7 @@ import chisel3.simulator.EphemeralSimulator._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import common._
+import components.structures.{ALUInfo, IssueBuffer}
 
 class IssueBufferTest extends AnyFlatSpec with Matchers {
     "IssueBuffer" should "enqueue and issue an instruction when operands are ready" in {

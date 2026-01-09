@@ -1,4 +1,4 @@
-package components.backend
+package components.structures
 
 import chisel3._
 import chisel3.util._
@@ -41,16 +41,19 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int) extends Module {
     })
 
     val buffer = Reg(Vec(numEntries, new IssueBufferEntry(gen)))
-    val valid  = RegInit(VecInit(Seq.fill(numEntries)(false.B)))
-    
+    val valid = RegInit(VecInit(Seq.fill(numEntries)(false.B)))
+
     when(io.flush) {
         val head_le_flush = io.robHead <= io.flushTag
 
         for (i <- 0 until numEntries) {
             when(valid(i)) {
                 val tag = buffer(i).robTag
-                val is_older = Mux(head_le_flush, (tag >= io.robHead && tag < io.flushTag), 
-                                      (tag >= io.robHead || tag < io.flushTag))
+                val is_older = Mux(
+                  head_le_flush,
+                  (tag >= io.robHead && tag < io.flushTag),
+                  (tag >= io.robHead || tag < io.flushTag)
+                )
                 when(io.flush && !is_older) {
                     valid(i) := false.B
                 }
@@ -66,7 +69,7 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int) extends Module {
 
     when(io.in.fire) {
         buffer(emptyIndex) := io.in.bits
-        valid(emptyIndex)  := true.B
+        valid(emptyIndex) := true.B
     }
 
     // 4. Update Readiness (Snoop/Broadcast)
@@ -86,14 +89,16 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int) extends Module {
     // 5. Issue Logic (Out-of-Order selection)
     val readyEntries = Wire(Vec(numEntries, Bool()))
     for (i <- 0 until numEntries) {
-        readyEntries(i) := valid(i) && buffer(i).src1Ready && buffer(i).src2Ready
+        readyEntries(i) := valid(i) && buffer(i).src1Ready && buffer(
+          i
+        ).src2Ready
     }
 
     val issueIndex = PriorityEncoder(readyEntries)
-    val canIssue   = readyEntries.asUInt.orR
+    val canIssue = readyEntries.asUInt.orR
 
     io.out.valid := canIssue && !io.flush
-    io.out.bits  := buffer(issueIndex)
+    io.out.bits := buffer(issueIndex)
 
     when(io.out.fire) {
         valid(issueIndex) := false.B

@@ -5,12 +5,13 @@ import chisel3.util._
 import common._
 import common.Configurables._
 import components.structures.ArithmeticLogicUnit
+import components.structures.{ALUInfo, IssueBufferEntry}
 
 class ALUAdaptor extends Module {
     val io = IO(new Bundle {
         val issueIn = Flipped(Decoupled(new IssueBufferEntry(new ALUInfo)))
         val broadcastOut = Decoupled(new BroadcastBundle)
-        
+
         // PRF interface
         val prfRead = new Bundle {
             val addr1 = Output(UInt(PREG_WIDTH.W))
@@ -29,12 +30,16 @@ class ALUAdaptor extends Module {
 
     // Connect Issue Buffer to ALU
     io.issueIn.ready := io.broadcastOut.ready
-    
+
     io.prfRead.addr1 := io.issueIn.bits.src1
     io.prfRead.addr2 := io.issueIn.bits.src2
 
     alu.io.inA := io.prfRead.data1
-    alu.io.inB := Mux(io.issueIn.bits.useImm, io.issueIn.bits.imm, io.prfRead.data2)
+    alu.io.inB := Mux(
+      io.issueIn.bits.useImm,
+      io.issueIn.bits.imm,
+      io.prfRead.data2
+    )
     alu.io.aluOp := io.issueIn.bits.info.aluOp
 
     // Connect ALU to PRF Write and Broadcast

@@ -8,6 +8,7 @@ import components.backend._
 import components.structures._
 import common._
 import common.Configurables._
+import components.structures.{ALUInfo, BRUInfo, IssueBuffer}
 
 class BoomCore(val hexFile: String) extends CycleAwareModule {
     // Component Instantiation
@@ -32,7 +33,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     // BTB integration
     btb.io.pc := fetcher.io.instAddr
     fetcher.io.targetPC := btb.io.target
-    
+
     // Memory interface for fetcher
     imem.io.addr := fetcher.io.instAddr
     fetcher.io.instData := imem.io.inst
@@ -42,7 +43,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
 
     // Dispatcher connections
     dispatcher.io.instInput <> decoder.io.out
-    
+
     // RAT and FreeList connections
     rat.io.readL(0) := dispatcher.io.rat.lrs1
     rat.io.readL(1) := dispatcher.io.rat.lrs2
@@ -98,7 +99,11 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     bruIB.io.in.bits.info.predict := instOutput.bits.predict
     bruIB.io.in.bits.info.predictedTarget := instOutput.bits.predictedTarget
 
-    instOutput.ready := Mux(isALU, aluIB.io.in.ready, Mux(isBRU, bruIB.io.in.ready, false.B)) && rob.io.dispatch.ready
+    instOutput.ready := Mux(
+      isALU,
+      aluIB.io.in.ready,
+      Mux(isBRU, bruIB.io.in.ready, false.B)
+    ) && rob.io.dispatch.ready
 
     // PRF Busy Table Update (Set Busy on Dispatch)
     prf.io.setBusy.valid := instOutput.valid && instOutput.ready && instOutput.bits.pdst =/= 0.U
@@ -137,7 +142,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     bruIB.io.broadcast := broadcast
     rob.io.broadcastInput.valid := broadcast.valid
     rob.io.broadcastInput.bits := broadcast.bits
-    
+
     // PRF Busy Table Update (Set Ready on Broadcast)
     prf.io.setReady.valid := broadcast.valid
     prf.io.setReady.bits := broadcast.bits.pdst
@@ -145,8 +150,8 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     // Misprediction handling
     val brUpdate = bruAdaptor.io.brUpdate
     val mispredict = brUpdate.valid && (
-        (brUpdate.taken =/= brUpdate.predict) ||
-        (brUpdate.taken && brUpdate.target =/= brUpdate.predictedTarget)
+      (brUpdate.taken =/= brUpdate.predict) ||
+          (brUpdate.taken && brUpdate.target =/= brUpdate.predictedTarget)
     )
     rob.io.brUpdate.valid := mispredict
     rob.io.brUpdate.bits.robTag := brUpdate.robTag
@@ -154,12 +159,16 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
 
     // Fetcher PC Overwrite (Misprediction)
     fetcher.io.pcOverwrite.valid := mispredict
-    fetcher.io.pcOverwrite.bits := Mux(brUpdate.taken, brUpdate.target, brUpdate.pc + 4.U)
+    fetcher.io.pcOverwrite.bits := Mux(
+      brUpdate.taken,
+      brUpdate.target,
+      brUpdate.pc + 4.U
+    )
 
     // Flush logic
     aluIB.io.flush := mispredict
     bruIB.io.flush := mispredict
-    rob.io.flush := false.B 
+    rob.io.flush := false.B
 
     // Unused PRF readyAddrs
     prf.io.readyAddrs(2) := 0.U
@@ -181,4 +190,3 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     freeList.io.rollbackFree.valid := rollback.valid
     freeList.io.rollbackFree.bits := rollback.bits.pdst
 }
-

@@ -5,12 +5,13 @@ import chisel3.util._
 import common._
 import common.Configurables._
 import components.structures.BranchUnit
+import components.structures.{BRUInfo, IssueBufferEntry}
 
 class BRUAdaptor extends Module {
     val io = IO(new Bundle {
         val issueIn = Flipped(Decoupled(new IssueBufferEntry(new BRUInfo)))
         val broadcastOut = Decoupled(new BroadcastBundle)
-        
+
         // PRF interface
         val prfRead = new Bundle {
             val addr1 = Output(UInt(PREG_WIDTH.W))
@@ -40,7 +41,7 @@ class BRUAdaptor extends Module {
 
     // Connect Issue Buffer to BRU
     io.issueIn.ready := io.broadcastOut.ready
-    
+
     io.prfRead.addr1 := io.issueIn.bits.src1
     io.prfRead.addr2 := io.issueIn.bits.src2
 
