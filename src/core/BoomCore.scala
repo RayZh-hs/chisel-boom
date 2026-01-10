@@ -23,7 +23,6 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     val rob = Module(new ReOrderBuffer)
     val aluIB = Module(new IssueBuffer(new ALUInfo, 8))
     val bruIB = Module(new IssueBuffer(new BRUInfo, 4))
-    val lsIB = Module(new SequentialIssueBuffer(new LoadStoreInfo, 8))
     val aluAdaptor = Module(new ALUAdaptor)
     val bruAdaptor = Module(new BRUAdaptor)
     val lsAdaptor = Module(new LoadStoreAdaptor)
@@ -103,22 +102,22 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     bruIB.io.in.bits.info.predictedTarget := instOutput.bits.predictedTarget
 
     // LSU Issue Buffer Enqueue
-    lsIB.io.in.valid := instOutput.valid && isLSU && !rob.io.rollback.valid
-    lsIB.io.in.bits.robTag := rob.io.robTag
-    lsIB.io.in.bits.pdst := instOutput.bits.pdst
-    lsIB.io.in.bits.src1 := instOutput.bits.prs1
-    lsIB.io.in.bits.src2 := instOutput.bits.prs2
-    lsIB.io.in.bits.src1Ready := src1Ready
-    lsIB.io.in.bits.src2Ready := Mux(instOutput.bits.isStore, src2Ready, true.B)// Not used for loads
-    lsIB.io.in.bits.info.opWidth := instOutput.bits.opWidth
-    lsIB.io.in.bits.info.isStore := instOutput.bits.isStore
-    lsIB.io.in.bits.info.isUnsigned := instOutput.bits.isUnsigned
-    lsIB.io.in.bits.info.imm := instOutput.bits.imm
+    lsAdaptor.io.issueIn.valid := instOutput.valid && isLSU && !rob.io.rollback.valid
+    lsAdaptor.io.issueIn.bits.robTag := rob.io.robTag
+    lsAdaptor.io.issueIn.bits.pdst := instOutput.bits.pdst
+    lsAdaptor.io.issueIn.bits.src1 := instOutput.bits.prs1
+    lsAdaptor.io.issueIn.bits.src2 := instOutput.bits.prs2
+    lsAdaptor.io.issueIn.bits.src1Ready := src1Ready
+    lsAdaptor.io.issueIn.bits.src2Ready := Mux(instOutput.bits.isStore, src2Ready, true.B)// Not used for loads
+    lsAdaptor.io.issueIn.bits.info.opWidth := instOutput.bits.opWidth
+    lsAdaptor.io.issueIn.bits.info.isStore := instOutput.bits.isStore
+    lsAdaptor.io.issueIn.bits.info.isUnsigned := instOutput.bits.isUnsigned
+    lsAdaptor.io.issueIn.bits.info.imm := instOutput.bits.imm
 
     instOutput.ready := Mux(
       isALU,
       aluIB.io.in.ready,
-      Mux(isBRU, bruIB.io.in.ready, Mux(isLSU, lsIB.io.in.ready, false.B))
+      Mux(isBRU, bruIB.io.in.ready, Mux(isLSU, lsAdaptor.io.issueIn.ready, false.B))
     ) && rob.io.dispatch.ready
 
     // PRF Busy Table Update (Set Busy on Dispatch)
@@ -128,7 +127,6 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     // Issue Buffer to Adaptor connections
     aluAdaptor.io.issueIn <> aluIB.io.out
     bruAdaptor.io.issueIn <> bruIB.io.out
-    lsAdaptor.io.issueIn <> lsIB.io.out
 
     lsAdaptor.io.robHead := rob.io.head
 
@@ -165,7 +163,6 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     val broadcast = bc.io.broadcastOut
     aluIB.io.broadcast := broadcast
     bruIB.io.broadcast := broadcast
-    lsIB.io.broadcast := broadcast
     lsAdaptor.io.broadcastIn := broadcast
     rob.io.broadcastInput.valid := broadcast.valid
     rob.io.broadcastInput.bits := broadcast.bits
@@ -203,7 +200,6 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
 
     aluIB.io.flush := flushCtrl
     bruIB.io.flush := flushCtrl
-    lsIB.io.flush := flushCtrl
 
     aluAdaptor.io.flush := flushCtrl
     bruAdaptor.io.flush := flushCtrl
