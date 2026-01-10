@@ -109,7 +109,19 @@ object E2EUtils {
         )
 
         val objRc = Process(
-          Seq(objcopy, "-O", "binary", elf.toString, bin.toString),
+          Seq(
+            objcopy,
+            "-O",
+            "binary",
+            "-R",
+            ".note.gnu.build-id",
+            "-R",
+            ".comment",
+            "-R",
+            ".riscv.attributes",
+            elf.toString,
+            bin.toString
+          ),
           repoRoot.toFile
         ).!
         require(

@@ -30,9 +30,15 @@ class LoadStoreUnit extends Module {
     when(valid) {
         val addrOffset = req.addr(1, 0)
         when(req.opWidth === MemOpWidth.HALFWORD) {
-            assert(addrOffset(0) === 0.U, "Halfword access must be 2-byte aligned")
+            assert(
+              addrOffset(0) === 0.U,
+              "Halfword access must be 2-byte aligned"
+            )
         }.elsewhen(req.opWidth === MemOpWidth.WORD) {
-            assert(addrOffset === 0.U, "Word access must be 4-byte aligned")
+            assert(
+              addrOffset === 0.U,
+              p"Word access must be 4-byte aligned. Addr: 0x${Hexadecimal(req.addr)}"
+            )
         }
 
         when(!req.isLoad) {
