@@ -36,28 +36,40 @@ class ALUAdaptor extends Module {
     val s3_bits = Reg(new IssueBufferEntry(new ALUInfo))
     val s3_result = Reg(UInt(32.W))
 
-    // Pipeline Control
-    val can_flow = io.broadcastOut.ready
-    io.issueIn.ready := can_flow
+    // Pipeline Control: A stage moves if the next stage can accept it
+    val s3_ready = io.broadcastOut.ready || !s3_valid
+    val s2_ready = s3_ready || !s2_valid
+    val s1_ready = s2_ready || !s1_valid
 
-    // Transition Logic
-    when(can_flow) {
-        s1_valid := io.issueIn.valid && !io.flush.checkKilled(io.issueIn.bits.robTag)
+    io.issueIn.ready := s1_ready
+
+    // Stage 1 Transition
+    when(s1_ready) {
+        s1_valid := io.issueIn.fire && !io.flush.checkKilled(
+          io.issueIn.bits.robTag
+        )
         s1_bits := io.issueIn.bits
+    }.elsewhen(io.flush.checkKilled(s1_bits.robTag)) {
+        s1_valid := false.B
+    }
 
+    // Stage 2 Transition
+    when(s2_ready) {
         s2_valid := s1_valid && !io.flush.checkKilled(s1_bits.robTag)
-        s2_bits  := s1_bits
+        s2_bits := s1_bits
         s2_data1 := io.prfRead.data1
         s2_data2 := Mux(s1_bits.useImm, s1_bits.imm, io.prfRead.data2)
+    }.elsewhen(io.flush.checkKilled(s2_bits.robTag)) {
+        s2_valid := false.B
+    }
 
+    // Stage 3 Transition
+    when(s3_ready) {
         s3_valid := s2_valid && !io.flush.checkKilled(s2_bits.robTag)
-        s3_bits  := s2_bits
+        s3_bits := s2_bits
         s3_result := alu.io.result
-    }.otherwise {
-        // When stalled, tokens can still be killed
-        when(io.flush.checkKilled(s1_bits.robTag)) { s1_valid := false.B }
-        when(io.flush.checkKilled(s2_bits.robTag)) { s2_valid := false.B }
-        when(io.flush.checkKilled(s3_bits.robTag)) { s3_valid := false.B }
+    }.elsewhen(io.flush.checkKilled(s3_bits.robTag)) {
+        s3_valid := false.B
     }
 
     // Connect Stage 1 to PRF
