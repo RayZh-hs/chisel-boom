@@ -4,66 +4,65 @@ import chisel3._
 import chisel3.util._
 
 class FreeList(numRegs: Int, numArchRegs: Int) extends Module {
-    val width = log2Ceil(numRegs)
-    val capacity = numRegs - numArchRegs
+  val numFreeRegisters = numRegs - numArchRegs
+  val capacity = 1 << log2Ceil(numFreeRegisters)
+  val width = log2Ceil(numRegs)
+  val ptrWidth = log2Ceil(capacity)
 
-    val io = IO(new Bundle {
-        val allocate = Decoupled(UInt(width.W)) // Dequeue: Get a free register
-        val free = Flipped(Decoupled(UInt(width.W))) // Enqueue: Return a register to free list
-        val rollbackFree = Flipped(Decoupled(UInt(width.W))) // Enqueue: Return a register to free list during rollback
-    })
+  val io = IO(new Bundle {
+    val allocate = Decoupled(UInt(width.W))
+    val free = Flipped(Decoupled(UInt(width.W)))
+    val rollbackFree = Flipped(Decoupled(UInt(width.W)))
+  })
 
-    // Initialize the RAM with the registers that are free at reset (numArchRegs to numRegs-1)
-    // We use RegInit to ensure the free list is populated at reset.
-    val initialRegs = Seq.tabulate(capacity)(i => (i + numArchRegs).U(width.W))
-    val ram = RegInit(VecInit(initialRegs))
+  val ram = Mem(capacity, UInt(width.W))
 
-    val head = RegInit(0.U(log2Ceil(capacity).W))
-    val tail = RegInit(0.U(log2Ceil(capacity).W))
-    val maybeFull = RegInit(true.B) // Starts full
+  val head = RegInit(0.U((ptrWidth + 1).W))
+  val tail = RegInit(0.U((ptrWidth + 1).W))
 
-    val ptrMatch = head === tail
-    val empty = ptrMatch && !maybeFull
-    val full = ptrMatch && maybeFull
+  // --- Initialization ---
+  val isInit  = RegInit(true.B)
+  val initPtr = RegInit(0.U(ptrWidth.W))
 
-    // Allocation (Dequeue) logic
-    io.allocate.valid := !empty
-    io.allocate.bits := ram(head)
-
-    val doAlloc = io.allocate.ready && io.allocate.valid
-    when(doAlloc) {
-        head := Mux(head === (capacity - 1).U, 0.U, head + 1.U)
+  when(isInit) {
+    ram.write(initPtr, initPtr + numArchRegs.U)
+    initPtr := initPtr + 1.U
+    when(initPtr === (numFreeRegisters - 1).U) {
+      isInit := false.B
+      tail   := numFreeRegisters.U
     }
+  }
 
-    // Freeing (Enqueue) logic
-    // Calculate available space more explicitly
-    val count = Mux(maybeFull, capacity.U, 
-                    Mux(tail >= head, tail - head, capacity.U - head + tail))
-    val freeSpace = capacity.U - count
+  // --- Logic ---
+  val empty = head === tail
+  io.allocate.valid := !empty && !isInit
+  io.allocate.bits  := ram.read(head(ptrWidth - 1, 0))
+
+  io.free.ready         := !isInit
+  io.rollbackFree.ready := !isInit
+
+  val doAlloc    = io.allocate.fire
+  val doFree     = io.free.fire
+  val doRollback = io.rollbackFree.fire
+  val numEnq     = doFree.asUInt +& doRollback.asUInt
+
+  // Sequential Write Logic (Dual Port Write)
+  when(doFree) {
+    ram.write(tail(ptrWidth - 1, 0), io.free.bits)
+  }
+  
+  val rollbackIdx = tail + doFree.asUInt 
+  when(doRollback) {
+    ram.write(rollbackIdx(ptrWidth - 1, 0), io.rollbackFree.bits)
+  }
+
+  when(!isInit) {
+    // This assertion will trigger in simulation if the Renamer/ROB logic 
+    // attempts to return more registers than exist in the system.
+    assert( (tail - head +& numEnq - doAlloc.asUInt) <= numFreeRegisters.U, 
+           "FreeList Overflow: Architectural limit of %d regs exceeded!", numFreeRegisters.U)
     
-    io.free.ready := freeSpace >= 1.U
-    // rollbackFree needs a second slot available (either free is not firing, or we have 2+ slots)
-    io.rollbackFree.ready := (freeSpace >= 2.U) || (freeSpace >= 1.U && !io.free.valid)
-
-    val doFree = io.free.ready && io.free.valid
-    val doRollbackFree = io.rollbackFree.ready && io.rollbackFree.valid
-
-    when(doFree) {
-        ram(tail) := io.free.bits
-    }
-    when(doRollbackFree) {
-        val targetIdx = Mux(doFree, Mux(tail === (capacity - 1).U, 0.U, tail + 1.U), tail)
-        ram(targetIdx) := io.rollbackFree.bits
-    }
-
-    val numFreed = doFree.asUInt +& doRollbackFree.asUInt
-    val nextTail = tail +& numFreed
-    tail := Mux(nextTail >= capacity.U, nextTail - capacity.U, nextTail)
-
-    // Update full/empty state
-    when(numFreed > doAlloc.asUInt) {
-        maybeFull := true.B
-    }.elsewhen(doAlloc && numFreed === 0.U) {
-        maybeFull := false.B
-    }
+    head := head + doAlloc.asUInt
+    tail := tail + numEnq
+  }
 }
