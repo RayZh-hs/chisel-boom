@@ -37,22 +37,29 @@ class LoadStoreUnit extends Module {
     wdata(3) := req.data(31, 24)
 
     // Calculate Write Mask based on Address and OpWidth
-    when(valid && !req.isLoad) {
+    when(valid) {
         val addrOffset = req.addr(1, 0)
-        switch(req.opWidth) {
-            is(MemOpWidth.BYTE) {
-                wmask(addrOffset) := true.B
-            }
-            is(MemOpWidth.HALFWORD) {
-                // Assuming natural alignment for simplicity check
-                wmask(addrOffset) := true.B
-                wmask(addrOffset + 1.U) := true.B
-            }
-            is(MemOpWidth.WORD) {
-                wmask := VecInit(Seq.fill(4)(true.B))
-            }
+        when(req.opWidth === MemOpWidth.HALFWORD) {
+            assert(addrOffset(0) === 0.U, "Halfword access must be 2-byte aligned")
+        }.elsewhen(req.opWidth === MemOpWidth.WORD) {
+            assert(addrOffset === 0.U, "Word access must be 4-byte aligned")
         }
-        mem.write(wordAddr, wdata, wmask)
+
+        when(!req.isLoad) {
+            switch(req.opWidth) {
+                is(MemOpWidth.BYTE) {
+                    wmask(addrOffset) := true.B
+                }
+                is(MemOpWidth.HALFWORD) {
+                    wmask(addrOffset) := true.B
+                    wmask(addrOffset + 1.U) := true.B
+                }
+                is(MemOpWidth.WORD) {
+                    wmask := VecInit(Seq.fill(4)(true.B))
+                }
+            }
+            mem.write(wordAddr, wdata, wmask)
+        }
     }
 
     // Read Logic

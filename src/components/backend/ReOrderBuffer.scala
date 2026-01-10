@@ -108,7 +108,6 @@ class ReOrderBuffer extends Module {
 
     io.commit.valid := canCommit
     io.commit.bits := headEntry
-    io.commit.ready := true.B
 
     io.head := head
 }

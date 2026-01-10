@@ -17,8 +17,11 @@ class BranchTargetBuffer extends Module {
     val buffer = SyncReadMem(32, new BTBEntry)
     val index = io.pc(6, 2)
     val tag = io.pc(31, 7)
+    
+    val tag_reg = RegNext(tag)
     val entry = buffer.read(index)
-    when (entry.tag === tag) {
+
+    when (entry.tag === tag_reg) {
         io.target.valid := true.B
         io.target.bits := entry.target
     } .otherwise {
