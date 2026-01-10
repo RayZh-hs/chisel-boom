@@ -2,15 +2,15 @@ import mill._
 import mill.scalalib._
 
 object `package` extends RootModule with ScalaModule {
-    def scalaVersion = "2.13.18"
+    def scalaVersion = "2.13.12"
 
     def ivyDeps = Agg(
-      ivy"org.chipsalliance::chisel:7.4.0",
+      ivy"org.chipsalliance::chisel:6.0.0",
       ivy"org.scalatest::scalatest:3.2.19"
     )
 
     def scalacPluginIvyDeps = Agg(
-      ivy"org.chipsalliance:chisel-plugin_2.13.18:7.4.0"
+      ivy"org.chipsalliance:chisel-plugin_2.13.12:6.0.0"
     )
 
     object test extends ScalaTests with TestModule.ScalaTest {
