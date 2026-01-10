@@ -41,10 +41,10 @@ object CmpOpType extends ChiselEnum {
 
 /** Memory operation width types.
   *
-  * Includes: `BYTE`, `HALF`, `WORD`, `DWORD`.
+  * Includes: `BYTE`, `HALFWORD`, `WORD`, `DWORD`.
   */
 object MemOpWidth extends ChiselEnum {
-    val BYTE, HALF, WORD, DWORD = Value
+    val BYTE, HALFWORD, WORD, DWORD = Value
 }
 
 /** Physical Register Busy Status

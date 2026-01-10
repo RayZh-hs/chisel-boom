@@ -104,10 +104,10 @@ class InstDecoder extends Module {
         imm := iImm
         switch(funct3) {
             is(0.U) { memOpWidth := MemOpWidth.BYTE }
-            is(1.U) { memOpWidth := MemOpWidth.HALF }
+            is(1.U) { memOpWidth := MemOpWidth.HALFWORD }
             is(2.U) { memOpWidth := MemOpWidth.WORD }
             is(4.U) { memOpWidth := MemOpWidth.BYTE } // LBU
-            is(5.U) { memOpWidth := MemOpWidth.HALF } // LHU
+            is(5.U) { memOpWidth := MemOpWidth.HALFWORD } // LHU
         }
     }.elsewhen(opcode === "b0100011".U) { // STORE
         fUnitType := FunUnitType.MEM
@@ -116,7 +116,7 @@ class InstDecoder extends Module {
         imm := sImm
         switch(funct3) {
             is(0.U) { memOpWidth := MemOpWidth.BYTE }
-            is(1.U) { memOpWidth := MemOpWidth.HALF }
+            is(1.U) { memOpWidth := MemOpWidth.HALFWORD }
             is(2.U) { memOpWidth := MemOpWidth.WORD }
         }
     }.elsewhen(opcode === "b0010011".U) { // ALU I-Type
