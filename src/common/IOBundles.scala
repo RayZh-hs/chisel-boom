@@ -43,6 +43,7 @@ class DecodeToDispatchBundle extends BrFlagBundle {
     val imm = UInt(32.W)
     // - memory access info
     val opWidth = MemOpWidth()
+    val isUnsigned = Bool()
     // paddr is assumed to be prs1
     // psrc is assumed to be prs2
     // pdst is assumed to be pdst

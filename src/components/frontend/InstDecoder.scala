@@ -49,6 +49,7 @@ class InstDecoder extends Module {
     val memOpWidth = Wire(MemOpWidth())
     val isLoad = Wire(Bool())
     val isStore = Wire(Bool())
+    val isUnsigned = Wire(Bool())
     val useImm = Wire(Bool())
     val imm = Wire(UInt(32.W))
 
@@ -60,6 +61,7 @@ class InstDecoder extends Module {
     memOpWidth := MemOpWidth.WORD
     isLoad := false.B
     isStore := false.B
+    isUnsigned := false.B
     useImm := false.B
     imm := 0.U
 
@@ -103,11 +105,11 @@ class InstDecoder extends Module {
         useImm := true.B
         imm := iImm
         switch(funct3) {
-            is(0.U) { memOpWidth := MemOpWidth.BYTE }
-            is(1.U) { memOpWidth := MemOpWidth.HALFWORD }
-            is(2.U) { memOpWidth := MemOpWidth.WORD }
-            is(4.U) { memOpWidth := MemOpWidth.BYTE } // LBU
-            is(5.U) { memOpWidth := MemOpWidth.HALFWORD } // LHU
+            is(0.U) { memOpWidth := MemOpWidth.BYTE; isUnsigned := false.B }
+            is(1.U) { memOpWidth := MemOpWidth.HALFWORD; isUnsigned := false.B }
+            is(2.U) { memOpWidth := MemOpWidth.WORD; isUnsigned := false.B }
+            is(4.U) { memOpWidth := MemOpWidth.BYTE; isUnsigned := true.B } // LBU
+            is(5.U) { memOpWidth := MemOpWidth.HALFWORD; isUnsigned := true.B } // LHU
         }
     }.elsewhen(opcode === "b0100011".U) { // STORE
         fUnitType := FunUnitType.MEM
@@ -204,5 +206,6 @@ class InstDecoder extends Module {
     io.out.bits.useImm := useImm
     io.out.bits.imm := imm
     io.out.bits.opWidth := memOpWidth
+    io.out.bits.isUnsigned := isUnsigned
     io.out.bits.brFlag := fUnitType === FunUnitType.BRU
 }

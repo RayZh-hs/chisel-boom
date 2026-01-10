@@ -102,8 +102,16 @@ class LoadStoreAdaptor extends Module {
 
     // Flush WB state on flush
     when(io.flush) {
-        wbValid := false.B
-        wbResultPending := false.B
+        val head_le_flush = io.robHead <= io.flushTag
+        val is_older = Mux(
+          head_le_flush,
+          (wbTag >= io.robHead && wbTag < io.flushTag),
+          (wbTag >= io.robHead || wbTag < io.flushTag)
+        )
+        when(!is_older) {
+            wbValid := false.B
+            wbResultPending := false.B
+        }
     }
 
     // Regs for Store status

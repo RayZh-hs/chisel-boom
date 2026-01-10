@@ -16,5 +16,7 @@ class BroadcastChannel extends Module {
 
     val arbiter = Module(new RRArbiter(new BroadcastBundle, 3))
     arbiter.io.in <> Seq(io.aluResult, io.bruResult, io.memResult)
-    io.broadcastOut <> arbiter.io.out
+    io.broadcastOut.valid := arbiter.io.out.valid
+    io.broadcastOut.bits := arbiter.io.out.bits
+    arbiter.io.out.ready := true.B
 }
