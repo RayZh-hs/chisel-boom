@@ -34,10 +34,9 @@ class ReOrderBuffer extends Module {
     private val tail = RegInit(0.U(ROB_WIDTH.W))
     private val maybeFull = RegInit(false.B)
 
-    private def nextPtr(p: UInt): UInt =
-        Mux(p === (entries - 1).U, 0.U, p + 1.U)
-    private def prevPtr(p: UInt): UInt =
-        Mux(p === 0.U, (entries - 1).U, p - 1.U)
+    // entries is a power of 2, so we can use bitmask for efficient wrapping
+    private def nextPtr(p: UInt): UInt = (p + 1.U)(ROB_WIDTH - 1, 0)
+    private def prevPtr(p: UInt): UInt = (p - 1.U)(ROB_WIDTH - 1, 0)
 
     val tailPrev = prevPtr(tail)
     val tailNext = nextPtr(tail)

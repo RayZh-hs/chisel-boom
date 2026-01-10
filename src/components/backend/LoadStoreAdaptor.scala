@@ -138,7 +138,7 @@ class LoadStoreAdaptor extends Module {
 
     // 2. Commit -> Write to Memory
     // We wait until the ROB head pointer matches our ROB tag
-    val cancommitStore = headValid && isStore && (io.flush.robHead === robTag)
+    val cancommitStore = headValid && isStore && (io.robHead === robTag)
 
     when(cancommitStore) {
         // Send request to Memory System

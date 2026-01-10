@@ -50,9 +50,12 @@ class SequentialIssueBuffer[T <: Data](gen: T, entries: Int) extends Module {
     }
 
     // --- Broadcast Logic ---
+    // Note: Only need to update entries between head and tail
+    // For simplicity, we update all entries but the buffer semantics ensure only valid entries matter
     when(io.broadcast.valid) {
         val resPdst = io.broadcast.bits.pdst
         for (i <- 0 until entries) {
+            // Only update src readiness, actual validity is tracked by head/tail pointers
             when(buffer(i).src1 === resPdst) {
                 buffer(i).src1Ready := true.B
             }
@@ -76,40 +79,20 @@ class SequentialIssueBuffer[T <: Data](gen: T, entries: Int) extends Module {
         maybeFull := false.B
     }
 
-    // --- Flush Logic ---
-    // TODO: Optimize to directly find the next tail(oldest invalid) without doing the count
+    // --- Flush Logic (Optimized) ---
     when(io.flush.valid) {
-        val validMask = Wire(Vec(entries, Bool()))
+        val killMask = VecInit((0 until entries).map(i => io.flush.checkKilled(buffer(i).robTag))).asUInt
 
-        // Construct mask of physically valid entries
-        for (i <- 0 until entries) {
-            val idx = i.U
-            when(isFull) {
-                validMask(i) := true.B
-            }.elsewhen(isEmpty) {
-                validMask(i) := false.B
-            }.elsewhen(head < tail) {
-                validMask(i) := idx >= head && idx < tail
-            }.otherwise {
-                validMask(i) := idx >= head || idx < tail
-            }
+        val doubledKillMask = Cat(killMask, killMask)
+        val shiftedKillMask = doubledKillMask >> head
+
+        val anyKilled = killMask.orR
+        val distToFirstKill = PriorityEncoder(shiftedKillMask(entries - 1, 0))
+        
+        when(anyKilled) {
+            val nextTail = head +& distToFirstKill
+            tail := Mux(nextTail >= entries.U, nextTail - entries.U, nextTail)
+            maybeFull := false.B
         }
-
-        val keepMask = Wire(Vec(entries, Bool()))
-
-        for (i <- 0 until entries) {
-            keepMask(i) := validMask(i) && !io.flush.checkKilled(buffer(i).robTag)
-        }
-
-        // Count how many entries to keep (starting from head)
-        val newCount = PopCount(keepMask)
-
-        // Move tail to head + newCount
-        val nextTail = head +& newCount
-        tail := Mux(nextTail >= entries.U, nextTail - entries.U, nextTail)
-
-        // Update maybeFull state
-        // If we keep equal to entries, it must be full
-        maybeFull := (newCount === entries.U)
     }
 }

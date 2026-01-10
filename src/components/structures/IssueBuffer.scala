@@ -61,15 +61,17 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int) extends Module {
     }
 
     // 4. Update Readiness (Snoop/Broadcast)
-    // This happens every cycle an entry is valid
-    for (i <- 0 until numEntries) {
-        when(valid(i) && io.broadcast.valid) {
-            val resPdst = io.broadcast.bits.pdst
-            when(buffer(i).src1 === resPdst) {
-                buffer(i).src1Ready := true.B
-            }
-            when(buffer(i).src2 === resPdst) {
-                buffer(i).src2Ready := true.B
+    // Only update valid entries when broadcast is active
+    when(io.broadcast.valid) {
+        val resPdst = io.broadcast.bits.pdst
+        for (i <- 0 until numEntries) {
+            when(valid(i)) {
+                when(buffer(i).src1 === resPdst) {
+                    buffer(i).src1Ready := true.B
+                }
+                when(buffer(i).src2 === resPdst) {
+                    buffer(i).src2Ready := true.B
+                }
             }
         }
     }

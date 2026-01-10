@@ -47,16 +47,17 @@ class PhysicalRegisterFile(numRegs: Int, numReadPorts: Int, numWritePorts: Int, 
     }
 
     // Busy Table Updates
-    // setBusy has priority over setReady if they happen to the same register (unlikely in this design)
-    when(io.setBusy.valid) {
-        busyTable(io.setBusy.bits) := true.B
+    // Assertion first - setBusy and setReady should never target same register in same cycle
+    when(io.setBusy.valid && io.setReady.valid && (io.setBusy.bits === io.setReady.bits)) {
+        chisel3.assert(false.B, "Attempting to set the same register busy and ready in the same cycle! should not happen since free list have delay.")
     }
+    
+    // setReady first, then setBusy takes precedence (more common to set busy on new dispatch)
     when(io.setReady.valid) {
         busyTable(io.setReady.bits) := false.B
     }
-
-    when(io.setBusy.valid && io.setReady.valid && (io.setBusy.bits === io.setReady.bits)) {
-        chisel3.assert(false.B, "Attempting to set the same register busy and ready in the same cycle! should not happen since free list have delay.")
+    when(io.setBusy.valid) {
+        busyTable(io.setBusy.bits) := true.B
     }
     
     // Register 0 is always ready and always 0

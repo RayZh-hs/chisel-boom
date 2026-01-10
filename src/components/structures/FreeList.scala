@@ -36,9 +36,14 @@ class FreeList(numRegs: Int, numArchRegs: Int) extends Module {
     }
 
     // Freeing (Enqueue) logic
-    // TODO: simplify the logic for handling 2 enqueues
-    io.free.ready := !full
-    io.rollbackFree.ready := !full && (io.free.ready && !io.free.valid || tail =/= Mux(head === 0.U, (capacity - 1).U, head - 1.U)) // Simplified check for 2 spaces
+    // Calculate available space more explicitly
+    val count = Mux(maybeFull, capacity.U, 
+                    Mux(tail >= head, tail - head, capacity.U - head + tail))
+    val freeSpace = capacity.U - count
+    
+    io.free.ready := freeSpace >= 1.U
+    // rollbackFree needs a second slot available (either free is not firing, or we have 2+ slots)
+    io.rollbackFree.ready := (freeSpace >= 2.U) || (freeSpace >= 1.U && !io.free.valid)
 
     val doFree = io.free.ready && io.free.valid
     val doRollbackFree = io.rollbackFree.ready && io.rollbackFree.valid
