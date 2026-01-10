@@ -7,9 +7,9 @@ object Configurables {
     val MEM_WIDTH = 12 // 4KB data memory (8-bit per slot)
 
     object Derived {
-        val PREG_COUNT = 2 << PREG_WIDTH
-        val ROB_COUNT = 2 << ROB_WIDTH
-        val IMEM_SIZE = 2 << IMEM_WIDTH
-        val MEM_SIZE = 2 << MEM_WIDTH
+        val PREG_COUNT = 1 << PREG_WIDTH
+        val ROB_COUNT = 1 << ROB_WIDTH
+        val IMEM_SIZE = 1 << IMEM_WIDTH
+        val MEM_SIZE = 1 << MEM_WIDTH
     }
 }

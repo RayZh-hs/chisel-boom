@@ -96,9 +96,14 @@ class LoadStoreAdaptor extends Module {
     val fireStore = WireInit(false.B)
     val readyToBroadcastStore = WireInit(false.B)
 
+    // Default Memory Request
+    memory.io.req.valid := false.B
+    memory.io.req.bits := DontCare
+
     // Load Section
     // Condition: LSQ has valid load, and WB stage is free (to accept result in next cycle).
-    val canIssueLoad = headValid && isLoad && !wbState.valid && !wbState.resultPending
+    val canIssueLoad =
+        headValid && isLoad && !wbState.valid && !wbState.resultPending
 
     when(canIssueLoad) {
         // Send request to Memory System

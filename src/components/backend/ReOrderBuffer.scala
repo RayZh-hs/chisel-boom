@@ -33,7 +33,7 @@ class ReOrderBuffer extends Module {
     private val head = RegInit(0.U(ROB_WIDTH.W))
     private val tail = RegInit(0.U(ROB_WIDTH.W))
     private val maybeFull = RegInit(false.B)
-    
+
     private def nextPtr(p: UInt): UInt =
         Mux(p === (entries - 1).U, 0.U, p + 1.U)
     private def prevPtr(p: UInt): UInt =
@@ -41,9 +41,6 @@ class ReOrderBuffer extends Module {
 
     val tailPrev = prevPtr(tail)
     val tailNext = nextPtr(tail)
-
-    io.dispatch.ready := !isFull && !isRollingBack
-    io.broadcastInput.ready := true.B // Always ready to accept broadcasts
 
     val isRollingBack = RegInit(false.B)
     val targetTail = Reg(UInt(ROB_WIDTH.W))
@@ -78,6 +75,7 @@ class ReOrderBuffer extends Module {
     }
 
     // Dispatch
+    io.dispatch.ready := !isFull && !isRollingBack
     when(doEnq) {
         val entry = Wire(new ROBEntry)
         entry.ldst := io.dispatch.bits.ldst
@@ -90,6 +88,7 @@ class ReOrderBuffer extends Module {
     io.robTag := tail
 
     // Broadcast
+    io.broadcastInput.ready := true.B // Always ready to accept broadcasts
     when(io.broadcastInput.valid) {
         robRam(io.broadcastInput.bits.robTag).ready := true.B
     }
