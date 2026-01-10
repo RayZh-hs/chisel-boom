@@ -45,13 +45,13 @@ class MMIODevice extends Module {
 
 class PrintDevice extends MMIODevice {
     when(io.req.valid && !io.req.bits.isLoad) {
-        printf(p"MMIO Print Device: Data = 0x${Hexadecimal(io.req.bits.data)}\n")
+        printf(p"print:${io.req.bits.data.asUInt}\n")
     }
 }
 
 class ExitDevice extends MMIODevice {
     when(io.req.valid && !io.req.bits.isLoad) {
-        printf(p"MMIO Exit Device: Exiting with code = 0x${Hexadecimal(io.req.bits.data)}\n")
+        printf(p"${io.req.bits.data.asUInt}\n")
         stop()
     }
 }

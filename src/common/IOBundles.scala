@@ -111,10 +111,12 @@ class FlushBundle extends Bundle {
 
     def checkKilled(tag: UInt): Bool = {
         val head_le_flush = robHead <= flushTag
+        val tag_ge_robHead = tag >= robHead
+        val tag_le_flush = tag <= flushTag
         val is_older = Mux(
           head_le_flush,
-          (tag >= robHead && tag <= flushTag),
-          (tag >= robHead || tag <= flushTag)
+          (tag_ge_robHead && tag_le_flush),
+          (tag_ge_robHead || tag_le_flush)
         )
         valid && !is_older
     }
