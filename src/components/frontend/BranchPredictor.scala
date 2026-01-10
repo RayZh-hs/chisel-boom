@@ -22,13 +22,15 @@ class BranchTargetBuffer extends Module {
         val target = UInt(32.W)
     }
     val buffer = SyncReadMem(32, new BTBEntry)
+    val valids = RegInit(0.U(32.W))
     val index = io.pc(6, 2)
     val tag = io.pc(31, 7)
     
+    val index_reg = RegNext(index)
     val tag_reg = RegNext(tag)
     val entry = buffer.read(index)
 
-    when (entry.tag === tag_reg) {
+    when (valids(index_reg) && entry.tag === tag_reg) {
         io.target.valid := true.B
         io.target.bits := entry.target
     } .otherwise {
@@ -42,6 +44,7 @@ class BranchTargetBuffer extends Module {
         val new_entry = Wire(new BTBEntry)
         new_entry.tag := upd_tag
         new_entry.target := io.update.bits.target
-        buffer.write(upd_index, new_entry) // last time always wins
+        buffer.write(upd_index, new_entry)
+        valids := valids | (1.U << upd_index)
     }
 }

@@ -16,6 +16,6 @@ class InstructionMemory(val hexFilePath: String) extends Module {
     // Initialize instruction memory from hex file
     loadMemoryFromFileInline(imem, hexFilePath)
     assert(io.addr(1, 0) === 0.U, "Instruction fetch address must be 4-byte aligned")
-    val readAddr = io.addr(IMEM_WIDTH + 2, 2) // Word-aligned address matching IMEM_SIZE
+    val readAddr = io.addr(IMEM_WIDTH + 1, 2) 
     io.inst := imem.read(readAddr)
 }

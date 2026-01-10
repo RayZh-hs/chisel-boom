@@ -44,7 +44,16 @@ class SequentialIssueBuffer[T <: Data](gen: T, entries: Int) extends Module {
     io.in.ready := !isFull && !io.flush.valid
 
     when(io.in.fire) {
-        buffer(tail) := io.in.bits
+        val entry = io.in.bits
+        val broadcastMatch1 = io.broadcast.valid && (entry.src1 === io.broadcast.bits.pdst)
+        val broadcastMatch2 = io.broadcast.valid && (entry.src2 === io.broadcast.bits.pdst)
+
+        val updatedEntry = Wire(new SequentialBufferEntry(gen))
+        updatedEntry := entry
+        when(broadcastMatch1) { updatedEntry.src1Ready := true.B }
+        when(broadcastMatch2) { updatedEntry.src2Ready := true.B }
+
+        buffer(tail) := updatedEntry
         tail := Mux(tail === (entries - 1).U, 0.U, tail + 1.U)
         maybeFull := true.B
     }

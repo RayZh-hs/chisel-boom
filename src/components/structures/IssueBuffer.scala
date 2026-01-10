@@ -56,7 +56,16 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int) extends Module {
     val emptyIndex = PriorityEncoder(valid.map(!_))
 
     when(io.in.fire) {
-        buffer(emptyIndex) := io.in.bits
+        val entry = io.in.bits
+        val broadcastMatch1 = io.broadcast.valid && (entry.src1 === io.broadcast.bits.pdst)
+        val broadcastMatch2 = io.broadcast.valid && (entry.src2 === io.broadcast.bits.pdst)
+        
+        val updatedEntry = Wire(new IssueBufferEntry(gen))
+        updatedEntry := entry
+        when(broadcastMatch1) { updatedEntry.src1Ready := true.B }
+        when(broadcastMatch2) { updatedEntry.src2Ready := true.B }
+        
+        buffer(emptyIndex) := updatedEntry
         valid(emptyIndex) := true.B
     }
 

@@ -252,4 +252,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
 
     freeList.io.rollbackFree.valid := rollback.valid && (rollback.bits.ldst =/= 0.U)
     freeList.io.rollbackFree.bits := rollback.bits.pdst
+    
+    prf.io.clrBusy.valid := rollback.valid && (rollback.bits.pdst =/= 0.U)
+    prf.io.clrBusy.bits := rollback.bits.pdst
 }
