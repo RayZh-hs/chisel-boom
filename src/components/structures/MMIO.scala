@@ -4,39 +4,38 @@ import chisel3.util._
 import common._
 import common.Configurables._
 
-class MMIORouter extends Module {
+class MMIORouter(val mappings: Seq[UInt]) extends Module {
     val io = IO(new Bundle {
-        val req = Flipped(Valid(new LoadStoreAction))
-        val resp = Valid(UInt(32.W))
+        val upstream = new MemoryInterface
+        // Parameterized ports to connect to devices
+        val devices = Vec(mappings.length, Flipped(new MemoryInterface))
     })
-
-    val printDevice = Module(new PrintDevice)
-    val exitDevice = Module(new ExitDevice)
 
     // Routing Logic
-    // 0x8000_0000: Print Device
-    // 0x8000_0008: Exit Device
+    val sel = mappings.map(addr => io.upstream.req.bits.addr === addr)
+    val anySel = sel.reduce(_ || _)
+
+    for (i <- 0 until mappings.length) {
+        io.devices(i).req.valid := io.upstream.req.valid && sel(i)
+        io.devices(i).req.bits := io.upstream.req.bits
+    }
+
+    // Response Logic (1 cycle latency)
+    io.upstream.resp.valid := RegNext(io.upstream.req.valid && anySel && io.upstream.req.bits.isLoad)
     
-    // Address bit 31 is the MMIO indicator, and we check lower bits for device selection
-    val isPrint = io.req.bits.addr === "h80000000".U
-    val isExit = io.req.bits.addr === "h80000008".U
-
-    printDevice.io.req.valid := io.req.valid && isPrint
-    printDevice.io.req.bits := io.req.bits
-
-    exitDevice.io.req.valid := io.req.valid && isExit
-    exitDevice.io.req.bits := io.req.bits
-
-    // Response Logic (1 cycle latency to match LSU)
-    // We only care about loads for responses
-    io.resp.valid := RegNext(io.req.valid && (isPrint || isExit) && io.req.bits.isLoad)
-    io.resp.bits := RegNext(Mux(isPrint, printDevice.io.resp.bits, exitDevice.io.resp.bits))
+    // Mux for responses
+    val respData = Wire(UInt(32.W))
+    respData := 0.U
+    for (i <- 0 until mappings.length) {
+        when(RegNext(sel(i))) {
+            respData := io.devices(i).resp.bits
+        }
+    }
+    io.upstream.resp.bits := respData
 }
+
 class MMIODevice extends Module {
-    val io = IO(new Bundle {
-        val req = Flipped(Valid(new LoadStoreAction))
-        val resp = Valid(UInt(32.W))
-    })
+    val io = IO(new MemoryInterface)
 
     io.resp.valid := io.req.valid && io.req.bits.isLoad
     io.resp.bits := 0.U
@@ -52,6 +51,5 @@ class PrintDevice extends MMIODevice {
 class ExitDevice extends MMIODevice {
     when(io.req.valid && !io.req.bits.isLoad) {
         printf(p"${io.req.bits.data.asUInt}\n")
-        stop()
     }
 }

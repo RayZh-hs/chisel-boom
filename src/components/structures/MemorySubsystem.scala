@@ -7,27 +7,25 @@ import common.Configurables._
 
 class MemorySubsystem extends Module {
     val io = IO(new Bundle {
-        val req = Flipped(Valid(new LoadStoreAction))
-        val resp = Valid(UInt(32.W))
+        val upstream = new MemoryInterface
+        val lsu = Flipped(new MemoryInterface)
+        val mmio = Flipped(new MemoryInterface)
     })
 
-    val lsu = Module(new LoadStoreUnit)
-    val mmio = Module(new MMIORouter)
+    val isMMIO = io.upstream.req.bits.addr(31) === 1.U
 
-    val isMMIO = io.req.bits.addr(31) === 1.U
+    io.lsu.req.valid := io.upstream.req.valid && !isMMIO
+    io.lsu.req.bits := io.upstream.req.bits
 
-    lsu.io.req.valid := io.req.valid && !isMMIO
-    lsu.io.req.bits := io.req.bits
-
-    mmio.io.req.valid := io.req.valid && isMMIO
-    mmio.io.req.bits := io.req.bits
+    io.mmio.req.valid := io.upstream.req.valid && isMMIO
+    io.mmio.req.bits := io.upstream.req.bits
 
     // Response Handling (1 cycle latency)
-    val respValid = lsu.io.resp.valid || mmio.io.resp.valid
-    val rawData = Mux(lsu.io.resp.valid, lsu.io.resp.bits, mmio.io.resp.bits)
+    val respValid = io.lsu.resp.valid || io.mmio.resp.valid
+    val rawData = Mux(io.lsu.resp.valid, io.lsu.resp.bits, io.mmio.resp.bits)
 
     // Pipeline the request info for formatting
-    val reqReg = RegNext(io.req.bits)
+    val reqReg = RegNext(io.upstream.req.bits)
     val addrOffset = reqReg.addr(1, 0)
     
     // Process Data (Sign Extension)
@@ -54,6 +52,6 @@ class MemorySubsystem extends Module {
         }
     }
 
-    io.resp.valid := respValid
-    io.resp.bits := formattedData
+    io.upstream.resp.valid := respValid
+    io.upstream.resp.bits := formattedData
 }

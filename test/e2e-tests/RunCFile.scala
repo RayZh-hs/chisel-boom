@@ -47,14 +47,9 @@ object RunCFile extends App {
 
         println("Simulation started.")
         while (!done && cycle < 200000) {
-            if (cycle % 1000 == 0) println(s"Cycle: $cycle")
-            val mmio = dut.lsAdaptor.memory.mmio.exitDevice.io.req
-            if (
-              mmio.valid.peek().litToBoolean && !mmio.bits.isLoad
-                  .peek()
-                  .litToBoolean
-            ) {
-                result = mmio.bits.data.peek().litValue
+            if (cycle % 100 == 0) println(s"Cycle: $cycle")
+            if( dut.io.exit.valid.peek().litToBoolean) {
+                result = dut.io.exit.bits.peek().litValue
                 done = true
             } else {
                 dut.clock.step(1)

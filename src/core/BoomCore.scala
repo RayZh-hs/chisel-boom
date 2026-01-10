@@ -11,6 +11,10 @@ import common.Configurables._
 import components.structures.{ALUInfo, BRUInfo, IssueBuffer, LoadStoreInfo, SequentialIssueBuffer, SequentialBufferEntry}
 
 class BoomCore(val hexFile: String) extends CycleAwareModule {
+    val io = IO(new Bundle {
+        val exit = Output(Valid(new LoadStoreAction))
+    })
+
     // Component Instantiation
     val fetcher = Module(new InstFetcher)
     val decoder = Module(new InstDecoder)
@@ -25,7 +29,27 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     val bruIB = Module(new IssueBuffer(new BRUInfo, 4))
     val aluAdaptor = Module(new ALUAdaptor)
     val bruAdaptor = Module(new BRUAdaptor)
+
+    // Memory Subsystem and MMIO Devices
+    val lsu = Module(new LoadStoreUnit)
+    val printDevice = Module(new PrintDevice)
+    val exitDevice = Module(new ExitDevice)
+    val mmio = Module(new MMIORouter(Seq("h80000000".U, "h80000008".U)))
+    val memory = Module(new MemorySubsystem)
     val lsAdaptor = Module(new LoadStoreAdaptor)
+
+    // Generic memory routing: Adaptor -> MemorySubsystem -> (LSU | MMIO)
+    memory.io.upstream <> lsAdaptor.io.mem
+    lsu.io <> memory.io.lsu
+    mmio.io.upstream <> memory.io.mmio
+
+    printDevice.io <> mmio.io.devices(0)
+    exitDevice.io <> mmio.io.devices(1)
+
+    // Expose exit device to top level
+    io.exit.valid := exitDevice.io.req.valid && !exitDevice.io.req.bits.isLoad
+    io.exit.bits := exitDevice.io.req.bits
+
     val prf = Module(new PhysicalRegisterFile(Derived.PREG_COUNT, 6, 1, 32))
     val bc = Module(new BroadcastChannel)
 
@@ -226,6 +250,6 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     rat.rollback(0).bits.ldst := rollback.bits.ldst
     rat.rollback(0).bits.stalePdst := rollback.bits.stalePdst
 
-    freeList.io.rollbackFree.valid := rollback.valid
+    freeList.io.rollbackFree.valid := rollback.valid && (rollback.bits.ldst =/= 0.U)
     freeList.io.rollbackFree.bits := rollback.bits.pdst
 }

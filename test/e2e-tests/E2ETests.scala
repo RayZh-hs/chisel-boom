@@ -38,16 +38,8 @@ class E2ETests extends AnyFunSuite with ChiselScalatestTester {
                         var done = false
 
                         while (!done && cycle < 200000) {
-                            val mmio =
-                                dut.lsAdaptor.memory.mmio.exitDevice.io.req
-                            if (
-                              mmio.valid
-                                  .peek()
-                                  .litToBoolean && !mmio.bits.isLoad
-                                  .peek()
-                                  .litToBoolean
-                            ) {
-                                result = mmio.bits.data.peek().litValue
+                            if (dut.io.exit.valid.peek().litToBoolean) {
+                                result = dut.io.exit.bits.data.peek().litValue
                                 done = true
                             } else {
                                 dut.clock.step(1)

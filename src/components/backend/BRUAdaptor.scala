@@ -100,9 +100,7 @@ class BRUAdaptor extends Module {
     io.broadcastOut.bits.data := s3_result
     io.broadcastOut.bits.writeEn := isWritebackInst_s3
 
-    io.brUpdate.valid := s3_valid && !s3_upd_sent && !io.flush.checkKilled(
-      s3_bits.robTag
-    )
+    io.brUpdate.valid := s3_valid && !s3_upd_sent
     io.brUpdate.taken := s3_taken
     io.brUpdate.target := s3_target
     io.brUpdate.pc := s3_bits.info.pc
@@ -110,7 +108,11 @@ class BRUAdaptor extends Module {
     io.brUpdate.predict := s3_bits.info.predict
     io.brUpdate.predictedTarget := s3_bits.info.predictedTarget
 
-    val mispredict = (io.brUpdate.taken =/= io.brUpdate.predict) ||
-        (io.brUpdate.taken && io.brUpdate.target =/= io.brUpdate.predictedTarget)
+    val s3_mispredict = RegEnable(
+      (bru.io.taken =/= s2_bits.info.predict) ||
+        (bru.io.taken && bru.io.target =/= s2_bits.info.predictedTarget),
+      s3_ready
+    )
+    val mispredict = s3_mispredict
     io.brUpdate.mispredict := mispredict
 }

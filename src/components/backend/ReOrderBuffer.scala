@@ -44,16 +44,15 @@ class ReOrderBuffer extends Module {
     val isRollingBack = RegInit(false.B)
     val targetTail = Reg(UInt(ROB_WIDTH.W))
 
-    when(io.brUpdate.valid && io.brUpdate.bits.mispredict) {
-        isRollingBack := true.B
-        targetTail := nextPtr(io.brUpdate.bits.robTag)
-    }
-
     val rollbackDone = tail === targetTail
     val doPopTail = isRollingBack && !rollbackDone
 
     when(isRollingBack && rollbackDone) {
         isRollingBack := false.B
+    }
+    when(io.brUpdate.valid && io.brUpdate.bits.mispredict) {
+        isRollingBack := true.B
+        targetTail := nextPtr(io.brUpdate.bits.robTag)
     }
 
     val ptrMatch = head === tail

@@ -10,7 +10,9 @@ import components.structures.{
     LoadStoreInfo,
     SequentialBufferEntry,
     MMIORouter,
-    MemorySubsystem
+    MemorySubsystem,
+    PrintDevice,
+    ExitDevice
 }
 
 // State maintained for a load in the writeback pipeline stage
@@ -29,10 +31,12 @@ class LoadStoreAdaptor extends Module {
         val prfRead = new PRFReadBundle
         val flush = Input(new FlushBundle)
         val robHead = Input(UInt(ROB_WIDTH.W))
+        
+        // Memory Interface
+        val mem = Flipped(new MemoryInterface)
     })
 
     val lsq = Module(new SequentialIssueBuffer(new LoadStoreInfo, 8))
-    val memory = Module(new MemorySubsystem)
 
     // Connect LSQ
     lsq.io.in <> io.issueIn
@@ -105,13 +109,13 @@ class LoadStoreAdaptor extends Module {
     val effAddr = (s2_data1.asSInt + s2_bits.info.imm.asSInt).asUInt
 
     // Memory Request (Stage 2 -> Stage 3)
-    memory.io.req.valid := s2_valid && (isLoadS2 || canCommitStoreS2) && s3_ready
-    memory.io.req.bits.isLoad := isLoadS2
-    memory.io.req.bits.opWidth := s2_bits.info.opWidth
-    memory.io.req.bits.isUnsigned := s2_bits.info.isUnsigned
-    memory.io.req.bits.addr := effAddr
-    memory.io.req.bits.data := s2_data2
-    memory.io.req.bits.targetReg := s2_bits.pdst
+    io.mem.req.valid := s2_valid && (isLoadS2 || canCommitStoreS2) && s3_ready
+    io.mem.req.bits.isLoad := isLoadS2
+    io.mem.req.bits.opWidth := s2_bits.info.opWidth
+    io.mem.req.bits.isUnsigned := s2_bits.info.isUnsigned
+    io.mem.req.bits.addr := effAddr
+    io.mem.req.bits.data := s2_data2
+    io.mem.req.bits.targetReg := s2_bits.pdst
 
     // --- Stage 3 Transition ---
     when(s3_ready) {
@@ -136,7 +140,7 @@ class LoadStoreAdaptor extends Module {
         io.broadcastOut.valid := true.B
         io.broadcastOut.bits.pdst := s3_bits.pdst
         io.broadcastOut.bits.robTag := s3_bits.robTag
-        io.broadcastOut.bits.data := memory.io.resp.bits // From MemorySubsystem
+        io.broadcastOut.bits.data := io.mem.resp.bits // From MemorySubsystem
         io.broadcastOut.bits.writeEn := isLoadS3 
     } .elsewhen(s2_valid && isStoreS2 && !s2_st_ready_sent && !io.flush.checkKilled(s2_bits.robTag)) {
         // Store notification: "I have my operands, I'm ready for the ROB head to find me"

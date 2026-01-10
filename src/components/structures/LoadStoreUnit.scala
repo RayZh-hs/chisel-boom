@@ -6,10 +6,7 @@ import common._
 import common.Configurables._
 
 class LoadStoreUnit extends Module {
-    val io = IO(new Bundle {
-        val req = Flipped(Valid(new LoadStoreAction))
-        val resp = Valid(UInt(32.W))
-    })
+    val io = IO(new MemoryInterface)
 
     // 4KB Data Memory
     // We use a Vec of 4 bytes to support byte-level masking easily while maintaining 32-bit alignment

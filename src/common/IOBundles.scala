@@ -109,16 +109,20 @@ class FlushBundle extends Bundle {
     val flushTag = UInt(ROB_WIDTH.W)
     val robHead = UInt(ROB_WIDTH.W)
 
-    def checkKilled(tag: UInt): Bool = {
+    def isYounger(tag: UInt): Bool = {
         val head_le_flush = robHead <= flushTag
         val tag_ge_robHead = tag >= robHead
         val tag_le_flush = tag <= flushTag
-        val is_older = Mux(
+        val is_older_or_same = Mux(
           head_le_flush,
           (tag_ge_robHead && tag_le_flush),
           (tag_ge_robHead || tag_le_flush)
         )
-        valid && !is_older
+        !is_older_or_same
+    }
+
+    def checkKilled(tag: UInt): Bool = {
+        valid && isYounger(tag)
     }
 }
 
@@ -131,4 +135,10 @@ class LoadStoreAction extends Bundle {
     val addr = UInt(32.W)
     val data = UInt(32.W)
     val targetReg = UInt(PREG_WIDTH.W)
+}
+
+
+class MemoryInterface extends Bundle {
+    val req = Flipped(Valid(new LoadStoreAction))
+    val resp = Valid(UInt(32.W))
 }
