@@ -1,3 +1,5 @@
+package e2e
+
 import org.scalatest.funsuite.AnyFunSuite
 import chiseltest._
 import core.BoomCore
@@ -7,7 +9,7 @@ import java.nio.file.{Files, Path, Paths}
 import scala.jdk.CollectionConverters._
 import scala.sys.process.Process
 
-class CProgramSpec extends AnyFunSuite with ChiselScalatestTester {
+class End2EndTest extends AnyFunSuite with ChiselScalatestTester {
     private def findRepoRoot(start: Path): Path = {
         var cur = start
         while (cur != null && !Files.exists(cur.resolve("build.mill"))) {
