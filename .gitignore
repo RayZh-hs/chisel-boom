@@ -15,3 +15,5 @@ filelist.f
 
 *.v
 *.vh
+
+test_run_dir
