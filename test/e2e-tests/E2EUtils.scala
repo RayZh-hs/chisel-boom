@@ -90,6 +90,7 @@ object E2EUtils {
           "-mabi=ilp32",
           "-O2",
           "-ffreestanding",
+          "-mstrict-align",
           "-fno-builtin",
           "-T",
           linkLd.toString,

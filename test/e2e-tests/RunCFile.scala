@@ -38,7 +38,7 @@ object RunCFile extends App {
 
     println(s"Running simulation using hex file: $hex")
 
-    RawTester.test(new BoomCore(hex.toString), Seq(WriteVcdAnnotation)) { dut =>
+    RawTester.test(new BoomCore(hex.toString), Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)) { dut =>
         dut.clock.setTimeout(200000)
 
         var cycle = 0

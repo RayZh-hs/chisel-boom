@@ -30,7 +30,7 @@ class E2ETests extends AnyFunSuite with ChiselScalatestTester {
                 val hex = buildHexFor(cFile)
 
                 test(new BoomCore(hex.toString))
-                    .withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
+                    .withAnnotations(Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)) { dut =>
                         dut.clock.setTimeout(200000)
 
                         var cycle = 0
@@ -38,6 +38,7 @@ class E2ETests extends AnyFunSuite with ChiselScalatestTester {
                         var done = false
 
                         while (!done && cycle < 200000) {
+                            if (cycle % 100 == 0) println(s"Cycle: $cycle")
                             if (dut.io.exit.valid.peek().litToBoolean) {
                                 result = dut.io.exit.bits.data.peek().litValue
                                 done = true
