@@ -119,3 +119,14 @@ class FlushBundle extends Bundle {
         valid && !is_older
     }
 }
+
+/** The Load Store Action is what actually drives the memory system
+  */
+class LoadStoreAction extends Bundle {
+    val isLoad = Bool()
+    val opWidth = MemOpWidth()
+    val isUnsigned = Bool()
+    val addr = UInt(32.W)
+    val data = UInt(32.W)
+    val targetReg = UInt(PREG_WIDTH.W)
+}

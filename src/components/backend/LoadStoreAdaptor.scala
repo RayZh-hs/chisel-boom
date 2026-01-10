@@ -8,17 +8,18 @@ import components.structures.{
     LoadStoreUnit,
     SequentialIssueBuffer,
     LoadStoreInfo,
-    SequentialBufferEntry
+    SequentialBufferEntry,
+    MMIORouter,
+    MemorySubsystem
 }
-import components.structures.LoadStoreUnit
 
-// The Load Store Action is what actually drives the memory system
-class LoadStoreAction extends Bundle {
-    val isLoad = Bool()
-    val opWidth = MemOpWidth()
-    val addr = UInt(MEM_WIDTH.W)
-    val data = UInt(32.W)
-    val targetReg = UInt(PREG_WIDTH.W)
+// State maintained for a load in the writeback pipeline stage
+class LoadStoreWBState extends Bundle {
+    val valid = Bool()
+    val pdst = UInt(PREG_WIDTH.W)
+    val robTag = UInt(ROB_WIDTH.W)
+    val resultPending = Bool()
+    val pendingData = UInt(32.W)
 }
 
 // Wiring:
@@ -46,7 +47,7 @@ class LoadStoreAdaptor extends Module {
     })
 
     val lsq = Module(new SequentialIssueBuffer(new LoadStoreInfo, 8))
-    val lsu = Module(new LoadStoreUnit)
+    val memory = Module(new MemorySubsystem)
 
     lsq.io.in <> io.issueIn
     lsq.io.broadcast := io.broadcastIn
@@ -75,19 +76,12 @@ class LoadStoreAdaptor extends Module {
     val effAddr = (baseAddr.asSInt + imm.asSInt).asUInt
 
     // Regs for Writeback Stage
-    val wbValid = RegInit(false.B)
-    val wbPdst = RegInit(0.U(PREG_WIDTH.W))
-    val wbTag = RegInit(0.U(ROB_WIDTH.W))
-    val wbUnsigned = RegInit(false.B)
-    val wbOpWidth = RegInit(MemOpWidth.WORD)
-    val wbAddrOffset = RegInit(0.U(2.W))
-    val wbResultPending = RegInit(false.B)
-    val wbPendingData = Reg(UInt(32.W))
+    val wbState = RegInit(0.U.asTypeOf(new LoadStoreWBState))
 
     // Flush WB state on flush
-    when(io.flush.checkKilled(wbTag)) {
-        wbValid := false.B
-        wbResultPending := false.B
+    when(io.flush.checkKilled(wbState.robTag)) {
+        wbState.valid := false.B
+        wbState.resultPending := false.B
     }
 
     // Regs for Store status
@@ -104,27 +98,25 @@ class LoadStoreAdaptor extends Module {
 
     // Load Section
     // Condition: LSQ has valid load, and WB stage is free (to accept result in next cycle).
-    val canIssueLoad = headValid && isLoad && !wbValid && !wbResultPending
+    val canIssueLoad = headValid && isLoad && !wbState.valid && !wbState.resultPending
 
     when(canIssueLoad) {
-        // Send request to LSU
-        lsu.io.req.valid := true.B
-        lsu.io.req.bits.isLoad := true.B
-        lsu.io.req.bits.opWidth := opWidth
-        lsu.io.req.bits.addr := effAddr
-        lsu.io.req.bits.data := 0.U // Unused for load
-        lsu.io.req.bits.targetReg := pdst
+        // Send request to Memory System
+        memory.io.req.valid := true.B
+        memory.io.req.bits.isLoad := true.B
+        memory.io.req.bits.opWidth := opWidth
+        memory.io.req.bits.isUnsigned := isUnsigned
+        memory.io.req.bits.addr := effAddr
+        memory.io.req.bits.data := 0.U // Unused for load
+        memory.io.req.bits.targetReg := pdst
 
         // Advance State
         fireLoad := true.B
 
         // Reserve WB stage
-        wbValid := true.B
-        wbPdst := pdst
-        wbTag := robTag
-        wbUnsigned := isUnsigned
-        wbOpWidth := opWidth
-        wbAddrOffset := effAddr(1, 0)
+        wbState.valid := true.B
+        wbState.pdst := pdst
+        wbState.robTag := robTag
     }
 
     // Store Section
@@ -142,13 +134,14 @@ class LoadStoreAdaptor extends Module {
     val cancommitStore = headValid && isStore && (io.flush.robHead === robTag)
 
     when(cancommitStore) {
-        // Send request to LSU
-        lsu.io.req.valid := true.B
-        lsu.io.req.bits.isLoad := false.B
-        lsu.io.req.bits.opWidth := opWidth
-        lsu.io.req.bits.addr := effAddr
-        lsu.io.req.bits.data := storeData
-        lsu.io.req.bits.targetReg := 0.U
+        // Send request to Memory System
+        memory.io.req.valid := true.B
+        memory.io.req.bits.isLoad := false.B
+        memory.io.req.bits.opWidth := opWidth
+        memory.io.req.bits.isUnsigned := isUnsigned
+        memory.io.req.bits.addr := effAddr
+        memory.io.req.bits.data := storeData
+        memory.io.req.bits.targetReg := 0.U
 
         // Advance State
         fireStore := true.B
@@ -157,45 +150,23 @@ class LoadStoreAdaptor extends Module {
     // Dequeue Logic
     lsq.io.out.ready := fireLoad || fireStore
 
-    // Default LSU Req
+    // Default Memory Req
     when(!fireLoad && !fireStore) {
-        lsu.io.req.valid := false.B
-        lsu.io.req.bits := DontCare
+        memory.io.req.valid := false.B
+        memory.io.req.bits := DontCare
     }
 
     // Writeback & Broadcast
-    // Capture data from LSU (1 cycle latency from Request)
-    val lsuRespValid = lsu.io.resp.valid
-    val lsuData = lsu.io.resp.bits
-
-    // Process Data (Sign Extension)
-    val rbyte = MuxLookup(wbAddrOffset, 0.U)(
-      Seq(
-        0.U -> lsuData(7, 0),
-        1.U -> lsuData(15, 8),
-        2.U -> lsuData(23, 16),
-        3.U -> lsuData(31, 24)
-      )
-    )
-    val rhalf = Mux(wbAddrOffset(1) === 0.U, lsuData(15, 0), lsuData(31, 16))
-    val sextByte = Cat(Fill(24, rbyte(7)), rbyte)
-    val sextHalf = Cat(Fill(16, rhalf(15)), rhalf)
-
-    val finalData = Wire(UInt(32.W))
-    finalData := lsuData
-    switch(wbOpWidth) {
-        is(MemOpWidth.BYTE) { finalData := Mux(wbUnsigned, rbyte, sextByte) }
-        is(MemOpWidth.HALFWORD) {
-            finalData := Mux(wbUnsigned, rhalf, sextHalf)
-        }
-    }
+    // Capture data from Memory System (1 cycle latency from Request)
+    val lsuRespValid = memory.io.resp.valid
+    val finalData = memory.io.resp.bits
 
     // Handle Pending Result (if broadcast was blocked)
     when(lsuRespValid) {
         // If we can't broadcast immediately, save it
         when(!io.broadcastOut.ready) {
-            wbResultPending := true.B
-            wbPendingData := finalData
+            wbState.resultPending := true.B
+            wbState.pendingData := finalData
         }
     }
 
@@ -207,27 +178,27 @@ class LoadStoreAdaptor extends Module {
     io.broadcastOut.bits.writeEn := false.B
 
     // Pending Load Result Logic
-    when(wbResultPending) {
+    when(wbState.resultPending) {
         io.broadcastOut.valid := true.B
-        io.broadcastOut.bits.pdst := wbPdst
-        io.broadcastOut.bits.robTag := wbTag
-        io.broadcastOut.bits.data := wbPendingData
+        io.broadcastOut.bits.pdst := wbState.pdst
+        io.broadcastOut.bits.robTag := wbState.robTag
+        io.broadcastOut.bits.data := wbState.pendingData
         io.broadcastOut.bits.writeEn := true.B
 
         when(io.broadcastOut.ready) {
-            wbResultPending := false.B
-            wbValid := false.B // Free the stage
+            wbState.resultPending := false.B
+            wbState.valid := false.B // Free the stage
         }
     }.elsewhen(lsuRespValid) {
-        val killed = io.flush.checkKilled(wbTag)
+        val killed = io.flush.checkKilled(wbState.robTag)
         io.broadcastOut.valid := !killed
-        io.broadcastOut.bits.pdst := wbPdst
-        io.broadcastOut.bits.robTag := wbTag
+        io.broadcastOut.bits.pdst := wbState.pdst
+        io.broadcastOut.bits.robTag := wbState.robTag
         io.broadcastOut.bits.data := finalData
         io.broadcastOut.bits.writeEn := true.B
 
         when(io.broadcastOut.ready || killed) {
-            wbValid := false.B // Free the stage
+            wbState.valid := false.B // Free the stage
         }
     }.elsewhen(readyToBroadcastStore) {
         io.broadcastOut.valid := true.B

@@ -4,7 +4,6 @@ import chisel3._
 import chisel3.util._
 import common._
 import common.Configurables._
-import components.backend.LoadStoreAction
 
 class LoadStoreUnit extends Module {
     val io = IO(new Bundle {
