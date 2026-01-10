@@ -27,7 +27,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     val aluAdaptor = Module(new ALUAdaptor)
     val bruAdaptor = Module(new BRUAdaptor)
     val lsAdaptor = Module(new LoadStoreAdaptor)
-    val prf = Module(new PhysicalRegisterFile(Derived.PREG_COUNT, 6, 3, 32))
+    val prf = Module(new PhysicalRegisterFile(Derived.PREG_COUNT, 6, 1, 32))
     val bc = Module(new BroadcastChannel)
 
     // --- Frontend Wiring ---
@@ -149,10 +149,10 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     prf.io.read(5).addr := lsAdaptor.io.prfRead.addr2
     lsAdaptor.io.prfRead.data2 := prf.io.read(5).data
 
-    // Adaptor to PRF Write connections
-    prf.io.write(0) <> aluAdaptor.io.prfWrite
-    prf.io.write(1) <> bruAdaptor.io.prfWrite
-    prf.io.write(2) <> lsAdaptor.io.prfWrite
+    // Adaptor to PRF Write connections (Unified via Broadcast Channel)
+    prf.io.write(0).addr := bc.io.broadcastOut.bits.pdst
+    prf.io.write(0).data := bc.io.broadcastOut.bits.data
+    prf.io.write(0).en := bc.io.broadcastOut.valid && bc.io.broadcastOut.bits.writeEn
 
     // Broadcast Channel connections
     bc.io.aluResult <> aluAdaptor.io.broadcastOut
@@ -174,10 +174,8 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
 
     // Misprediction handling
     val brUpdate = bruAdaptor.io.brUpdate
-    val mispredict = brUpdate.valid && (
-      (brUpdate.taken =/= brUpdate.predict) ||
-          (brUpdate.taken && brUpdate.target =/= brUpdate.predictedTarget)
-    )
+    val mispredict = brUpdate.valid && brUpdate.mispredict
+    
     rob.io.brUpdate.valid := mispredict
     rob.io.brUpdate.bits.robTag := brUpdate.robTag
     rob.io.brUpdate.bits.mispredict := mispredict
@@ -191,21 +189,18 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     )
 
     // Flush logic
-    aluIB.io.flush := mispredict
-    aluIB.io.flushTag := brUpdate.robTag
-    aluIB.io.robHead := rob.io.head
+    val flushCtrl = Wire(new FlushBundle)
+    flushCtrl.valid := mispredict
+    flushCtrl.flushTag := brUpdate.robTag
+    flushCtrl.robHead := rob.io.head
 
-    bruIB.io.flush := mispredict
-    bruIB.io.flushTag := brUpdate.robTag
-    bruIB.io.robHead := rob.io.head
+    aluIB.io.flush := flushCtrl
+    bruIB.io.flush := flushCtrl
+    lsIB.io.flush := flushCtrl
 
-    lsIB.io.flush := mispredict
-    lsIB.io.flushTag := brUpdate.robTag
-    lsIB.io.robHead := rob.io.head
-
-    lsAdaptor.io.flush := mispredict
-    lsAdaptor.io.flushTag := brUpdate.robTag
-    lsAdaptor.io.robHead := rob.io.head
+    aluAdaptor.io.flush := flushCtrl
+    bruAdaptor.io.flush := flushCtrl
+    lsAdaptor.io.flush := flushCtrl
     rob.io.flush := false.B
 
     // Unused PRF readyAddrs

@@ -83,10 +83,39 @@ class DispatchToLSQBundle extends BrFlagBundle {
 class BroadcastBundle extends Bundle {
     val pdst = UInt(PREG_WIDTH.W)
     val robTag = UInt(ROB_WIDTH.W)
+    val data = UInt(32.W)
+    val writeEn = Bool()
 }
 
 class RollbackBundle extends Bundle {
     val ldst = UInt(5.W)
     val pdst = UInt(PREG_WIDTH.W)
     val stalePdst = UInt(PREG_WIDTH.W)
+}
+
+class BranchUpdateBundle extends Bundle {
+    val valid = Bool()
+    val mispredict = Bool()
+    val taken = Bool()
+    val target = UInt(32.W)
+    val pc = UInt(32.W)
+    val robTag = UInt(ROB_WIDTH.W)
+    val predict = Bool()
+    val predictedTarget = UInt(32.W)
+}
+
+class FlushBundle extends Bundle {
+    val valid = Bool()
+    val flushTag = UInt(ROB_WIDTH.W)
+    val robHead = UInt(ROB_WIDTH.W)
+
+    def checkKilled(tag: UInt): Bool = {
+        val head_le_flush = robHead <= flushTag
+        val is_older = Mux(
+          head_le_flush,
+          (tag >= robHead && tag <= flushTag),
+          (tag >= robHead || tag <= flushTag)
+        )
+        valid && !is_older
+    }
 }

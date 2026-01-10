@@ -39,24 +39,10 @@ class LoadStoreAdaptor extends Module {
         val broadcastIn = Input(Valid(new BroadcastBundle))
 
         // PRF Interface - Read Operands
-        val prfRead = new Bundle {
-            val addr1 = Output(UInt(PREG_WIDTH.W))
-            val data1 = Input(UInt(32.W))
-            val addr2 = Output(UInt(PREG_WIDTH.W))
-            val data2 = Input(UInt(32.W))
-        }
-
-        // PRF Interface - Writeback Result (Loads)
-        val prfWrite = new Bundle {
-            val addr = Output(UInt(PREG_WIDTH.W))
-            val data = Output(UInt(32.W))
-            val en = Output(Bool())
-        }
+        val prfRead = new PRFReadBundle
 
         // ROB Interface and Flush
-        val flush = Input(Bool())
-        val flushTag = Input(UInt(ROB_WIDTH.W))
-        val robHead = Input(UInt(ROB_WIDTH.W))
+        val flush = Input(new FlushBundle)
     })
 
     val lsq = Module(new SequentialIssueBuffer(new LoadStoreInfo, 8))
@@ -65,8 +51,6 @@ class LoadStoreAdaptor extends Module {
     lsq.io.in <> io.issueIn
     lsq.io.broadcast := io.broadcastIn
     lsq.io.flush := io.flush
-    lsq.io.flushTag := io.flushTag
-    lsq.io.robHead := io.robHead
 
     io.prfRead.addr1 := lsq.io.out.bits.src1 // Base Address
     io.prfRead.addr2 := lsq.io.out.bits.src2 // Store Data (or unused for Load)
@@ -101,23 +85,15 @@ class LoadStoreAdaptor extends Module {
     val wbPendingData = Reg(UInt(32.W))
 
     // Flush WB state on flush
-    when(io.flush) {
-        val head_le_flush = io.robHead <= io.flushTag
-        val is_older = Mux(
-          head_le_flush,
-          (wbTag >= io.robHead && wbTag < io.flushTag),
-          (wbTag >= io.robHead || wbTag < io.flushTag)
-        )
-        when(!is_older) {
-            wbValid := false.B
-            wbResultPending := false.B
-        }
+    when(io.flush.checkKilled(wbTag)) {
+        wbValid := false.B
+        wbResultPending := false.B
     }
 
     // Regs for Store status
     val storeReadyBroadcasted = RegInit(false.B)
     // Clear when we advance queue or flush
-    when(lsq.io.out.fire || io.flush) {
+    when(lsq.io.out.fire || io.flush.valid) {
         storeReadyBroadcasted := false.B
     }
 
@@ -163,7 +139,7 @@ class LoadStoreAdaptor extends Module {
 
     // 2. Commit -> Write to Memory
     // We wait until the ROB head pointer matches our ROB tag
-    val cancommitStore = headValid && isStore && (io.robHead === robTag)
+    val cancommitStore = headValid && isStore && (io.flush.robHead === robTag)
 
     when(cancommitStore) {
         // Send request to LSU
@@ -228,26 +204,29 @@ class LoadStoreAdaptor extends Module {
 
     io.broadcastOut.valid := false.B
     io.broadcastOut.bits := DontCare
-    io.prfWrite.data := 0.U // Default assignment
+    io.broadcastOut.bits.writeEn := false.B
 
     // Pending Load Result Logic
     when(wbResultPending) {
         io.broadcastOut.valid := true.B
         io.broadcastOut.bits.pdst := wbPdst
         io.broadcastOut.bits.robTag := wbTag
-        io.prfWrite.data := wbPendingData // PRF Write uses same data
+        io.broadcastOut.bits.data := wbPendingData
+        io.broadcastOut.bits.writeEn := true.B
 
         when(io.broadcastOut.ready) {
             wbResultPending := false.B
             wbValid := false.B // Free the stage
         }
     }.elsewhen(lsuRespValid) {
-        io.broadcastOut.valid := true.B
+        val killed = io.flush.checkKilled(wbTag)
+        io.broadcastOut.valid := !killed
         io.broadcastOut.bits.pdst := wbPdst
         io.broadcastOut.bits.robTag := wbTag
-        io.prfWrite.data := finalData
+        io.broadcastOut.bits.data := finalData
+        io.broadcastOut.bits.writeEn := true.B
 
-        when(io.broadcastOut.ready) {
+        when(io.broadcastOut.ready || killed) {
             wbValid := false.B // Free the stage
         }
     }.elsewhen(readyToBroadcastStore) {
@@ -255,10 +234,6 @@ class LoadStoreAdaptor extends Module {
         // For stores, we just broadcast completion tag to ROB. pdst is usually 0.
         io.broadcastOut.bits.pdst := pdst
         io.broadcastOut.bits.robTag := robTag
+        io.broadcastOut.bits.writeEn := false.B
     }
-
-    // PRF Write Connection
-    // PRF Write enable is tied to actual broadcast of data (validity of Load Result)
-    io.prfWrite.en := (wbResultPending || lsuRespValid) && io.broadcastOut.ready
-    io.prfWrite.addr := wbPdst
 }

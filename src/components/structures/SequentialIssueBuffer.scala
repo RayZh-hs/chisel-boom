@@ -28,9 +28,7 @@ class SequentialIssueBuffer[T <: Data](gen: T, entries: Int) extends Module {
         val broadcast = Input(Valid(new BroadcastBundle()))
         val out = Decoupled(new SequentialBufferEntry(gen))
 
-        val flush = Input(Bool())
-        val flushTag = Input(UInt(ROB_WIDTH.W))
-        val robHead = Input(UInt(ROB_WIDTH.W))
+        val flush = Input(new FlushBundle)
     })
 
     val buffer = Reg(Vec(entries, new SequentialBufferEntry(gen)))
@@ -43,7 +41,7 @@ class SequentialIssueBuffer[T <: Data](gen: T, entries: Int) extends Module {
     val isFull = ptrMatch && maybeFull
 
     // --- Enqueue Logic ---
-    io.in.ready := !isFull && !io.flush
+    io.in.ready := !isFull && !io.flush.valid
 
     when(io.in.fire) {
         buffer(tail) := io.in.bits
@@ -70,7 +68,7 @@ class SequentialIssueBuffer[T <: Data](gen: T, entries: Int) extends Module {
     // Only the head entry can be issued
     val canIssue = !isEmpty && headEntry.src1Ready && headEntry.src2Ready
 
-    io.out.valid := canIssue && !io.flush
+    io.out.valid := canIssue && !io.flush.valid
     io.out.bits := headEntry
 
     when(io.out.fire) {
@@ -79,7 +77,7 @@ class SequentialIssueBuffer[T <: Data](gen: T, entries: Int) extends Module {
     }
 
     // --- Flush Logic ---
-    when(io.flush) {
+    when(io.flush.valid) {
         val validMask = Wire(Vec(entries, Bool()))
 
         // Construct mask of physically valid entries
@@ -97,16 +95,9 @@ class SequentialIssueBuffer[T <: Data](gen: T, entries: Int) extends Module {
         }
 
         val keepMask = Wire(Vec(entries, Bool()))
-        val head_le_flush = io.robHead <= io.flushTag
 
         for (i <- 0 until entries) {
-            val tag = buffer(i).robTag
-            val is_older = Mux(
-              head_le_flush,
-              (tag >= io.robHead && tag < io.flushTag),
-              (tag >= io.robHead || tag < io.flushTag)
-            )
-            keepMask(i) := validMask(i) && is_older
+            keepMask(i) := validMask(i) && !io.flush.checkKilled(buffer(i).robTag)
         }
 
         // Count how many entries to keep (starting from head)

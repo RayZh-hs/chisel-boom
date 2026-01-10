@@ -12,32 +12,19 @@ class BRUAdaptor extends Module {
         val issueIn = Flipped(Decoupled(new IssueBufferEntry(new BRUInfo)))
         val broadcastOut = Decoupled(new BroadcastBundle)
 
-        // PRF interface
-        val prfRead = new Bundle {
-            val addr1 = Output(UInt(PREG_WIDTH.W))
-            val data1 = Input(UInt(32.W))
-            val addr2 = Output(UInt(PREG_WIDTH.W))
-            val data2 = Input(UInt(32.W))
-        }
-        val prfWrite = new Bundle {
-            val addr = Output(UInt(PREG_WIDTH.W))
-            val data = Output(UInt(32.W))
-            val en = Output(Bool())
-        }
+        // PRF interface - Read only now, writeback via broadcast
+        val prfRead = new PRFReadBundle
 
         // Branch update (to frontend/ROB)
-        val brUpdate = Output(new Bundle {
-            val valid = Bool()
-            val taken = Bool()
-            val target = UInt(32.W)
-            val pc = UInt(32.W)
-            val robTag = UInt(ROB_WIDTH.W)
-            val predict = Bool()
-            val predictedTarget = UInt(32.W)
-        })
+        val brUpdate = Output(new BranchUpdateBundle)
+
+        val flush = Input(new FlushBundle)
     })
 
     val bru = Module(new BranchUnit)
+
+    // Flush logic
+    val killed = io.flush.checkKilled(io.issueIn.bits.robTag)
 
     // Connect Issue Buffer to BRU
     io.issueIn.ready := io.broadcastOut.ready
@@ -52,21 +39,25 @@ class BRUAdaptor extends Module {
     bru.io.bruOp := io.issueIn.bits.info.bruOp
     bru.io.cmpOp := io.issueIn.bits.info.cmpOp
 
-    // Connect BRU to PRF Write and Broadcast
-    io.prfWrite.addr := io.issueIn.bits.pdst
-    io.prfWrite.data := bru.io.result
-    io.prfWrite.en := io.issueIn.valid && io.issueIn.ready && (io.issueIn.bits.info.bruOp === BRUOpType.JAL || io.issueIn.bits.info.bruOp === BRUOpType.JALR || io.issueIn.bits.info.bruOp === BRUOpType.AUIPC)
-
-    io.broadcastOut.valid := io.issueIn.valid
+    // Broadcast logic (includes PRF write data)
+    val isWritebackInst = io.issueIn.bits.info.bruOp.isOneOf(BRUOpType.JAL, BRUOpType.JALR, BRUOpType.AUIPC)
+    
+    io.broadcastOut.valid := io.issueIn.valid && !killed
     io.broadcastOut.bits.pdst := io.issueIn.bits.pdst
     io.broadcastOut.bits.robTag := io.issueIn.bits.robTag
+    io.broadcastOut.bits.data := bru.io.result
+    io.broadcastOut.bits.writeEn := isWritebackInst
 
     // Branch update
-    io.brUpdate.valid := io.issueIn.valid && io.issueIn.ready
+    io.brUpdate.valid := io.issueIn.valid && io.issueIn.ready && !killed
     io.brUpdate.taken := bru.io.taken
     io.brUpdate.target := bru.io.target
     io.brUpdate.pc := io.issueIn.bits.info.pc
     io.brUpdate.robTag := io.issueIn.bits.robTag
     io.brUpdate.predict := io.issueIn.bits.info.predict
     io.brUpdate.predictedTarget := io.issueIn.bits.info.predictedTarget
+
+    val mispredict = (io.brUpdate.taken =/= io.brUpdate.predict) || 
+                     (io.brUpdate.taken && io.brUpdate.target =/= io.brUpdate.predictedTarget)
+    io.brUpdate.mispredict := mispredict
 }

@@ -19,8 +19,15 @@ class BranchUnit extends Module {
     })
 
     val taken = WireInit(false.B)
-    val target = WireInit(0.U(32.W))
-    val result = WireInit(0.U(32.W))
+    
+    // Shared adder for target calculation
+    val targetBase = Mux(io.bruOp === BRUOpType.JALR, io.inA, io.pc)
+    val targetRaw = targetBase + io.imm
+    val target = Mux(io.bruOp === BRUOpType.JALR, targetRaw & ~1.U(32.W), targetRaw)
+
+    // Shared adder for result calculation (NPC)
+    val npc = io.pc + 4.U
+    val result = Mux(io.bruOp === BRUOpType.AUIPC, targetRaw, npc)
 
     switch(io.bruOp) {
         is(BRUOpType.CBR) {
@@ -34,22 +41,15 @@ class BranchUnit extends Module {
                 is(CmpOpType.GEU) { cmpRes := io.inA >= io.inB }
             }
             taken := cmpRes
-            target := io.pc + io.imm
         }
         is(BRUOpType.JAL) {
             taken := true.B
-            target := io.pc + io.imm
-            result := io.pc + 4.U
         }
         is(BRUOpType.JALR) {
             taken := true.B
-            target := (io.inA + io.imm) & ~1.U(32.W)
-            result := io.pc + 4.U
         }
         is(BRUOpType.AUIPC) {
             taken := false.B
-            target := io.pc + io.imm
-            result := io.pc + io.imm
         }
     }
 

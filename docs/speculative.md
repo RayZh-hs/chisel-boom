@@ -15,14 +15,14 @@ Upon receiving a misprediction signal from the branch unit, the processor initia
 1. **Flush Pipeline**: The processor flushes all instructions that are in-flight in the pipeline stages (fetch, decode, dispatch, execute) that were fetched after the mispredicted branch.
 
 Notably, the Issue Buffers need partial flush, remove only the instructions that are younger than the mispredicted branch instruction, while keeping the older instructions intact.
-2. **Restore State**: 
+2. **Restore State**:
 In the frontend, the fetch unit overwrites the program counter (PC) to the correct target address.
 In the backend, we need to restore the Register Alias Table (RAT) and Free List to their states prior to the mispredicted branch. Instead of the snapshot way, we roll back instrustions from the tail of the Reorder Buffer (ROB) one by one until we reach the mispredicted branch instruction. For each instruction being rolled back, we update the RAT and Free List accordingly using the information stored in the ROB entries.
 For every instruction being rolled back, we perform the following updates:
 
-   - **RAT Update**: The RAT entry for the logical destination register is restored to point to the previous physical register (stale physical destination) that was mapped before the instruction was dispatched.
-   - **Free List Update**: The physical register that was allocated for the instruction's destination is returned to the Free List, making it available for future allocations.
+- **RAT Update**: The RAT entry for the logical destination register is restored to point to the previous physical register (stale physical destination) that was mapped before the instruction was dispatched.
+- **Free List Update**: The physical register that was allocated for the instruction's destination is returned to the Free List, making it available for future allocations.
 
 In this stage, though dispatch of new instructions is paused, the backend continues to process and retire instructions, while the frontend continue to fetch instructions from the correct target address. Hopefully, this allows the pipeline to drain faster and reduces the overall penalty of mispredictions.
 
-3. **Resume Execution**: After restoring the state, the processor resumes instruction fetching from the correct target address, continuing normal execution.
+1. **Resume Execution**: After restoring the state, the processor resumes instruction fetching from the correct target address, continuing normal execution.
