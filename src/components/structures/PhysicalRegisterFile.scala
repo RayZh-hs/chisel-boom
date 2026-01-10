@@ -54,6 +54,10 @@ class PhysicalRegisterFile(numRegs: Int, numReadPorts: Int, numWritePorts: Int, 
     when(io.setReady.valid) {
         busyTable(io.setReady.bits) := false.B
     }
+
+    when(io.setBusy.valid && io.setReady.valid && (io.setBusy.bits === io.setReady.bits)) {
+        chisel3.assert(false.B, "Attempting to set the same register busy and ready in the same cycle! should not happen since free list have delay.")
+    }
     
     // Register 0 is always ready and always 0
     busyTable(0) := false.B

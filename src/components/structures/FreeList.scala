@@ -11,7 +11,6 @@ class FreeList(numRegs: Int, numArchRegs: Int) extends Module {
         val allocate = Decoupled(UInt(width.W)) // Dequeue: Get a free register
         val free = Flipped(Decoupled(UInt(width.W))) // Enqueue: Return a register to free list
         val rollbackFree = Flipped(Decoupled(UInt(width.W))) // Enqueue: Return a register to free list during rollback
-        val count = Output(UInt(log2Ceil(capacity + 1).W))
     })
 
     // Initialize the RAM with the registers that are free at reset (numArchRegs to numRegs-1)
@@ -37,6 +36,7 @@ class FreeList(numRegs: Int, numArchRegs: Int) extends Module {
     }
 
     // Freeing (Enqueue) logic
+    // TODO: simplify the logic for handling 2 enqueues
     io.free.ready := !full
     io.rollbackFree.ready := !full && (io.free.ready && !io.free.valid || tail =/= Mux(head === 0.U, (capacity - 1).U, head - 1.U)) // Simplified check for 2 spaces
 
@@ -61,12 +61,4 @@ class FreeList(numRegs: Int, numArchRegs: Int) extends Module {
     }.elsewhen(doAlloc && numFreed === 0.U) {
         maybeFull := false.B
     }
-
-    // Calculate count
-    val ptrDiff = tail - head
-    io.count := Mux(
-      empty,
-      0.U,
-      Mux(full, capacity.U, Mux(tail > head, ptrDiff, (capacity.U + ptrDiff)))
-    )
 }

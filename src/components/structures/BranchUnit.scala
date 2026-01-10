@@ -6,8 +6,8 @@ import common._
 
 class BranchUnit extends Module {
     val io = IO(new Bundle {
-        val inA = Input(UInt(32.W))
-        val inB = Input(UInt(32.W))
+        val inA = Input(UInt(32.W)) // rs1 
+        val inB = Input(UInt(32.W)) // rs2 
         val pc = Input(UInt(32.W))
         val imm = Input(UInt(32.W))
         val bruOp = Input(BRUOpType())

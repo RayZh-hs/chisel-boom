@@ -29,13 +29,7 @@ class LoadStoreUnit extends Module {
     wdata := VecInit(Seq.fill(4)(0.U(8.W)))
     wmask := VecInit(Seq.fill(4)(false.B))
 
-    // Format write data (Little Endian assumed for RISC-V)
-    wdata(0) := req.data(7, 0)
-    wdata(1) := req.data(15, 8)
-    wdata(2) := req.data(23, 16)
-    wdata(3) := req.data(31, 24)
-
-    // Calculate Write Mask based on Address and OpWidth
+    // Calculate Write Mask and Data based on Address and OpWidth
     when(valid) {
         val addrOffset = req.addr(1, 0)
         when(req.opWidth === MemOpWidth.HALFWORD) {
@@ -47,13 +41,20 @@ class LoadStoreUnit extends Module {
         when(!req.isLoad) {
             switch(req.opWidth) {
                 is(MemOpWidth.BYTE) {
+                    wdata(addrOffset) := req.data(7, 0)
                     wmask(addrOffset) := true.B
                 }
                 is(MemOpWidth.HALFWORD) {
+                    wdata(addrOffset) := req.data(7, 0)
+                    wdata(addrOffset + 1.U) := req.data(15, 8)
                     wmask(addrOffset) := true.B
                     wmask(addrOffset + 1.U) := true.B
                 }
                 is(MemOpWidth.WORD) {
+                    wdata(0) := req.data(7, 0)
+                    wdata(1) := req.data(15, 8)
+                    wdata(2) := req.data(23, 16)
+                    wdata(3) := req.data(31, 24)
                     wmask := VecInit(Seq.fill(4)(true.B))
                 }
             }

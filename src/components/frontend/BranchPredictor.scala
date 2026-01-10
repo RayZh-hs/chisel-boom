@@ -6,8 +6,15 @@ import chisel3.util._
 class BranchTargetBuffer extends Module {
 
     val io = IO(new Bundle {
+        // Predictor interface
         val pc = Input(UInt(32.W))
         val target = Output(Valid(UInt(32.W)))
+
+        // Update interface
+        val update = Input(Valid(new Bundle {
+            val pc = UInt(32.W)
+            val target = UInt(32.W)
+        }))
     })
 
     class BTBEntry extends Bundle{
@@ -27,5 +34,14 @@ class BranchTargetBuffer extends Module {
     } .otherwise {
         io.target.valid := false.B
         io.target.bits := 0.U
+    }
+
+    when (io.update.valid) {
+        val upd_index = io.update.bits.pc(6, 2)
+        val upd_tag = io.update.bits.pc(31, 7)
+        val new_entry = Wire(new BTBEntry)
+        new_entry.tag := upd_tag
+        new_entry.target := io.update.bits.target
+        buffer.write(upd_index, new_entry) // last time always wins
     }
 }

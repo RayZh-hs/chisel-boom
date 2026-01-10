@@ -109,7 +109,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     lsIB.io.in.bits.src1 := instOutput.bits.prs1
     lsIB.io.in.bits.src2 := instOutput.bits.prs2
     lsIB.io.in.bits.src1Ready := src1Ready
-    lsIB.io.in.bits.src2Ready := src2Ready
+    lsIB.io.in.bits.src2Ready := Mux(instOutput.bits.isStore, src2Ready, true.B)// Not used for loads
     lsIB.io.in.bits.info.opWidth := instOutput.bits.opWidth
     lsIB.io.in.bits.info.isStore := instOutput.bits.isStore
     lsIB.io.in.bits.info.isUnsigned := instOutput.bits.isUnsigned
@@ -129,6 +129,8 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     aluAdaptor.io.issueIn <> aluIB.io.out
     bruAdaptor.io.issueIn <> bruIB.io.out
     lsAdaptor.io.issueIn <> lsIB.io.out
+
+    lsAdaptor.io.robHead := rob.io.head
 
     // Adaptor to PRF Read connections
     // ALU uses ports 0, 1
@@ -175,6 +177,11 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     // Misprediction handling
     val brUpdate = bruAdaptor.io.brUpdate
     val mispredict = brUpdate.valid && brUpdate.mispredict
+
+    // BTB Update
+    btb.io.update.valid := brUpdate.valid
+    btb.io.update.bits.pc := brUpdate.pc
+    btb.io.update.bits.target := brUpdate.target
     
     rob.io.brUpdate.valid := mispredict
     rob.io.brUpdate.bits.robTag := brUpdate.robTag
@@ -201,6 +208,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     aluAdaptor.io.flush := flushCtrl
     bruAdaptor.io.flush := flushCtrl
     lsAdaptor.io.flush := flushCtrl
+    
     rob.io.flush := false.B
 
     // Unused PRF readyAddrs

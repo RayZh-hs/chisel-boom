@@ -77,6 +77,7 @@ class SequentialIssueBuffer[T <: Data](gen: T, entries: Int) extends Module {
     }
 
     // --- Flush Logic ---
+    // TODO: Optimize to directly find the next tail(oldest invalid) without doing the count
     when(io.flush.valid) {
         val validMask = Wire(Vec(entries, Bool()))
 

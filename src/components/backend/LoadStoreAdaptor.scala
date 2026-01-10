@@ -44,6 +44,8 @@ class LoadStoreAdaptor extends Module {
 
         // ROB Interface and Flush
         val flush = Input(new FlushBundle)
+
+        val robHead = Input(UInt(ROB_WIDTH.W))
     })
 
     val lsq = Module(new SequentialIssueBuffer(new LoadStoreInfo, 8))
