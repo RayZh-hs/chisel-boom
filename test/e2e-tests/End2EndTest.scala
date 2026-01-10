@@ -144,13 +144,38 @@ class CProgramSpec extends AnyFunSuite with ChiselScalatestTester {
 
                 test(new BoomCore(hex.toString))
                     .withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
-                        dut.clock.setTimeout(20000)
-                        dut.clock.step(5000)
+                        dut.clock.setTimeout(200000)
 
-                        val mapX10 = dut.rat.mapTable(10).peek().litValue.toInt
-                        val res = dut.prf.regFile(mapX10).peek().litValue
+                        var cycle = 0
+                        var result: BigInt = 0
+                        var done = false
 
-                        assert(res == expected, s"Expected $expected, got $res")
+                        while (!done && cycle < 200000) {
+                            val mmio =
+                                dut.lsAdaptor.memory.mmio.exitDevice.io.req
+                            if (
+                              mmio.valid
+                                  .peek()
+                                  .litToBoolean && !mmio.bits.isLoad
+                                  .peek()
+                                  .litToBoolean
+                            ) {
+                                result = mmio.bits.data.peek().litValue
+                                done = true
+                            } else {
+                                dut.clock.step(1)
+                                cycle += 1
+                            }
+                        }
+
+                        assert(
+                          done,
+                          s"Simulation timed out after $cycle cycles"
+                        )
+                        assert(
+                          result == expected,
+                          s"Expected $expected, got $result"
+                        )
                     }
             }
         }

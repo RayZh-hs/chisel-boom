@@ -7,3 +7,8 @@ To support mmio, instead of directly send load/store requests to the data cache(
 ## MMIO Address Range
 
 all MMIO devices have the highest bit of the address set to 1, which means the address range is from 0x8000000 to 0xFFFFFFFF.
+
+## MMIO Device Code
+
+- `0x8000_0000`: Print Device
+- `0x8000_0008`: Exit Device
