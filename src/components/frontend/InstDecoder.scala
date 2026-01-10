@@ -108,8 +108,12 @@ class InstDecoder extends Module {
             is(0.U) { memOpWidth := MemOpWidth.BYTE; isUnsigned := false.B }
             is(1.U) { memOpWidth := MemOpWidth.HALFWORD; isUnsigned := false.B }
             is(2.U) { memOpWidth := MemOpWidth.WORD; isUnsigned := false.B }
-            is(4.U) { memOpWidth := MemOpWidth.BYTE; isUnsigned := true.B } // LBU
-            is(5.U) { memOpWidth := MemOpWidth.HALFWORD; isUnsigned := true.B } // LHU
+            is(4.U) {
+                memOpWidth := MemOpWidth.BYTE; isUnsigned := true.B
+            } // LBU
+            is(5.U) {
+                memOpWidth := MemOpWidth.HALFWORD; isUnsigned := true.B
+            } // LHU
         }
     }.elsewhen(opcode === "b0100011".U) { // STORE
         fUnitType := FunUnitType.MEM
@@ -207,5 +211,4 @@ class InstDecoder extends Module {
     io.out.bits.imm := imm
     io.out.bits.opWidth := memOpWidth
     io.out.bits.isUnsigned := isUnsigned
-    io.out.bits.brFlag := fUnitType === FunUnitType.BRU
 }

@@ -23,7 +23,7 @@ class FetchToDecodeBundle extends Bundle {
   *   Memory access uops assume: `paddr` is `prs1`, `psrc` is `prs2`, `pdst` is
   *   `pdst`.
   */
-class DecodeToDispatchBundle extends BrFlagBundle {
+class DecodeToDispatchBundle extends Bundle {
     // - categorizing operation
     val fUnitType = FunUnitType() // functional unit type
     val aluOpType = ALUOpType()
@@ -49,21 +49,21 @@ class DecodeToDispatchBundle extends BrFlagBundle {
     // pdst is assumed to be pdst
 }
 
-class DispatchToROBBundle extends BrFlagBundle {
+class DispatchToROBBundle extends Bundle {
     val ldst = UInt(5.W)
     val pdst = UInt(PREG_WIDTH.W)
     val stalePdst = UInt(PREG_WIDTH.W)
     val isStore = Bool()
 }
 
-class DispatchToALQBundle extends BrFlagBundle {
+class DispatchToALQBundle extends Bundle {
     val aluOpType = ALUOpType()
     val prs1, prs2 = UInt(PREG_WIDTH.W)
     val (useImm, imm) = (Bool(), UInt(32.W))
     val pdst = UInt(PREG_WIDTH.W)
 }
 
-class DispatchToBRQBundle extends BrFlagBundle {
+class DispatchToBRQBundle extends Bundle {
     val bruOpType = BRUOpType()
     val cmpOpType = CmpOpType()
     val prs1, prs2 = UInt(PREG_WIDTH.W)
@@ -71,7 +71,7 @@ class DispatchToBRQBundle extends BrFlagBundle {
     val pc = UInt(32.W)
 }
 
-class DispatchToLSQBundle extends BrFlagBundle {
+class DispatchToLSQBundle extends Bundle {
     val isLoad = Bool() // differentiate load/store
     val opWidth = MemOpWidth()
     val paddr = UInt(PREG_WIDTH.W)

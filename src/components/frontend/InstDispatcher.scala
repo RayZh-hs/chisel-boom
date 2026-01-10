@@ -17,7 +17,7 @@ class InstDispatcher extends Module {
         val instOutput = Decoupled(new DecodeToDispatchBundle)
 
         val robOutput = Decoupled(new DispatchToROBBundle)
-        
+
         // New interfaces for external RAT and FreeList
         val rat = new Bundle {
             val lrs1 = Output(UInt(5.W))
@@ -83,5 +83,4 @@ class InstDispatcher extends Module {
     io.robOutput.bits.pdst := currentPdst
     io.robOutput.bits.stalePdst := stalePdst
     io.robOutput.bits.isStore := inst.isStore
-    io.robOutput.bits.brFlag := inst.brFlag
 }
