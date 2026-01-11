@@ -50,6 +50,22 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int) extends CycleAwareModule {
         }
     }
 
+    // 4. Update Readiness (Snoop/Broadcast)
+    // Only update valid entries when broadcast is active
+    when(io.broadcast.valid) {
+        val resPdst = io.broadcast.bits.pdst
+        for (i <- 0 until numEntries) {
+            when(valid(i)) {
+                when(buffer(i).src1 === resPdst) {
+                    buffer(i).src1Ready := true.B
+                }
+                when(buffer(i).src2 === resPdst) {
+                    buffer(i).src2Ready := true.B
+                }
+            }
+        }
+    }
+
     // 3. Enqueue Logic
     val canEnqueue = !valid.asUInt.andR
     io.in.ready := canEnqueue && !io.flush.valid
@@ -70,22 +86,6 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int) extends CycleAwareModule {
 
         buffer(emptyIndex) := updatedEntry
         valid(emptyIndex) := true.B
-    }
-
-    // 4. Update Readiness (Snoop/Broadcast)
-    // Only update valid entries when broadcast is active
-    when(io.broadcast.valid) {
-        val resPdst = io.broadcast.bits.pdst
-        for (i <- 0 until numEntries) {
-            when(valid(i)) {
-                when(buffer(i).src1 === resPdst) {
-                    buffer(i).src1Ready := true.B
-                }
-                when(buffer(i).src2 === resPdst) {
-                    buffer(i).src2Ready := true.B
-                }
-            }
-        }
     }
 
     // 5. Issue Logic (Out-of-Order selection)

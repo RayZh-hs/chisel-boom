@@ -40,24 +40,6 @@ class SequentialIssueBuffer[T <: Data](gen: T, entries: Int) extends Module {
     val isEmpty = ptrMatch && !maybeFull
     val isFull = ptrMatch && maybeFull
 
-    // --- Enqueue Logic ---
-    io.in.ready := !isFull && !io.flush.valid
-
-    when(io.in.fire) {
-        val entry = io.in.bits
-        val broadcastMatch1 = io.broadcast.valid && (entry.src1 === io.broadcast.bits.pdst)
-        val broadcastMatch2 = io.broadcast.valid && (entry.src2 === io.broadcast.bits.pdst)
-
-        val updatedEntry = Wire(new SequentialBufferEntry(gen))
-        updatedEntry := entry
-        when(broadcastMatch1) { updatedEntry.src1Ready := true.B }
-        when(broadcastMatch2) { updatedEntry.src2Ready := true.B }
-
-        buffer(tail) := updatedEntry
-        tail := Mux(tail === (entries - 1).U, 0.U, tail + 1.U)
-        maybeFull := true.B
-    }
-
     // --- Broadcast Logic ---
     // Note: Only need to update entries between head and tail
     // For simplicity, we update all entries but the buffer semantics ensure only valid entries matter
@@ -72,6 +54,26 @@ class SequentialIssueBuffer[T <: Data](gen: T, entries: Int) extends Module {
                 buffer(i).src2Ready := true.B
             }
         }
+    }
+
+    // --- Enqueue Logic ---
+    io.in.ready := !isFull && !io.flush.valid
+
+    when(io.in.fire) {
+        val entry = io.in.bits
+        val broadcastMatch1 = io.broadcast.valid && (entry.src1 === io.broadcast.bits.pdst)
+        val broadcastMatch2 = io.broadcast.valid && (entry.src2 === io.broadcast.bits.pdst)
+
+        val updatedEntry = Wire(new SequentialBufferEntry(gen))
+        updatedEntry := entry
+        when(broadcastMatch1) { updatedEntry.src1Ready := true.B }
+        when(broadcastMatch2) { updatedEntry.src2Ready := true.B }
+
+        printf(p"LSQ_DEBUG: Enq robTag=${entry.robTag} tail=${tail}\n")
+
+        buffer(tail) := updatedEntry
+        tail := Mux(tail === (entries - 1).U, 0.U, tail + 1.U)
+        maybeFull := true.B
     }
 
     // --- Issue Logic (Sequential) ---
@@ -90,14 +92,28 @@ class SequentialIssueBuffer[T <: Data](gen: T, entries: Int) extends Module {
 
     // --- Flush Logic (Optimized) ---
     when(io.flush.valid) {
-        val killMask = VecInit((0 until entries).map(i => io.flush.checkKilled(buffer(i).robTag))).asUInt
+        val killMaskVec = Wire(Vec(entries, Bool()))
+        val validMaskVec = Wire(Vec(entries, Bool()))
+        val isWrapped = head > tail
+
+        for (i <- 0 until entries) {
+            killMaskVec(i) := io.flush.checkKilled(buffer(i).robTag)
+            
+            val idx = i.U
+            validMaskVec(i) := Mux(
+                isWrapped,
+                idx >= head || idx < tail,
+                idx >= head && idx < tail
+            )
+        }
+        val killMask = killMaskVec.asUInt & validMaskVec.asUInt
 
         val doubledKillMask = Cat(killMask, killMask)
         val shiftedKillMask = doubledKillMask >> head
 
         val anyKilled = killMask.orR
         val distToFirstKill = PriorityEncoder(shiftedKillMask(entries - 1, 0))
-        
+
         when(anyKilled) {
             val nextTail = head +& distToFirstKill
             tail := Mux(nextTail >= entries.U, nextTail - entries.U, nextTail)
