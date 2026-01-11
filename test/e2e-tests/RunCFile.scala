@@ -3,15 +3,25 @@ package e2e
 import chiseltest._
 import core.BoomCore
 import java.nio.file.{Path, Paths, Files}
-import Configurables._
+import common.Configurables._
+import e2e.Configurables._
 
 object RunCFile extends App {
-    if (args.length < 1) {
-        println("Usage: RunCFile <path_to_c_file>")
+    val argList = args.toList
+    val verbose = argList.contains("-v") || argList.contains("--verbose")
+    val positionalArgs = argList.filterNot(arg => arg.startsWith("-"))
+
+    if (positionalArgs.isEmpty) {
+        println("Usage: RunCFile [options] <path_to_c_file>")
+        println("Options:")
+        println("  -v, --verbose    Enable verbose debug output")
         sys.exit(1)
     }
 
-    val cFileCandidate = Paths.get(args(0)).toAbsolutePath
+    // Set the global verbose flag
+    common.Configurables.verbose = verbose
+
+    val cFileCandidate = Paths.get(positionalArgs.head).toAbsolutePath
 
     if (!Files.exists(cFileCandidate)) {
         println(s"File not found: $cFileCandidate")

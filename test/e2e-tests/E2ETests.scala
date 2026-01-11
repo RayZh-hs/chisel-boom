@@ -13,6 +13,10 @@ import scala.sys.process.Process
 class E2ETests extends AnyFunSuite with ChiselScalatestTester {
     import E2EUtils._
 
+    if (sys.props.contains("verbose") || sys.props.contains("v")) {
+        common.Configurables.verbose = true
+    }
+
     if (toolchain.nonEmpty) {
         val cFiles =
             if (Files.isDirectory(cDir))

@@ -6,6 +6,11 @@ object Configurables {
     val IMEM_WIDTH = 12 // 4096 words = 16KB instruction memory
     val MEM_WIDTH = 14 // 16KB data memory (8-bit per slot)
 
+    // Configuration for debug output
+    // Set to true to enable printf outputs in the simulation by default
+    // Otherwise, leave as is and use -v/--verbose flag to enable in mill
+    var verbose: Boolean = false
+
     object Derived {
         val PREG_COUNT = 1 << PREG_WIDTH
         val ROB_COUNT = 1 << ROB_WIDTH

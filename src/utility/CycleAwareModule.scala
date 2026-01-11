@@ -2,6 +2,7 @@ package utility
 
 import chisel3._
 import chisel3.util._
+import common.Configurables
 
 // self-import shorthand
 import utility.CycleAwareModule.Configurables.{
@@ -27,14 +28,19 @@ class CycleAwareModule extends Module {
       *   The hardware signals to print (must be of type Bits/UInt/SInt/etc.)
       */
     def printf(fmt: String, args: Any*): Unit = {
-        val fmtWithCycle = s"[cycle: %d] $fmt"
-        val argsWithCycle = Seq(cycleCount) ++ args.map(_.asInstanceOf[Bits])
-        chisel3.printf(fmtWithCycle, argsWithCycle: _*)
+        if (Configurables.verbose) {
+            val fmtWithCycle = s"[cycle: %d] $fmt"
+            val argsWithCycle =
+                Seq(cycleCount) ++ args.map(_.asInstanceOf[Bits])
+            chisel3.printf(fmtWithCycle, argsWithCycle: _*)
+        }
     }
 
     // Overload to support the p"..." interpolator style (Idiomatic Chisel)
     def printf(p: Printable): Unit = {
-        val pWithCycle = p"[cycle: ${Decimal(cycleCount)}] " + p
-        chisel3.printf(pWithCycle)
+        if (Configurables.verbose) {
+            val pWithCycle = p"[cycle: ${Decimal(cycleCount)}] " + p
+            chisel3.printf(pWithCycle)
+        }
     }
 }
