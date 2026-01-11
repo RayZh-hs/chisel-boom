@@ -8,6 +8,8 @@ MEMORY
 
 SECTIONS
 {
+  /DISCARD/ : { *(.note.gnu.build-id) }
+
   .text :
   {
     *(.text.init)

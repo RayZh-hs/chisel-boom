@@ -91,7 +91,7 @@ object E2EUtils {
           gcc,
           "-march=rv32i",
           "-mabi=ilp32",
-          "-O2",
+          "-O0",
           "-ffreestanding",
           "-mstrict-align",
           "-fno-builtin",
