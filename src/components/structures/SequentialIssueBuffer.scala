@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import common.Configurables._
 import common._
+import utility.CycleAwareModule
 
 class LoadStoreInfo extends Bundle {
     val opWidth = MemOpWidth()
@@ -22,7 +23,8 @@ class SequentialBufferEntry[T <: Data](gen: T) extends Bundle {
     val info = gen
 }
 
-class SequentialIssueBuffer[T <: Data](gen: T, entries: Int) extends Module {
+class SequentialIssueBuffer[T <: Data](gen: T, entries: Int)
+    extends CycleAwareModule {
     val io = IO(new Bundle {
         val in = Flipped(Decoupled(new SequentialBufferEntry(gen)))
         val broadcast = Input(Valid(new BroadcastBundle()))
@@ -61,8 +63,10 @@ class SequentialIssueBuffer[T <: Data](gen: T, entries: Int) extends Module {
 
     when(io.in.fire) {
         val entry = io.in.bits
-        val broadcastMatch1 = io.broadcast.valid && (entry.src1 === io.broadcast.bits.pdst)
-        val broadcastMatch2 = io.broadcast.valid && (entry.src2 === io.broadcast.bits.pdst)
+        val broadcastMatch1 =
+            io.broadcast.valid && (entry.src1 === io.broadcast.bits.pdst)
+        val broadcastMatch2 =
+            io.broadcast.valid && (entry.src2 === io.broadcast.bits.pdst)
 
         val updatedEntry = Wire(new SequentialBufferEntry(gen))
         updatedEntry := entry
@@ -98,12 +102,12 @@ class SequentialIssueBuffer[T <: Data](gen: T, entries: Int) extends Module {
 
         for (i <- 0 until entries) {
             killMaskVec(i) := io.flush.checkKilled(buffer(i).robTag)
-            
+
             val idx = i.U
             validMaskVec(i) := Mux(
-                isWrapped,
-                idx >= head || idx < tail,
-                idx >= head && idx < tail
+              isWrapped,
+              idx >= head || idx < tail,
+              idx >= head && idx < tail
             )
         }
         val killMask = killMaskVec.asUInt & validMaskVec.asUInt
