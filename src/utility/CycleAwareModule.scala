@@ -3,8 +3,20 @@ package utility
 import chisel3._
 import chisel3.util._
 
+// self-import shorthand
+import utility.CycleAwareModule.Configurables.{
+    MAX_CYCLE_COUNT => MAX_CYCLE_COUNT
+}
+
+object CycleAwareModule {
+    object Configurables {
+        // Maximum cycle count supported by CycleAwareModule in debugging
+        val MAX_CYCLE_COUNT = 40000
+    }
+}
+
 class CycleAwareModule extends Module {
-    val cycleCount = RegInit(0.U(64.W))
+    val cycleCount = RegInit(0.U(log2Ceil(MAX_CYCLE_COUNT).W))
     cycleCount := cycleCount + 1.U
 
     /** Custom printf that prepends the current cycle count.
@@ -15,14 +27,14 @@ class CycleAwareModule extends Module {
       *   The hardware signals to print (must be of type Bits/UInt/SInt/etc.)
       */
     def printf(fmt: String, args: Any*): Unit = {
-        val fmtWithCycle = s"[Cycle=%d] $fmt"
+        val fmtWithCycle = s"[cycle: %d] $fmt"
         val argsWithCycle = Seq(cycleCount) ++ args.map(_.asInstanceOf[Bits])
         chisel3.printf(fmtWithCycle, argsWithCycle: _*)
     }
 
     // Overload to support the p"..." interpolator style (Idiomatic Chisel)
     def printf(p: Printable): Unit = {
-        val pWithCycle = p"[cycle=${Decimal(cycleCount)}] " + p
+        val pWithCycle = p"[cycle: ${Decimal(cycleCount)}] " + p
         chisel3.printf(pWithCycle)
     }
 }
