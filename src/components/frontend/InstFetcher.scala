@@ -43,11 +43,14 @@ class InstFetcher extends CycleAwareModule {
     }
 
     val was_fetching = RegNext(fetch_allowed, false.B)
+    val predict_delayed = RegEnable(io.targetPC.valid, fetch_allowed)
+    val predictedTarget_delayed = RegEnable(io.targetPC.bits, fetch_allowed)
+
     queue.io.enq.valid := was_fetching && !io.pcOverwrite.valid
     queue.io.enq.bits.inst := io.instData
     queue.io.enq.bits.pc := pc_delayed
-    queue.io.enq.bits.predict := io.targetPC.valid
-    queue.io.enq.bits.predictedTarget := io.targetPC.bits
+    queue.io.enq.bits.predict := predict_delayed
+    queue.io.enq.bits.predictedTarget := predictedTarget_delayed
 
     queue.reset := reset.asBool || io.pcOverwrite.valid
 

@@ -48,7 +48,7 @@ class RegisterAliasTable(
 
     // Rollback logic (takes precedence over updates in the same cycle)
     for (i <- 0 until nRollbackPorts) {
-        when(rollback(i).valid) {
+        when(rollback(i).valid && rollback(i).bits.ldst =/= 0.U) {
             mapTable(rollback(i).bits.ldst) := rollback(i).bits.stalePdst
         }
     }
