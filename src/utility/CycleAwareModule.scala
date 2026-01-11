@@ -22,7 +22,7 @@ class CycleAwareModule extends Module {
 
     // Overload to support the p"..." interpolator style (Idiomatic Chisel)
     def printf(p: Printable): Unit = {
-        val pWithCycle = p"[Cycle=$cycleCount] " + p
+        val pWithCycle = p"[cycle=${Decimal(cycleCount)}] " + p
         chisel3.printf(pWithCycle)
     }
 }

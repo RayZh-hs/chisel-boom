@@ -26,11 +26,11 @@ class BranchTargetBuffer extends Module {
     val index = io.pc(6, 2)
     val tag = io.pc(31, 7)
     
-    val index_reg = RegNext(index)
+    val valid_reg = RegNext(valids(index))
     val tag_reg = RegNext(tag)
     val entry = buffer.read(index)
 
-    when (valids(index_reg) && entry.tag === tag_reg) {
+    when (valid_reg && entry.tag === tag_reg) {
         io.target.valid := true.B
         io.target.bits := entry.target
     } .otherwise {

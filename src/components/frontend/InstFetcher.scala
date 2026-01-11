@@ -36,21 +36,27 @@ class InstFetcher extends CycleAwareModule {
 
     val pc_delayed = RegEnable(io.instAddr, fetch_allowed)
 
+    val kill_next_fetch = RegInit(false.B)
+
     when(io.pcOverwrite.valid) {
         pc := io.pcOverwrite.bits + 4.U
+        kill_next_fetch := false.B
+    }.elsewhen(io.targetPC.valid && fetch_allowed) {
+        pc := io.targetPC.bits
+        kill_next_fetch := true.B
     }.elsewhen(fetch_allowed) {
         pc := pc + 4.U
+        kill_next_fetch := false.B
     }
 
     val was_fetching = RegNext(fetch_allowed, false.B)
-    val predict_delayed = RegEnable(io.targetPC.valid, fetch_allowed)
-    val predictedTarget_delayed = RegEnable(io.targetPC.bits, fetch_allowed)
 
-    queue.io.enq.valid := was_fetching && !io.pcOverwrite.valid
+    // FIX: Do not enqueue if we are killing this fetch (shadow fetch of a taken branch)
+    queue.io.enq.valid := was_fetching && !io.pcOverwrite.valid && !kill_next_fetch
     queue.io.enq.bits.inst := io.instData
     queue.io.enq.bits.pc := pc_delayed
-    queue.io.enq.bits.predict := predict_delayed
-    queue.io.enq.bits.predictedTarget := predictedTarget_delayed
+    queue.io.enq.bits.predict := io.targetPC.valid
+    queue.io.enq.bits.predictedTarget := io.targetPC.bits
 
     queue.reset := reset.asBool || io.pcOverwrite.valid
 
@@ -63,5 +69,9 @@ class InstFetcher extends CycleAwareModule {
     }
     when(io.pcOverwrite.valid) {
         printf(p"FETCH: Redirect to 0x${Hexadecimal(io.pcOverwrite.bits)}\n")
+    }
+    // Debug print for prediction
+    when(io.targetPC.valid && fetch_allowed && !io.pcOverwrite.valid) {
+        printf(p"FETCH: BTB Predicted Target 0x${Hexadecimal(io.targetPC.bits)}\n")
     }
 }
