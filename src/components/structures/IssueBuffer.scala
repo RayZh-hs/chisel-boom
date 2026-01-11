@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import common.Configurables._
 import common._
+import utility.CycleAwareModule
 
 class ALUInfo extends Bundle {
     val aluOp = ALUOpType()
@@ -29,7 +30,7 @@ class IssueBufferEntry[T <: Data](gen: T) extends Bundle {
     val info = gen
 }
 
-class IssueBuffer[T <: Data](gen: T, numEntries: Int) extends Module {
+class IssueBuffer[T <: Data](gen: T, numEntries: Int) extends CycleAwareModule {
     val io = IO(new Bundle {
         val in = Flipped(Decoupled(new IssueBufferEntry(gen)))
         val broadcast = Input(Valid(new BroadcastBundle()))
@@ -57,14 +58,16 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int) extends Module {
 
     when(io.in.fire) {
         val entry = io.in.bits
-        val broadcastMatch1 = io.broadcast.valid && (entry.src1 === io.broadcast.bits.pdst)
-        val broadcastMatch2 = io.broadcast.valid && (entry.src2 === io.broadcast.bits.pdst)
-        
+        val broadcastMatch1 =
+            io.broadcast.valid && (entry.src1 === io.broadcast.bits.pdst)
+        val broadcastMatch2 =
+            io.broadcast.valid && (entry.src2 === io.broadcast.bits.pdst)
+
         val updatedEntry = Wire(new IssueBufferEntry(gen))
         updatedEntry := entry
         when(broadcastMatch1) { updatedEntry.src1Ready := true.B }
         when(broadcastMatch2) { updatedEntry.src2Ready := true.B }
-        
+
         buffer(emptyIndex) := updatedEntry
         valid(emptyIndex) := true.B
     }
@@ -101,5 +104,16 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int) extends Module {
 
     when(io.out.fire) {
         valid(issueIndex) := false.B
+    }
+
+    when(io.in.fire) {
+        printf(
+          p"ISSUE_BUF: Enq robTag=${io.in.bits.robTag} pdst=${io.in.bits.pdst}\n"
+        )
+    }
+    when(io.out.fire) {
+        printf(
+          p"ISSUE_BUF: Issue robTag=${io.out.bits.robTag} pdst=${io.out.bits.pdst}\n"
+        )
     }
 }

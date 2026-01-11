@@ -3,6 +3,7 @@ package e2e
 import chiseltest._
 import core.BoomCore
 import java.nio.file.{Path, Paths, Files}
+import Configurables._
 
 object RunCFile extends App {
     if (args.length < 1) {
@@ -38,17 +39,20 @@ object RunCFile extends App {
 
     println(s"Running simulation using hex file: $hex")
 
-    RawTester.test(new BoomCore(hex.toString), Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)) { dut =>
-        dut.clock.setTimeout(200000)
+    RawTester.test(
+      new BoomCore(hex.toString),
+      Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
+    ) { dut =>
+        dut.clock.setTimeout(MAX_CYCLE_COUNT)
 
         var cycle = 0
         var result: BigInt = 0
         var done = false
 
         println("Simulation started.")
-        while (!done && cycle < 200000) {
-            if (cycle % 100 == 0) println(s"Cycle: $cycle")
-            if( dut.io.exit.valid.peek().litToBoolean) {
+        while (!done && cycle < MAX_CYCLE_COUNT) {
+            // if (cycle % 100 == 0) println(s"Cycle: $cycle")
+            if (dut.io.exit.valid.peek().litToBoolean) {
                 result = dut.io.exit.bits.data.peek().litValue
                 done = true
             } else {

@@ -17,7 +17,7 @@ class InstFetcher extends CycleAwareModule {
         val instAddr = Output(UInt(32.W))
         val instData = Input(UInt(32.W))
 
-        // TODO branch predictor interface
+        // Branch predictor interface
         val targetPC = Input(Valid(UInt(32.W)))
     })
 
@@ -45,11 +45,20 @@ class InstFetcher extends CycleAwareModule {
     val was_fetching = RegNext(fetch_allowed, false.B)
     queue.io.enq.valid := was_fetching && !io.pcOverwrite.valid
     queue.io.enq.bits.inst := io.instData
-    queue.io.enq.bits.pc   := pc_delayed
+    queue.io.enq.bits.pc := pc_delayed
     queue.io.enq.bits.predict := io.targetPC.valid
     queue.io.enq.bits.predictedTarget := io.targetPC.bits
 
     queue.reset := reset.asBool || io.pcOverwrite.valid
 
     io.ifOut <> queue.io.deq
+
+    when(queue.io.enq.fire) {
+        printf(
+          p"FETCH: PC=0x${Hexadecimal(queue.io.enq.bits.pc)} Inst=0x${Hexadecimal(queue.io.enq.bits.inst)}\n"
+        )
+    }
+    when(io.pcOverwrite.valid) {
+        printf(p"FETCH: Redirect to 0x${Hexadecimal(io.pcOverwrite.bits)}\n")
+    }
 }

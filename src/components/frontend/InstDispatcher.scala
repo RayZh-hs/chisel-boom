@@ -3,6 +3,7 @@ package components.frontend
 import chisel3._
 import chisel3.util._
 import common._
+import utility.CycleAwareModule
 import common.Configurables._
 import components.structures.{FreeList, RegisterAliasTable}
 import components.backend.ROBEntry
@@ -11,7 +12,7 @@ import components.backend.ROBEntry
   *
   * Responsible for filling in register renaming data and
   */
-class InstDispatcher extends Module {
+class InstDispatcher extends CycleAwareModule {
     val io = IO(new Bundle {
         val instInput = Flipped(Decoupled(new DecodeToDispatchBundle))
         val instOutput = Decoupled(new DecodeToDispatchBundle)
@@ -83,4 +84,10 @@ class InstDispatcher extends Module {
     io.robOutput.bits.pdst := currentPdst
     io.robOutput.bits.stalePdst := stalePdst
     io.robOutput.bits.isStore := inst.isStore
+
+    when(io.instOutput.fire) {
+        printf(
+          p"DISPATCH: PC=0x${Hexadecimal(inst.pc)} ldst=${inst.ldst} -> pdst=$currentPdst (stale=$stalePdst)\n"
+        )
+    }
 }

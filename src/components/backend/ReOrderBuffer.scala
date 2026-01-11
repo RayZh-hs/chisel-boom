@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import common._
 import common.Configurables._
+import utility.CycleAwareModule
 
 class ROBEntry extends Bundle {
     val ldst = UInt(5.W)
@@ -13,7 +14,7 @@ class ROBEntry extends Bundle {
     val ready = Bool()
 }
 
-class ReOrderBuffer extends Module {
+class ReOrderBuffer extends CycleAwareModule {
     val io = IO(new Bundle {
         val dispatch = Flipped(Decoupled(new DispatchToROBBundle))
         val broadcastInput = Flipped(Decoupled(new BroadcastBundle))
@@ -107,4 +108,16 @@ class ReOrderBuffer extends Module {
     io.commit.bits := headEntry
 
     io.head := head
+
+    when(doEnq) {
+        printf(
+          p"ROB: Alloc Idx=$tail ldst=${io.dispatch.bits.ldst} pdst=${io.dispatch.bits.pdst}\n"
+        )
+    }
+    when(doDeq) {
+        printf(p"ROB: Commit Idx=$head\n")
+    }
+    when(io.brUpdate.valid && io.brUpdate.bits.mispredict) {
+        printf(p"ROB: Mispredict detected at tag=${io.brUpdate.bits.robTag}\n")
+    }
 }

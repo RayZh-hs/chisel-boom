@@ -3,6 +3,7 @@ package e2e
 import org.scalatest.funsuite.AnyFunSuite
 import chiseltest._
 import core.BoomCore
+import Configurables._
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
@@ -30,15 +31,17 @@ class E2ETests extends AnyFunSuite with ChiselScalatestTester {
                 val hex = buildHexFor(cFile)
 
                 test(new BoomCore(hex.toString))
-                    .withAnnotations(Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)) { dut =>
-                        dut.clock.setTimeout(200000)
+                    .withAnnotations(
+                      Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
+                    ) { dut =>
+                        dut.clock.setTimeout(MAX_CYCLE_COUNT)
 
                         var cycle = 0
                         var result: BigInt = 0
                         var done = false
 
-                        while (!done && cycle < 200000) {
-                            if (cycle % 100 == 0) println(s"Cycle: $cycle")
+                        while (!done && cycle < MAX_CYCLE_COUNT) {
+                            // if (cycle % 100 == 0) println(s"Cycle: $cycle")
                             if (dut.io.exit.valid.peek().litToBoolean) {
                                 result = dut.io.exit.bits.data.peek().litValue
                                 done = true

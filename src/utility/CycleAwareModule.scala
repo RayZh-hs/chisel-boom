@@ -15,14 +15,14 @@ class CycleAwareModule extends Module {
       *   The hardware signals to print (must be of type Bits/UInt/SInt/etc.)
       */
     def printf(fmt: String, args: Any*): Unit = {
-        val fmtWithCycle = s"[Cycle: %d] $fmt"
+        val fmtWithCycle = s"[Cycle=%d] $fmt"
         val argsWithCycle = Seq(cycleCount) ++ args.map(_.asInstanceOf[Bits])
         chisel3.printf(fmtWithCycle, argsWithCycle: _*)
     }
 
     // Overload to support the p"..." interpolator style (Idiomatic Chisel)
     def printf(p: Printable): Unit = {
-        val pWithCycle = p"[Cycle: $cycleCount] " + p
+        val pWithCycle = p"[Cycle=$cycleCount] " + p
         chisel3.printf(pWithCycle)
     }
 }
