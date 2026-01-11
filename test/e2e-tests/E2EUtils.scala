@@ -45,9 +45,12 @@ object E2EUtils {
     def objcopy: String =
         toolchain.map(_._2).getOrElse("riscv32-unknown-elf-objcopy")
 
-    def readExpected(name: String): BigInt = {
+    def readExpected(name: String): Seq[BigInt] = {
         val p = expectedDir.resolve(s"$name.expected")
-        BigInt(new String(Files.readAllBytes(p), StandardCharsets.UTF_8).trim)
+        val content =
+            new String(Files.readAllBytes(p), StandardCharsets.UTF_8).trim
+        if (content.isEmpty) Seq()
+        else content.split("\\s+").map(BigInt(_)).toSeq
     }
 
     def writeHexFromBinary(binPath: Path, hexPath: Path): Unit = {
@@ -92,6 +95,8 @@ object E2EUtils {
           "-ffreestanding",
           "-mstrict-align",
           "-fno-builtin",
+          "-I",
+          linkageDir.getParent.toString,
           "-T",
           linkLd.toString,
           "-nostdlib",

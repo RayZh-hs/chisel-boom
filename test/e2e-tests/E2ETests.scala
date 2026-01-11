@@ -38,10 +38,18 @@ class E2ETests extends AnyFunSuite with ChiselScalatestTester {
 
                         var cycle = 0
                         var result: BigInt = 0
+                        var outputBuffer =
+                            scala.collection.mutable.ArrayBuffer[BigInt]()
                         var done = false
 
                         while (!done && cycle < MAX_CYCLE_COUNT) {
-                            // if (cycle % 100 == 0) println(s"Cycle: $cycle")
+                            // Collect output
+                            if (dut.io.put.valid.peek().litToBoolean) {
+                                outputBuffer += dut.io.put.bits.data
+                                    .peek()
+                                    .litValue
+                            }
+
                             if (dut.io.exit.valid.peek().litToBoolean) {
                                 result = dut.io.exit.bits.data.peek().litValue
                                 done = true
@@ -55,10 +63,18 @@ class E2ETests extends AnyFunSuite with ChiselScalatestTester {
                           done,
                           s"Simulation timed out after $cycle cycles"
                         )
-                        assert(
-                          result == expected,
-                          s"Expected $expected, got $result"
-                        )
+
+                        if (outputBuffer.isEmpty && expected.length == 1) {
+                            assert(
+                              result == expected.head,
+                              s"Expected return value ${expected.head}, got $result (No output captured)"
+                            )
+                        } else {
+                            assert(
+                              outputBuffer.toSeq == expected,
+                              s"Expected $expected, got ${outputBuffer.toSeq}"
+                            )
+                        }
                     }
             }
         }

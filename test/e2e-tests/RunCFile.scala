@@ -47,11 +47,15 @@ object RunCFile extends App {
 
         var cycle = 0
         var result: BigInt = 0
+        var outputBuffer = scala.collection.mutable.ArrayBuffer[BigInt]()
         var done = false
 
         println("Simulation started.")
         while (!done && cycle < MAX_CYCLE_COUNT) {
             // if (cycle % 100 == 0) println(s"Cycle: $cycle")
+            if (dut.io.put.valid.peek().litToBoolean) {
+                outputBuffer += dut.io.put.bits.data.peek().litValue
+            }
             if (dut.io.exit.valid.peek().litToBoolean) {
                 result = dut.io.exit.bits.data.peek().litValue
                 done = true
@@ -61,11 +65,14 @@ object RunCFile extends App {
             }
         }
 
+        Thread.sleep(500) // Wait for final prints to flush
         if (done) {
             println(s"Simulation finished in $cycle cycles.")
-            println(s"Result: $result")
+            println(s"Return Code: $result")
+            println(s"Output: ${outputBuffer.mkString(" ")}")
         } else {
             println(s"Simulation timed out after $cycle cycles.")
+            println(s"Output so far: ${outputBuffer.mkString(" ")}")
         }
     }
 }

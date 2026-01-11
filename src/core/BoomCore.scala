@@ -8,11 +8,19 @@ import components.backend._
 import components.structures._
 import common._
 import common.Configurables._
-import components.structures.{ALUInfo, BRUInfo, IssueBuffer, LoadStoreInfo, SequentialIssueBuffer, SequentialBufferEntry}
+import components.structures.{
+    ALUInfo,
+    BRUInfo,
+    IssueBuffer,
+    LoadStoreInfo,
+    SequentialIssueBuffer,
+    SequentialBufferEntry
+}
 
 class BoomCore(val hexFile: String) extends CycleAwareModule {
     val io = IO(new Bundle {
         val exit = Output(Valid(new LoadStoreAction))
+        val put = Output(Valid(new LoadStoreAction))
     })
 
     // Component Instantiation
@@ -49,6 +57,9 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     // Expose exit device to top level
     io.exit.valid := exitDevice.io.req.valid && !exitDevice.io.req.bits.isLoad
     io.exit.bits := exitDevice.io.req.bits
+
+    io.put.valid := printDevice.io.req.valid && !printDevice.io.req.bits.isLoad
+    io.put.bits := printDevice.io.req.bits
 
     val prf = Module(new PhysicalRegisterFile(Derived.PREG_COUNT, 6, 1, 32))
     val bc = Module(new BroadcastChannel)
@@ -132,7 +143,11 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     lsAdaptor.io.issueIn.bits.src1 := instOutput.bits.prs1
     lsAdaptor.io.issueIn.bits.src2 := instOutput.bits.prs2
     lsAdaptor.io.issueIn.bits.src1Ready := src1Ready
-    lsAdaptor.io.issueIn.bits.src2Ready := Mux(instOutput.bits.isStore, src2Ready, true.B)// Not used for loads
+    lsAdaptor.io.issueIn.bits.src2Ready := Mux(
+      instOutput.bits.isStore,
+      src2Ready,
+      true.B
+    ) // Not used for loads
     lsAdaptor.io.issueIn.bits.info.opWidth := instOutput.bits.opWidth
     lsAdaptor.io.issueIn.bits.info.isStore := instOutput.bits.isStore
     lsAdaptor.io.issueIn.bits.info.isUnsigned := instOutput.bits.isUnsigned
@@ -141,7 +156,11 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     instOutput.ready := Mux(
       isALU,
       aluIB.io.in.ready,
-      Mux(isBRU, bruIB.io.in.ready, Mux(isLSU, lsAdaptor.io.issueIn.ready, false.B))
+      Mux(
+        isBRU,
+        bruIB.io.in.ready,
+        Mux(isLSU, lsAdaptor.io.issueIn.ready, false.B)
+      )
     ) && rob.io.dispatch.ready
 
     // PRF Busy Table Update (Set Busy on Dispatch)
@@ -176,7 +195,9 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     // Adaptor to PRF Write connections (Unified via Broadcast Channel)
     prf.io.write(0).addr := bc.io.broadcastOut.bits.pdst
     prf.io.write(0).data := bc.io.broadcastOut.bits.data
-    prf.io.write(0).en := bc.io.broadcastOut.valid && bc.io.broadcastOut.bits.writeEn
+    prf.io
+        .write(0)
+        .en := bc.io.broadcastOut.valid && bc.io.broadcastOut.bits.writeEn
 
     // Broadcast Channel connections
     bc.io.aluResult <> aluAdaptor.io.broadcastOut
@@ -203,7 +224,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     btb.io.update.valid := brUpdate.valid
     btb.io.update.bits.pc := brUpdate.pc
     btb.io.update.bits.target := brUpdate.target
-    
+
     rob.io.brUpdate.valid := mispredict
     rob.io.brUpdate.bits.robTag := brUpdate.robTag
     rob.io.brUpdate.bits.mispredict := mispredict
@@ -228,7 +249,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     aluAdaptor.io.flush := flushCtrl
     bruAdaptor.io.flush := flushCtrl
     lsAdaptor.io.flush := flushCtrl
-    
+
     rob.io.flush := false.B
 
     // Unused PRF readyAddrs
@@ -243,7 +264,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     val rollback = rob.io.rollback
 
     freeList.io.free.valid := rob.io.commit.valid && (rob.io.commit.bits.ldst =/= 0.U)
-    freeList.io.free.bits  := rob.io.commit.bits.stalePdst
+    freeList.io.free.bits := rob.io.commit.bits.stalePdst
     commit.ready := freeList.io.free.ready
 
     rat.rollback(0).valid := rollback.valid
@@ -252,7 +273,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
 
     freeList.io.rollbackFree.valid := rollback.valid && (rollback.bits.ldst =/= 0.U)
     freeList.io.rollbackFree.bits := rollback.bits.pdst
-    
+
     prf.io.clrBusy.valid := rollback.valid && (rollback.bits.pdst =/= 0.U)
     prf.io.clrBusy.bits := rollback.bits.pdst
 }

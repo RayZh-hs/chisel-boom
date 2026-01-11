@@ -3,6 +3,7 @@ import chisel3._
 import chisel3.util._
 import common._
 import common.Configurables._
+import utility.CycleAwareModule
 
 class MMIORouter(val mappings: Seq[UInt]) extends Module {
     val io = IO(new Bundle {
@@ -21,8 +22,10 @@ class MMIORouter(val mappings: Seq[UInt]) extends Module {
     }
 
     // Response Logic (1 cycle latency)
-    io.upstream.resp.valid := RegNext(io.upstream.req.valid && anySel && io.upstream.req.bits.isLoad)
-    
+    io.upstream.resp.valid := RegNext(
+      io.upstream.req.valid && anySel && io.upstream.req.bits.isLoad
+    )
+
     // Mux for responses
     val respData = Wire(UInt(32.W))
     respData := 0.U
@@ -34,13 +37,12 @@ class MMIORouter(val mappings: Seq[UInt]) extends Module {
     io.upstream.resp.bits := respData
 }
 
-class MMIODevice extends Module {
+class MMIODevice extends CycleAwareModule {
     val io = IO(new MemoryInterface)
 
     io.resp.valid := io.req.valid && io.req.bits.isLoad
     io.resp.bits := 0.U
 }
-
 
 class PrintDevice extends MMIODevice {
     when(io.req.valid && !io.req.bits.isLoad) {

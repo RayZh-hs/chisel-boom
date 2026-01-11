@@ -1,3 +1,6 @@
+#include "include/extern.h"
+
 int main() {
-    return 7;
+    put(7); // 7
+    return 0;
 }

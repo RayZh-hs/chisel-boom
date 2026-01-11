@@ -1,3 +1,5 @@
+#include "include/extern.h"
+
 int main() {
     unsigned int a = 0x12345678;
     unsigned int b = a << 4;  // 0x23456780
@@ -18,5 +20,6 @@ int main() {
     int i = 5;
     if (h < i) res += 16;
     
-    return res; // 1 + 2 + 4 + 8 + 16 = 31
+    put(res);   // 31
+    return 0;
 }

@@ -16,3 +16,9 @@ _start:
 
 loop:
     j loop
+
+.global put
+put:
+    li t0, 0x80000000
+    sw a0, 0(t0)
+    ret

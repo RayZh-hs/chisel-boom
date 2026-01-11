@@ -1,3 +1,5 @@
+#include "include/extern.h"
+
 int main() {
     int x = 10;
     int y = 20;
@@ -14,5 +16,6 @@ int main() {
         z += 20;
     }
     
-    return z; // 21
+    put(z); // 21
+    return 0;
 }

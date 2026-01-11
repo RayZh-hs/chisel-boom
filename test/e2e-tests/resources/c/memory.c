@@ -1,3 +1,5 @@
+#include "include/extern.h"
+
 int main() {
     int arr[4];
     arr[0] = 1;
@@ -8,5 +10,6 @@ int main() {
     for (int i = 0; i < 4; i++) {
         sum += arr[i];
     }
-    return sum; // 10
+    put(sum);   // 10
+    return 0;
 }

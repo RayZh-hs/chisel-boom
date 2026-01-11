@@ -1,0 +1,1 @@
+extern void put(const int val);
