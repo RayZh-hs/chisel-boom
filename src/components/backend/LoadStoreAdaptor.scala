@@ -4,16 +4,8 @@ import chisel3._
 import chisel3.util._
 import common._
 import common.Configurables._
-import components.structures.{
-    LoadStoreUnit,
-    SequentialIssueBuffer,
-    LoadStoreInfo,
-    SequentialBufferEntry,
-    MMIORouter,
-    MemorySubsystem,
-    PrintDevice,
-    ExitDevice
-}
+import components.structures._
+import utility.CycleAwareModule
 
 // State maintained for a load in the writeback pipeline stage
 class LoadStoreWBState extends Bundle {
@@ -23,7 +15,7 @@ class LoadStoreWBState extends Bundle {
     val resultPending = Bool()
     val pendingData = UInt(32.W)
 }
-class LoadStoreAdaptor extends Module {
+class LoadStoreAdaptor extends CycleAwareModule {
     val io = IO(new Bundle {
         val issueIn =
             Flipped(Decoupled(new SequentialBufferEntry(new LoadStoreInfo)))
@@ -111,6 +103,9 @@ class LoadStoreAdaptor extends Module {
     // --- AGU (Address Generation Unit) in Stage 2 ---
     val effAddr = (s2_data1.asSInt + s2_bits.info.imm.asSInt).asUInt
 
+    // Pipeline address to S3 for debug printing
+    val s3_addr = Reg(UInt(32.W))
+
     // Memory Request (Stage 2 -> Stage 3)
     io.mem.req.valid := s2_valid && (isLoadS2 || canCommitStoreS2) && s3_ready
     io.mem.req.bits.isLoad := isLoadS2
@@ -126,6 +121,7 @@ class LoadStoreAdaptor extends Module {
           s2_bits.robTag
         )
         s3_bits := s2_bits
+        s3_addr := effAddr
     }.elsewhen(io.flush.checkKilled(s3_bits.robTag)) {
         s3_valid := false.B
     }
@@ -139,6 +135,22 @@ class LoadStoreAdaptor extends Module {
 
     val s3_killed = io.flush.checkKilled(s3_bits.robTag)
     val isLoadS3 = !s3_bits.info.isStore
+
+    // Debug Print for Memory Accesses
+    when(Elaboration.printOnMemAccess.B) {
+        // Store Print (at Issue to Memory)
+        when(io.mem.req.valid && !io.mem.req.bits.isLoad) {
+            printf(
+              p"STORE: Addr=0x${Hexadecimal(io.mem.req.bits.addr)} Data=0x${Hexadecimal(io.mem.req.bits.data)}\n"
+            )
+        }
+        // Load Print (at Result Broadcast)
+        when(s3_valid && !s3_killed && isLoadS3) {
+            printf(
+              p"LOAD: Addr=0x${Hexadecimal(s3_addr)} Data=0x${Hexadecimal(io.mem.resp.bits)}\n"
+            )
+        }
+    }
 
     when(s3_valid && !s3_killed) {
         // Broadcast Load Result or Store-Writeback-Done

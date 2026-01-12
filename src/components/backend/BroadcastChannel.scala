@@ -3,8 +3,10 @@ package components.backend
 import chisel3._
 import chisel3.util._
 import common.BroadcastBundle
+import common.Configurables
+import utility.CycleAwareModule
 
-class BroadcastChannel extends Module {
+class BroadcastChannel extends CycleAwareModule {
     // IO definition
     val io = IO(new Bundle {
         val aluResult = Flipped(Decoupled(new BroadcastBundle))
@@ -19,4 +21,12 @@ class BroadcastChannel extends Module {
     io.broadcastOut.valid := arbiter.io.out.valid
     io.broadcastOut.bits := arbiter.io.out.bits
     arbiter.io.out.ready := true.B
+
+    when(
+      Configurables.Elaboration.printOnBroadcast.B && io.broadcastOut.valid && io.broadcastOut.bits.pdst =/= 0.U
+    ) {
+        printf(
+          p"CDB: pdst=${io.broadcastOut.bits.pdst} data=0x${Hexadecimal(io.broadcastOut.bits.data)}\n"
+        )
+    }
 }

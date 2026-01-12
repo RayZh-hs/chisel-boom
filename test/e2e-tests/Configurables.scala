@@ -3,7 +3,7 @@ package e2e
 import utility.CycleAwareModule
 
 object Configurables {
-    val MAX_CYCLE_COUNT = 5000
+    val MAX_CYCLE_COUNT = 500
 
     assert(
       MAX_CYCLE_COUNT <= CycleAwareModule.Configurables.MAX_CYCLE_COUNT,

@@ -19,6 +19,10 @@ object Configurables {
             true // this option adds a PC field to each ROB entry for easier debugging
         var pcInIssueBuffer: Boolean =
             true // this option adds a PC field to each Issue Buffer entry for easier debugging
+
+        var printOnBroadcast: Boolean = true // Print CDB broadcasts
+        var printOnMemAccess: Boolean =
+            true // Print memory accesses (loads/stores)
     }
 
     object Derived {
