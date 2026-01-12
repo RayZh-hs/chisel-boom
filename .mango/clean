@@ -1,0 +1,6 @@
+#!/bin/bash
+
+set -e
+
+mkdir -p test_run_dir
+rm -R -- test_run_dir/*/
