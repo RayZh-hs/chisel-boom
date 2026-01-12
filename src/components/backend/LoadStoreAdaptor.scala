@@ -126,6 +126,13 @@ class LoadStoreAdaptor extends CycleAwareModule {
         s3_valid := false.B
     }
 
+    // --- S3 Data Capture Logic ---
+    // Since latency is 1 cycle, data arrives 1 cycle after a request fires.
+    val mem_resp_arriving = RegNext(s2_fire_req && isLoadS2, init = false.B)
+
+    // Register to hold the data in case of a stall
+    val s3_data_latched = Reg(UInt(32.W))
+
     // --- Broadcast Arbitration (Output Logic) ---
     io.broadcastOut.valid := false.B
     io.broadcastOut.bits := DontCare
@@ -157,7 +164,11 @@ class LoadStoreAdaptor extends CycleAwareModule {
         io.broadcastOut.valid := true.B
         io.broadcastOut.bits.pdst := s3_bits.pdst
         io.broadcastOut.bits.robTag := s3_bits.robTag
-        io.broadcastOut.bits.data := io.mem.resp.bits // From MemorySubsystem
+        io.broadcastOut.bits.data := Mux(
+          mem_resp_arriving,
+          io.mem.resp.bits,
+          s3_data_latched
+        )
         io.broadcastOut.bits.writeEn := isLoadS3
     }.elsewhen(
       s2_valid && isStoreS2 && !s2_st_ready_sent && !io.flush.checkKilled(
