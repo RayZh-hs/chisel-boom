@@ -38,18 +38,31 @@ class InstFetcher extends CycleAwareModule {
 
     val kill_next_fetch = RegInit(false.B)
 
+    val was_fetching = RegNext(fetch_allowed, false.B)
+
+    // kill_next_fetch is a one-shot flag that suppresses exactly one enqueue.
+    // After the shadow fetch would have been enqueued (was_fetching is true),
+    // we must clear the flag so subsequent fetches can proceed.
+    // This handles the case where fetch stalls immediately after a BTB prediction.
+    val kill_consumed = was_fetching && kill_next_fetch
+
     when(io.pcOverwrite.valid) {
         pc := io.pcOverwrite.bits + 4.U
         kill_next_fetch := false.B
     }.elsewhen(io.targetPC.valid && fetch_allowed) {
         pc := io.targetPC.bits
-        kill_next_fetch := true.B
+        // Only kill the next fetch if there was actually a fetch in progress.
+        // When resuming from a stall (was_fetching = false), the branch instruction
+        // itself hasn't been enqueued yet, so we should not suppress the next enqueue.
+        kill_next_fetch := was_fetching
     }.elsewhen(fetch_allowed) {
         pc := pc + 4.U
         kill_next_fetch := false.B
+    }.elsewhen(kill_consumed) {
+        // Clear kill_next_fetch after it has suppressed the shadow fetch,
+        // even if fetch_allowed is false (e.g., queue full during rollback).
+        kill_next_fetch := false.B
     }
-
-    val was_fetching = RegNext(fetch_allowed, false.B)
 
     // FIX: Do not enqueue if we are killing this fetch (shadow fetch of a taken branch)
     queue.io.enq.valid := was_fetching && !io.pcOverwrite.valid && !kill_next_fetch
@@ -72,6 +85,8 @@ class InstFetcher extends CycleAwareModule {
     }
     // Debug print for prediction
     when(io.targetPC.valid && fetch_allowed && !io.pcOverwrite.valid) {
-        printf(p"FETCH: BTB Predicted Target 0x${Hexadecimal(io.targetPC.bits)}\n")
+        printf(
+          p"FETCH: BTB Predicted Target 0x${Hexadecimal(io.targetPC.bits)}\n"
+        )
     }
 }

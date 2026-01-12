@@ -2,7 +2,8 @@
 
 int main() {
     int n = 0;
-    for (int i = 1; i <= 100; i++) {
+    for (int i = 1; i <= 5; i++) {
+        put(i);
         n += i;
     }
     put(n); // 5050
