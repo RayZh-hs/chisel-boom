@@ -3,27 +3,29 @@ package components.structures
 import chisel3._
 import chisel3.util._
 import common._
+import utility.CycleAwareModule
 
-class BranchUnit extends Module {
+class BranchUnit extends CycleAwareModule {
     val io = IO(new Bundle {
-        val inA = Input(UInt(32.W)) // rs1 
-        val inB = Input(UInt(32.W)) // rs2 
+        val inA = Input(UInt(32.W)) // rs1
+        val inB = Input(UInt(32.W)) // rs2
         val pc = Input(UInt(32.W))
         val imm = Input(UInt(32.W))
         val bruOp = Input(BRUOpType())
         val cmpOp = Input(CmpOpType())
-        
+
         val taken = Output(Bool())
         val target = Output(UInt(32.W))
         val result = Output(UInt(32.W)) // for JAL/JALR/AUIPC
     })
 
     val taken = WireInit(false.B)
-    
+
     // Shared adder for target calculation
     val targetBase = Mux(io.bruOp === BRUOpType.JALR, io.inA, io.pc)
     val targetRaw = targetBase + io.imm
-    val target = Mux(io.bruOp === BRUOpType.JALR, targetRaw & ~1.U(32.W), targetRaw)
+    val target =
+        Mux(io.bruOp === BRUOpType.JALR, targetRaw & ~1.U(32.W), targetRaw)
 
     // Shared adder for result calculation (NPC)
     val npc = io.pc + 4.U
@@ -33,11 +35,11 @@ class BranchUnit extends Module {
         is(BRUOpType.CBR) {
             val cmpRes = WireInit(false.B)
             switch(io.cmpOp) {
-                is(CmpOpType.EQ)  { cmpRes := io.inA === io.inB }
+                is(CmpOpType.EQ) { cmpRes := io.inA === io.inB }
                 is(CmpOpType.NEQ) { cmpRes := io.inA =/= io.inB }
-                is(CmpOpType.LT)  { cmpRes := io.inA.asSInt < io.inB.asSInt }
+                is(CmpOpType.LT) { cmpRes := io.inA.asSInt < io.inB.asSInt }
                 is(CmpOpType.LTU) { cmpRes := io.inA < io.inB }
-                is(CmpOpType.GE)  { cmpRes := io.inA.asSInt >= io.inB.asSInt }
+                is(CmpOpType.GE) { cmpRes := io.inA.asSInt >= io.inB.asSInt }
                 is(CmpOpType.GEU) { cmpRes := io.inA >= io.inB }
             }
             taken := cmpRes
@@ -56,4 +58,8 @@ class BranchUnit extends Module {
     io.taken := taken
     io.target := target
     io.result := result
+
+    printf(
+      p"BRU: pc=0x${Hexadecimal(io.pc)} inA=0x${Hexadecimal(io.inA)} inB=0x${Hexadecimal(io.inB)} bruOp=${io.bruOp} cmpOp=${io.cmpOp} => taken=$taken target=0x${Hexadecimal(target)} result=0x${Hexadecimal(result)}\n"
+    )
 }

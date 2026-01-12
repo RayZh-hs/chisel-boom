@@ -6,8 +6,9 @@ import common._
 import common.Configurables._
 import components.structures.BranchUnit
 import components.structures.{BRUInfo, IssueBufferEntry}
+import utility.CycleAwareModule
 
-class BRUAdaptor extends Module {
+class BRUAdaptor extends CycleAwareModule {
     val io = IO(new Bundle {
         val issueIn = Flipped(Decoupled(new IssueBufferEntry(new BRUInfo)))
         val broadcastOut = Decoupled(new BroadcastBundle)
@@ -110,9 +111,16 @@ class BRUAdaptor extends Module {
 
     val s3_mispredict = RegEnable(
       (bru.io.taken =/= s2_bits.info.predict) ||
-        (bru.io.taken && bru.io.target =/= s2_bits.info.predictedTarget),
+          (bru.io.taken && bru.io.target =/= s2_bits.info.predictedTarget),
       s3_ready
     )
     val mispredict = s3_mispredict
     io.brUpdate.mispredict := mispredict
+
+    printf(
+      p"BRU: PC=0x${Hexadecimal(s3_bits.info.pc)}, mispredicted=${s3_bits.info.predict}\n"
+    )
+    printf(
+      p"BRU: taken=${bru.io.taken}, target=0x${Hexadecimal(bru.io.target)}, result=0x${Hexadecimal(bru.io.result)}\n"
+    )
 }
