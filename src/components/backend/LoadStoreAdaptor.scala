@@ -158,7 +158,7 @@ class LoadStoreAdaptor extends CycleAwareModule {
         // Load Print (at Result Broadcast)
         when(s3_valid && !s3_killed && isLoadS3) {
             printf(
-              p"LOAD: Addr=0x${Hexadecimal(s3_addr)} Data=0x${Hexadecimal(io.mem.resp.bits)}\n"
+              p"LOAD: Addr=0x${Hexadecimal(s3_addr)} Data=0x${Hexadecimal(io.broadcastOut.bits.data)}\n"
             )
         }
     }
