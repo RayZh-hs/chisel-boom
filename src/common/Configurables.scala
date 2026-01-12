@@ -1,6 +1,8 @@
 package common
 
 object Configurables {
+
+    // Constants are UPPERCASE, Compile-time flags are camelCase
     val PREG_WIDTH = 6
     val ROB_WIDTH = 6
     val IMEM_WIDTH = 12 // 4096 words = 16KB instruction memory
@@ -10,6 +12,12 @@ object Configurables {
     // Set to true to enable printf outputs in the simulation by default
     // Otherwise, leave as is and use -v/--verbose flag to enable in mill
     var verbose: Boolean = false
+
+    // Elaboration options for debugging
+    object Elaboration {
+        var pcInROB: Boolean =
+            true // this option adds a PC field to each ROB entry for easier debugging
+    }
 
     object Derived {
         val PREG_COUNT = 1 << PREG_WIDTH

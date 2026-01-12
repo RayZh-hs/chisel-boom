@@ -54,6 +54,9 @@ class DispatchToROBBundle extends Bundle {
     val pdst = UInt(PREG_WIDTH.W)
     val stalePdst = UInt(PREG_WIDTH.W)
     val isStore = Bool()
+
+    // wire pc if elaboration option is set
+    val pc = if (Configurables.Elaboration.pcInROB) Some(UInt(32.W)) else None
 }
 
 class DispatchToALQBundle extends Bundle {
@@ -136,7 +139,6 @@ class LoadStoreAction extends Bundle {
     val data = UInt(32.W)
     val targetReg = UInt(PREG_WIDTH.W)
 }
-
 
 class MemoryInterface extends Bundle {
     val req = Flipped(Valid(new LoadStoreAction))

@@ -12,6 +12,9 @@ class ROBEntry extends Bundle {
     val stalePdst = UInt(PREG_WIDTH.W)
     val isStore = Bool()
     val ready = Bool()
+
+    // pc field for easier debugging, requires elaboration option
+    val pc = if (Configurables.Elaboration.pcInROB) Some(UInt(32.W)) else None
 }
 
 class ReOrderBuffer extends CycleAwareModule {
@@ -82,6 +85,9 @@ class ReOrderBuffer extends CycleAwareModule {
         entry.stalePdst := io.dispatch.bits.stalePdst
         entry.isStore := io.dispatch.bits.isStore
         entry.ready := false.B
+        if (Configurables.Elaboration.pcInROB) {
+            entry.pc.get := io.dispatch.bits.pc.get
+        }
         robRam(tail) := entry
     }
     io.robTag := tail
@@ -110,14 +116,36 @@ class ReOrderBuffer extends CycleAwareModule {
     io.head := head
 
     when(doEnq) {
-        printf(
-          p"ROB: Alloc Idx=$tail ldst=${io.dispatch.bits.ldst} pdst=${io.dispatch.bits.pdst}\n"
-        )
+        if (Configurables.Elaboration.pcInROB) {
+            printf(
+              p"ROB: Alloc Idx=$tail ldst=${io.dispatch.bits.ldst} pdst=${io.dispatch.bits.pdst} pc=0x${Hexadecimal(io.dispatch.bits.pc.get)}\n"
+            )
+        } else {
+            printf(
+              p"ROB: Alloc Idx=$tail ldst=${io.dispatch.bits.ldst} pdst=${io.dispatch.bits.pdst}\n"
+            )
+        }
     }
     when(doDeq) {
-        printf(p"ROB: Commit Idx=$head\n")
+        if (Configurables.Elaboration.pcInROB) {
+            printf(
+              p"ROB: Commit Idx=$head ldst=${headEntry.ldst} pdst=${headEntry.pdst} pc=0x${Hexadecimal(headEntry.pc.get)}\n"
+            )
+        } else {
+            printf(
+              p"ROB: Commit Idx=$head ldst=${headEntry.ldst} pdst=${headEntry.pdst}\n"
+            )
+        }
     }
     when(io.brUpdate.valid && io.brUpdate.bits.mispredict) {
-        printf(p"ROB: Mispredict detected at tag=${io.brUpdate.bits.robTag}\n")
+        if (Configurables.Elaboration.pcInROB) {
+            printf(
+              p"ROB: Mispredict detected at tag=${io.brUpdate.bits.robTag} pc=0x${Hexadecimal(robRam(io.brUpdate.bits.robTag).pc.get)}\n"
+            )
+        } else {
+            printf(
+              p"ROB: Mispredict detected at tag=${io.brUpdate.bits.robTag}\n"
+            )
+        }
     }
 }
