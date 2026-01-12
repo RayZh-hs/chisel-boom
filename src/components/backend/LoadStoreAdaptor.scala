@@ -132,6 +132,10 @@ class LoadStoreAdaptor extends CycleAwareModule {
 
     // Register to hold the data in case of a stall
     val s3_data_latched = Reg(UInt(32.W))
+    when(mem_resp_arriving) {
+        s3_data_latched := io.mem.resp.bits
+    }
+
 
     // --- Broadcast Arbitration (Output Logic) ---
     io.broadcastOut.valid := false.B
