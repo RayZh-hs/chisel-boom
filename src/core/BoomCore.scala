@@ -81,15 +81,15 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     dispatcher.io.instInput <> decoder.io.out
 
     // RAT and FreeList connections
-    rat.io.readL(0) := dispatcher.io.rat.lrs1
-    rat.io.readL(1) := dispatcher.io.rat.lrs2
-    rat.io.readL(2) := dispatcher.io.rat.ldst
-    dispatcher.io.rat.prs1 := rat.io.readP(0)
-    dispatcher.io.rat.prs2 := rat.io.readP(1)
-    dispatcher.io.rat.stalePdst := rat.io.readP(2)
-    rat.io.update(0) <> dispatcher.io.rat.update
+    rat.io.readL(0) := dispatcher.io.ratAccess.lrs1
+    rat.io.readL(1) := dispatcher.io.ratAccess.lrs2
+    rat.io.readL(2) := dispatcher.io.ratAccess.ldst
+    dispatcher.io.ratAccess.prs1 := rat.io.readP(0)
+    dispatcher.io.ratAccess.prs2 := rat.io.readP(1)
+    dispatcher.io.ratAccess.stalePdst := rat.io.readP(2)
+    rat.io.update(0) <> dispatcher.io.ratAccess.update
 
-    dispatcher.io.freeList.allocate <> freeList.io.allocate
+    dispatcher.io.freeListAccess.allocate <> freeList.io.allocate
 
     // --- Backend Wiring ---
 

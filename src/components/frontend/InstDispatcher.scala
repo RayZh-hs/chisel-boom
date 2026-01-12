@@ -20,7 +20,7 @@ class InstDispatcher extends CycleAwareModule {
         val robOutput = Decoupled(new DispatchToROBBundle)
 
         // New interfaces for external RAT and FreeList
-        val rat = new Bundle {
+        val ratAccess = new Bundle {
             val lrs1 = Output(UInt(5.W))
             val lrs2 = Output(UInt(5.W))
             val ldst = Output(UInt(5.W))
@@ -33,43 +33,43 @@ class InstDispatcher extends CycleAwareModule {
             })
         }
 
-        val freeList = new Bundle {
+        val freeListAccess = new Bundle {
             val allocate = Flipped(Decoupled(UInt(PREG_WIDTH.W)))
         }
     })
 
-    val inst = io.instInput.bits
+    val inst = io.instInput.bits // incoming instruction
     val needAlloc = inst.ldst =/= 0.U
     val canDispatch = io.instInput.valid &&
         io.instOutput.ready &&
         io.robOutput.ready &&
-        (!needAlloc || io.freeList.allocate.valid)
+        (!needAlloc || io.freeListAccess.allocate.valid)
 
     // Consume input and allocate from free list
     io.instInput.ready := canDispatch
-    io.freeList.allocate.ready := canDispatch && needAlloc
+    io.freeListAccess.allocate.ready := canDispatch && needAlloc
 
     // Outputs
     io.instOutput.valid := canDispatch
     io.robOutput.valid := canDispatch
 
     // Renaming Logic
-    val allocPdst = io.freeList.allocate.bits
+    val allocPdst = io.freeListAccess.allocate.bits
     val currentPdst = Mux(needAlloc, allocPdst, 0.U) // If x0, pdst is 0
 
     // Connect RAT
-    io.rat.lrs1 := inst.lrs1
-    io.rat.lrs2 := inst.lrs2
-    io.rat.ldst := inst.ldst
+    io.ratAccess.lrs1 := inst.lrs1
+    io.ratAccess.lrs2 := inst.lrs2
+    io.ratAccess.ldst := inst.ldst
 
-    io.rat.update.valid := canDispatch && needAlloc
-    io.rat.update.bits.ldst := inst.ldst
-    io.rat.update.bits.pdst := allocPdst
+    io.ratAccess.update.valid := canDispatch && needAlloc
+    io.ratAccess.update.bits.ldst := inst.ldst
+    io.ratAccess.update.bits.pdst := allocPdst
 
     // Read source operands from RAT
-    val prs1 = io.rat.prs1
-    val prs2 = io.rat.prs2
-    val stalePdst = io.rat.stalePdst
+    val prs1 = io.ratAccess.prs1
+    val prs2 = io.ratAccess.prs2
+    val stalePdst = io.ratAccess.stalePdst
 
     // Fill Output Bundles
     io.instOutput.bits := inst
@@ -84,6 +84,9 @@ class InstDispatcher extends CycleAwareModule {
     io.robOutput.bits.pdst := currentPdst
     io.robOutput.bits.stalePdst := stalePdst
     io.robOutput.bits.isStore := inst.isStore
+    if (Configurables.Elaboration.pcInROB) {
+        io.robOutput.bits.pc.get := inst.pc
+    }
 
     when(io.instOutput.fire) {
         printf(
