@@ -116,10 +116,21 @@ class SequentialIssueBuffer[T <: Data](gen: T, entries: Int, name: String)
             killMaskVec(i) := io.flush.checkKilled(buffer(i).robTag)
 
             val idx = i.U
+            // When full (head == tail && maybeFull), all entries are valid.
+            // When empty (head == tail && !maybeFull), no entries are valid.
+            // Otherwise, compute based on head/tail positions.
             validMaskVec(i) := Mux(
-              isWrapped,
-              idx >= head || idx < tail,
-              idx >= head && idx < tail
+              isFull,
+              true.B,
+              Mux(
+                isEmpty,
+                false.B,
+                Mux(
+                  isWrapped,
+                  idx >= head || idx < tail,
+                  idx >= head && idx < tail
+                )
+              )
             )
         }
         val killMask = killMaskVec.asUInt & validMaskVec.asUInt
