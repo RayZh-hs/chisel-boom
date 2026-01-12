@@ -28,9 +28,14 @@ class IssueBufferEntry[T <: Data](gen: T) extends Bundle {
     val imm = UInt(32.W)
     val useImm = Bool()
     val info = gen
+
+    val pc =
+        if (Configurables.Elaboration.pcInIssueBuffer) Some(UInt(32.W))
+        else None
 }
 
-class IssueBuffer[T <: Data](gen: T, numEntries: Int) extends CycleAwareModule {
+class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
+    extends CycleAwareModule {
     val io = IO(new Bundle {
         val in = Flipped(Decoupled(new IssueBufferEntry(gen)))
         val broadcast = Input(Valid(new BroadcastBundle()))
@@ -107,13 +112,25 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int) extends CycleAwareModule {
     }
 
     when(io.in.fire) {
-        printf(
-          p"ISSUE_BUF: Enq robTag=${io.in.bits.robTag} pdst=${io.in.bits.pdst}\n"
-        )
+        if (Configurables.Elaboration.pcInIssueBuffer) {
+            printf(
+              p"${name}: Enq robTag=${io.in.bits.robTag} pdst=${io.in.bits.pdst} pc=0x${Hexadecimal(io.in.bits.pc.get)}\n"
+            )
+        } else {
+            printf(
+              p"${name}: Enq robTag=${io.in.bits.robTag} pdst=${io.in.bits.pdst}\n"
+            )
+        }
     }
     when(io.out.fire) {
-        printf(
-          p"ISSUE_BUF: Issue robTag=${io.out.bits.robTag} pdst=${io.out.bits.pdst}\n"
-        )
+        if (Configurables.Elaboration.pcInIssueBuffer) {
+            printf(
+              p"${name}: Issue robTag=${io.out.bits.robTag} pdst=${io.out.bits.pdst} pc=0x${Hexadecimal(io.out.bits.pc.get)}\n"
+            )
+        } else {
+            printf(
+              p"${name}: Issue robTag=${io.out.bits.robTag} pdst=${io.out.bits.pdst}\n"
+            )
+        }
     }
 }

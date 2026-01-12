@@ -33,8 +33,8 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     val btb = Module(new BranchTargetBuffer)
 
     val rob = Module(new ReOrderBuffer)
-    val aluIB = Module(new IssueBuffer(new ALUInfo, 8))
-    val bruIB = Module(new IssueBuffer(new BRUInfo, 4))
+    val aluIB = Module(new IssueBuffer(new ALUInfo, 8, "ALU_IB"))
+    val bruIB = Module(new IssueBuffer(new BRUInfo, 4, "BRU_IB"))
     val aluAdaptor = Module(new ALUAdaptor)
     val bruAdaptor = Module(new BRUAdaptor)
 
@@ -119,6 +119,9 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     aluIB.io.in.bits.imm := instOutput.bits.imm
     aluIB.io.in.bits.useImm := instOutput.bits.useImm
     aluIB.io.in.bits.info.aluOp := instOutput.bits.aluOpType
+    if (Configurables.Elaboration.pcInIssueBuffer) {
+        aluIB.io.in.bits.pc.get := instOutput.bits.pc
+    }
 
     // BRU Issue Buffer Enqueue
     bruIB.io.in.valid := instOutput.valid && isBRU && !rob.io.rollback.valid
@@ -135,6 +138,9 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     bruIB.io.in.bits.info.pc := instOutput.bits.pc
     bruIB.io.in.bits.info.predict := instOutput.bits.predict
     bruIB.io.in.bits.info.predictedTarget := instOutput.bits.predictedTarget
+    if (Configurables.Elaboration.pcInIssueBuffer) {
+        bruIB.io.in.bits.pc.get := instOutput.bits.pc
+    }
 
     // LSU Issue Buffer Enqueue
     lsAdaptor.io.issueIn.valid := instOutput.valid && isLSU && !rob.io.rollback.valid
@@ -152,6 +158,9 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     lsAdaptor.io.issueIn.bits.info.isStore := instOutput.bits.isStore
     lsAdaptor.io.issueIn.bits.info.isUnsigned := instOutput.bits.isUnsigned
     lsAdaptor.io.issueIn.bits.info.imm := instOutput.bits.imm
+    if (Configurables.Elaboration.pcInIssueBuffer) {
+        lsAdaptor.io.issueIn.bits.pc.get := instOutput.bits.pc
+    }
 
     instOutput.ready := Mux(
       isALU,

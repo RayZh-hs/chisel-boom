@@ -25,18 +25,19 @@ class LoadStoreWBState extends Bundle {
 }
 class LoadStoreAdaptor extends Module {
     val io = IO(new Bundle {
-        val issueIn = Flipped(Decoupled(new SequentialBufferEntry(new LoadStoreInfo)))
+        val issueIn =
+            Flipped(Decoupled(new SequentialBufferEntry(new LoadStoreInfo)))
         val broadcastOut = Decoupled(new BroadcastBundle)
         val broadcastIn = Input(Valid(new BroadcastBundle))
         val prfRead = new PRFReadBundle
         val flush = Input(new FlushBundle)
         val robHead = Input(UInt(ROB_WIDTH.W))
-        
+
         // Memory Interface
         val mem = Flipped(new MemoryInterface)
     })
 
-    val lsq = Module(new SequentialIssueBuffer(new LoadStoreInfo, 8))
+    val lsq = Module(new SequentialIssueBuffer(new LoadStoreInfo, 8, "LSQ"))
 
     // Connect LSQ
     lsq.io.in <> io.issueIn
@@ -46,31 +47,31 @@ class LoadStoreAdaptor extends Module {
     // --- Pipeline Registers ---
     // S1: LSQ Head -> PRF Read
     val s1_valid = RegInit(false.B)
-    val s1_bits  = Reg(new SequentialBufferEntry(new LoadStoreInfo))
+    val s1_bits = Reg(new SequentialBufferEntry(new LoadStoreInfo))
 
     // S2: PRF Data -> AGU -> Memory Request
     val s2_valid = RegInit(false.B)
-    val s2_bits  = Reg(new SequentialBufferEntry(new LoadStoreInfo))
+    val s2_bits = Reg(new SequentialBufferEntry(new LoadStoreInfo))
     val s2_data1 = Reg(UInt(32.W)) // Base
     val s2_data2 = Reg(UInt(32.W)) // Store Data
-    
+
     // Tracking for Store-Ready notification
     val s2_st_ready_sent = RegInit(false.B)
 
     // S3: Memory Response -> Broadcast
     val s3_valid = RegInit(false.B)
-    val s3_bits  = Reg(new SequentialBufferEntry(new LoadStoreInfo))
+    val s3_bits = Reg(new SequentialBufferEntry(new LoadStoreInfo))
 
     // --- Pipeline Control (Flexible Flow) ---
     // S3 moves if broadcast is accepted
     val s3_ready = io.broadcastOut.ready || !s3_valid
-    
+
     // S2 moves if S3 is ready AND memory/commit conditions are met
     // Note: Store must wait for robHead to commit to memory
     val isStoreS2 = s2_bits.info.isStore
-    val isLoadS2  = !s2_bits.info.isStore
+    val isLoadS2 = !s2_bits.info.isStore
     val canCommitStoreS2 = isStoreS2 && (io.robHead === s2_bits.robTag)
-    
+
     // S2 is ready to advance if:
     // 1. It's a Load (it will fire memory req and move to S3)
     // 2. It's a Store and it's time to commit
@@ -83,9 +84,11 @@ class LoadStoreAdaptor extends Module {
 
     // --- Stage 1 Transition ---
     when(s1_ready) {
-        s1_valid := lsq.io.out.fire && !io.flush.checkKilled(lsq.io.out.bits.robTag)
-        s1_bits  := lsq.io.out.bits
-    } .elsewhen(io.flush.checkKilled(s1_bits.robTag)) {
+        s1_valid := lsq.io.out.fire && !io.flush.checkKilled(
+          lsq.io.out.bits.robTag
+        )
+        s1_bits := lsq.io.out.bits
+    }.elsewhen(io.flush.checkKilled(s1_bits.robTag)) {
         s1_valid := false.B
     }
 
@@ -95,11 +98,11 @@ class LoadStoreAdaptor extends Module {
 
     when(s2_ready) {
         s2_valid := s1_valid && !io.flush.checkKilled(s1_bits.robTag)
-        s2_bits  := s1_bits
+        s2_bits := s1_bits
         s2_data1 := io.prfRead.data1
         s2_data2 := io.prfRead.data2
         s2_st_ready_sent := false.B
-    } .otherwise {
+    }.otherwise {
         // Track if we sent the "Store Ready" notification while stalled waiting for robHead
         when(io.broadcastOut.fire && isStoreS2) { s2_st_ready_sent := true.B }
         when(io.flush.checkKilled(s2_bits.robTag)) { s2_valid := false.B }
@@ -119,19 +122,21 @@ class LoadStoreAdaptor extends Module {
 
     // --- Stage 3 Transition ---
     when(s3_ready) {
-        s3_valid := s2_valid && s2_fire_req && !io.flush.checkKilled(s2_bits.robTag)
-        s3_bits  := s2_bits
-    } .elsewhen(io.flush.checkKilled(s3_bits.robTag)) {
+        s3_valid := s2_valid && s2_fire_req && !io.flush.checkKilled(
+          s2_bits.robTag
+        )
+        s3_bits := s2_bits
+    }.elsewhen(io.flush.checkKilled(s3_bits.robTag)) {
         s3_valid := false.B
     }
 
     // --- Broadcast Arbitration (Output Logic) ---
     io.broadcastOut.valid := false.B
     io.broadcastOut.bits := DontCare
-    
+
     // Priority 1: Load Results (Stage 3)
     // Priority 2: Store "Ready to Commit" Notification (Stage 2)
-    
+
     val s3_killed = io.flush.checkKilled(s3_bits.robTag)
     val isLoadS3 = !s3_bits.info.isStore
 
@@ -141,8 +146,12 @@ class LoadStoreAdaptor extends Module {
         io.broadcastOut.bits.pdst := s3_bits.pdst
         io.broadcastOut.bits.robTag := s3_bits.robTag
         io.broadcastOut.bits.data := io.mem.resp.bits // From MemorySubsystem
-        io.broadcastOut.bits.writeEn := isLoadS3 
-    } .elsewhen(s2_valid && isStoreS2 && !s2_st_ready_sent && !io.flush.checkKilled(s2_bits.robTag)) {
+        io.broadcastOut.bits.writeEn := isLoadS3
+    }.elsewhen(
+      s2_valid && isStoreS2 && !s2_st_ready_sent && !io.flush.checkKilled(
+        s2_bits.robTag
+      )
+    ) {
         // Store notification: "I have my operands, I'm ready for the ROB head to find me"
         io.broadcastOut.valid := true.B
         io.broadcastOut.bits.pdst := s2_bits.pdst

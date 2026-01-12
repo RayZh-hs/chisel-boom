@@ -17,6 +17,8 @@ object Configurables {
     object Elaboration {
         var pcInROB: Boolean =
             true // this option adds a PC field to each ROB entry for easier debugging
+        var pcInIssueBuffer: Boolean =
+            true // this option adds a PC field to each Issue Buffer entry for easier debugging
     }
 
     object Derived {

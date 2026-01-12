@@ -21,9 +21,13 @@ class SequentialBufferEntry[T <: Data](gen: T) extends Bundle {
     val src1 = UInt(PREG_WIDTH.W)
     val src2 = UInt(PREG_WIDTH.W)
     val info = gen
+
+    val pc =
+        if (Configurables.Elaboration.pcInIssueBuffer) Some(UInt(32.W))
+        else None
 }
 
-class SequentialIssueBuffer[T <: Data](gen: T, entries: Int)
+class SequentialIssueBuffer[T <: Data](gen: T, entries: Int, name: String)
     extends CycleAwareModule {
     val io = IO(new Bundle {
         val in = Flipped(Decoupled(new SequentialBufferEntry(gen)))
@@ -73,7 +77,15 @@ class SequentialIssueBuffer[T <: Data](gen: T, entries: Int)
         when(broadcastMatch1) { updatedEntry.src1Ready := true.B }
         when(broadcastMatch2) { updatedEntry.src2Ready := true.B }
 
-        printf(p"LSQ_DEBUG: Enq robTag=${entry.robTag} tail=${tail}\n")
+        if (Configurables.Elaboration.pcInIssueBuffer) {
+            printf(
+              p"${name}: Enq robTag=${entry.robTag} pdst=${entry.pdst} pc=0x${Hexadecimal(entry.pc.get)} tail=${tail}\n"
+            )
+        } else {
+            printf(
+              p"${name}: Enq robTag=${entry.robTag} pdst=${entry.pdst} tail=${tail}\n"
+            )
+        }
 
         buffer(tail) := updatedEntry
         tail := Mux(tail === (entries - 1).U, 0.U, tail + 1.U)

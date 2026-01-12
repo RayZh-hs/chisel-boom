@@ -9,7 +9,7 @@ import components.structures.{ALUInfo, IssueBuffer}
 
 class IssueBufferTest extends AnyFlatSpec with Matchers {
     "IssueBuffer" should "enqueue and issue an instruction when operands are ready" in {
-        simulate(new IssueBuffer(new ALUInfo, 4)) { dut =>
+        simulate(new IssueBuffer(new ALUInfo, 4, "IB")) { dut =>
             // Enqueue an instruction with ready operands
             dut.io.in.valid.poke(true.B)
             dut.io.in.bits.robTag.poke(1.U)
@@ -32,7 +32,7 @@ class IssueBufferTest extends AnyFlatSpec with Matchers {
     }
 
     it should "wait for broadcast to wake up instructions" in {
-        simulate(new IssueBuffer(new ALUInfo, 4)) { dut =>
+        simulate(new IssueBuffer(new ALUInfo, 4, "IB")) { dut =>
             // Enqueue an instruction with non-ready src1
             dut.io.in.valid.poke(true.B)
             dut.io.in.bits.src1.poke(5.U)
@@ -60,7 +60,7 @@ class IssueBufferTest extends AnyFlatSpec with Matchers {
         // 1. Tag 1 (Older, keep)
         // 2. Tag 2 (The branch, keep)
         // 3. Tag 3 (Younger, kill)
-        simulate(new IssueBuffer(new ALUInfo, 8)) { dut =>
+        simulate(new IssueBuffer(new ALUInfo, 8, "IB")) { dut =>
             dut.io.in.valid.poke(true.B)
             dut.io.in.bits.robTag.poke(1.U)
             dut.io.in.bits.src1.poke(10.U) // Waiting on P10
@@ -105,7 +105,7 @@ class IssueBufferTest extends AnyFlatSpec with Matchers {
     }
 
     it should "flush younger instructions on redirect (wrap-around)" in {
-        simulate(new IssueBuffer(new ALUInfo, 8)) { dut =>
+        simulate(new IssueBuffer(new ALUInfo, 8, "IB")) { dut =>
             // ROB Head = 60. Flush Tag = 2.
             // Range [60, max] and [0, 2] are safe.
             // 61 -> Safe
