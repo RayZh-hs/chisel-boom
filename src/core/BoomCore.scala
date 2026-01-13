@@ -26,7 +26,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     // Component Instantiation
     val fetcher = Module(new InstFetcher)
     val ifQueue = Module(
-      new Queue(new FetchToDecodeBundle, entries = 3, pipe = true, flow = true)
+      new Queue(new FetchToDecodeBundle, entries = 4, pipe = true, flow = true)
     )
     val decoder = Module(new InstDecoder)
     val dispatcher = Module(new InstDispatcher)
@@ -78,7 +78,6 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     fetcher.io.instData := imem.io.inst
 
     // Frontend queue (in-stage buffer between fetcher and decoder)
-    fetcher.io.queueCount := ifQueue.io.count
     ifQueue.io.enq <> fetcher.io.ifOut
     ifQueue.reset := reset.asBool || fetcher.io.pcOverwrite.valid
 
