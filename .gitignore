@@ -8,6 +8,7 @@
 
 target
 out
+build
 verification
 notes
 
@@ -16,4 +17,7 @@ filelist.f
 *.v
 *.vh
 
+.env
+
 test_run_dir
+*.log

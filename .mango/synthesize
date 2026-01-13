@@ -1,0 +1,26 @@
+#!/bin/bash
+set -e
+
+# Navigate to the repository root
+cd $MANGO_REPO_PATH
+
+# Declare requirements
+function requires() {
+    if ! command -v $1 &>/dev/null; then
+        echo "Requires $1"
+        exit 1
+    fi
+}
+requires apptainer
+
+# Source environment variables
+[ -f .env ] && source .env
+
+# Expect the apptainer path to be set
+if [ -z "$SILICON_COMPILER_APPTAINER_PATH" ]; then
+    echo "Please set SILICON_COMPILER_APPTAINER_PATH"
+    exit 1
+fi
+
+# Run synthesis inside apptainer
+apptainer exec --bind .:/workspace "$SILICON_COMPILER_APPTAINER_PATH" python3 /workspace/synthesis/Synthesize.py
