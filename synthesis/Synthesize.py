@@ -2,6 +2,7 @@ import siliconcompiler
 import glob
 import os
 from siliconcompiler.targets import asap7_demo
+import webbrowser
 
 is_mem_stub_content = """\
 // Stub for Instruction Memory
@@ -62,10 +63,22 @@ def build_boom():
 
     # Important: Define 'SYNTHESIS' so Chisel/sv2v strips out $finish/$fatal/printf
     chip.add('option', 'define', 'SYNTHESIS')
+    
+    # Fix for OpenROAD in container: QStandardPaths: error creating runtime directory
+    # Redirect XDG_RUNTIME_DIR to a writable temporary location
+    os.environ['XDG_RUNTIME_DIR'] = "/tmp"
 
-    chip.set('option', 'to', 'syn')
+    # Run the full physical design flow (Synthesis -> Floorplan -> Place -> CTS -> Route -> GDS)
+    # Removing 'to' option runs the flow to completion
+    # chip.set('option', 'to', 'floorplan')
+    
     chip.run()
-    chip.summary()
+    try:
+        chip.summary()
+    except webbrowser.Error:
+        # Ignore browser open errors in headless/container environments
+        pass
+    chip.show()
 
 if __name__ == "__main__":
     build_boom()
