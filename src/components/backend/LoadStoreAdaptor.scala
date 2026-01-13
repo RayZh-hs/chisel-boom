@@ -38,104 +38,103 @@ class LoadStoreAdaptor extends CycleAwareModule {
 
     // --- Pipeline Registers ---
     // S1: LSQ Head -> PRF Read
-    val s1_valid = RegInit(false.B)
-    val s1_bits = Reg(new SequentialBufferEntry(new LoadStoreInfo))
+    val s1Valid = RegInit(false.B)
+    val s1Bits = Reg(new SequentialBufferEntry(new LoadStoreInfo))
 
     // S2: PRF Data -> AGU -> Memory Request
-    val s2_valid = RegInit(false.B)
-    val s2_bits = Reg(new SequentialBufferEntry(new LoadStoreInfo))
-    val s2_data1 = Reg(UInt(32.W)) // Base
-    val s2_data2 = Reg(UInt(32.W)) // Store Data
+    val s2Valid = RegInit(false.B)
+    val s2Bits = Reg(new SequentialBufferEntry(new LoadStoreInfo))
+    val s2Data1 = Reg(UInt(32.W)) // Base
+    val s2Data2 = Reg(UInt(32.W)) // Store Data
 
     // Tracking for Store-Ready notification
-    val s2_st_ready_sent = RegInit(false.B)
+    val s2StReadySent = RegInit(false.B)
 
     // S3: Memory Response -> Broadcast
-    val s3_valid = RegInit(false.B)
-    val s3_bits = Reg(new SequentialBufferEntry(new LoadStoreInfo))
+    val s3Valid = RegInit(false.B)
+    val s3Bits = Reg(new SequentialBufferEntry(new LoadStoreInfo))
 
     // --- Pipeline Control (Flexible Flow) ---
     // S3 moves if broadcast is accepted
-    val s3_ready = io.broadcastOut.ready || !s3_valid
+    val s3Ready = io.broadcastOut.ready || !s3Valid
 
     // S2 moves if S3 is ready AND memory/commit conditions are met
     // Note: Store must wait for robHead to commit to memory
-    val isStoreS2 = s2_bits.info.isStore
-    val isLoadS2 = !s2_bits.info.isStore
-    val canCommitStoreS2 = isStoreS2 && (io.robHead === s2_bits.robTag)
+    val isStoreS2 = s2Bits.info.isStore
+    val isLoadS2 = !s2Bits.info.isStore
+    val canCommitStoreS2 = isStoreS2 && (io.robHead === s2Bits.robTag)
 
     // S2 is ready to advance if:
     // 1. It's a Load (it will fire memory req and move to S3)
     // 2. It's a Store and it's time to commit
-    val s2_fire_req = (isLoadS2 || canCommitStoreS2) && s3_ready
-    val s2_ready = s2_fire_req || !s2_valid
+    val s2FireReq = (isLoadS2 || canCommitStoreS2) && s3Ready
+    val s2Ready = s2FireReq || !s2Valid
 
-    val s1_ready = s2_ready || !s1_valid
+    val s1Ready = s2Ready || !s1Valid
 
-    lsq.io.out.ready := s1_ready
+    lsq.io.out.ready := s1Ready
 
     // --- Stage 1 Transition ---
-    when(s1_ready) {
-        s1_valid := lsq.io.out.fire && !io.flush.checkKilled(
+    when(s1Ready) {
+        s1Valid := lsq.io.out.fire && !io.flush.checkKilled(
           lsq.io.out.bits.robTag
         )
-        s1_bits := lsq.io.out.bits
-    }.elsewhen(io.flush.checkKilled(s1_bits.robTag)) {
-        s1_valid := false.B
+        s1Bits := lsq.io.out.bits
+    }.elsewhen(io.flush.checkKilled(s1Bits.robTag)) {
+        s1Valid := false.B
     }
 
     // --- Stage 2 Transition ---
-    io.prfRead.addr1 := s1_bits.src1
-    io.prfRead.addr2 := s1_bits.src2
+    io.prfRead.addr1 := s1Bits.src1
+    io.prfRead.addr2 := s1Bits.src2
 
-    when(s2_ready) {
-        s2_valid := s1_valid && !io.flush.checkKilled(s1_bits.robTag)
-        s2_bits := s1_bits
-        s2_data1 := io.prfRead.data1
-        s2_data2 := io.prfRead.data2
-        s2_st_ready_sent := false.B
+    when(s2Ready) {
+        s2Valid := s1Valid && !io.flush.checkKilled(s1Bits.robTag)
+        s2Bits := s1Bits
+        s2Data1 := io.prfRead.data1
+        s2Data2 := io.prfRead.data2
+        s2StReadySent := false.B
     }.otherwise {
         // Track if we sent the "Store Ready" notification while stalled waiting for robHead
-        when(io.broadcastOut.fire && isStoreS2) { s2_st_ready_sent := true.B }
-        when(io.flush.checkKilled(s2_bits.robTag)) { s2_valid := false.B }
+        when(io.broadcastOut.fire && isStoreS2) { s2StReadySent := true.B }
+        when(io.flush.checkKilled(s2Bits.robTag)) { s2Valid := false.B }
     }
 
     // --- AGU (Address Generation Unit) in Stage 2 ---
-    val effAddr = (s2_data1.asSInt + s2_bits.info.imm.asSInt).asUInt
+    val effAddr = (s2Data1.asSInt + s2Bits.info.imm.asSInt).asUInt
 
     // Pipeline address to S3 for debug printing
-    val s3_addr = Reg(UInt(32.W))
+    val s3Addr = Reg(UInt(32.W))
 
     // Memory Request (Stage 2 -> Stage 3)
-    io.mem.req.valid := s2_valid && (isLoadS2 || canCommitStoreS2) && s3_ready
+    io.mem.req.valid := s2Valid && (isLoadS2 || canCommitStoreS2) && s3Ready
     io.mem.req.bits.isLoad := isLoadS2
-    io.mem.req.bits.opWidth := s2_bits.info.opWidth
-    io.mem.req.bits.isUnsigned := s2_bits.info.isUnsigned
+    io.mem.req.bits.opWidth := s2Bits.info.opWidth
+    io.mem.req.bits.isUnsigned := s2Bits.info.isUnsigned
     io.mem.req.bits.addr := effAddr
-    io.mem.req.bits.data := s2_data2
-    io.mem.req.bits.targetReg := s2_bits.pdst
+    io.mem.req.bits.data := s2Data2
+    io.mem.req.bits.targetReg := s2Bits.pdst
 
     // --- Stage 3 Transition ---
-    when(s3_ready) {
-        s3_valid := s2_valid && s2_fire_req && !io.flush.checkKilled(
-          s2_bits.robTag
+    when(s3Ready) {
+        s3Valid := s2Valid && s2FireReq && !io.flush.checkKilled(
+          s2Bits.robTag
         )
-        s3_bits := s2_bits
-        s3_addr := effAddr
-    }.elsewhen(io.flush.checkKilled(s3_bits.robTag)) {
-        s3_valid := false.B
+        s3Bits := s2Bits
+        s3Addr := effAddr
+    }.elsewhen(io.flush.checkKilled(s3Bits.robTag)) {
+        s3Valid := false.B
     }
 
     // --- S3 Data Capture Logic ---
     // Since latency is 1 cycle, data arrives 1 cycle after a request fires.
-    val mem_resp_arriving = RegNext(s2_fire_req && isLoadS2, init = false.B)
+    val memRespArriving = RegNext(s2FireReq && isLoadS2, init = false.B)
 
     // Register to hold the data in case of a stall
-    val s3_data_latched = Reg(UInt(32.W))
-    when(mem_resp_arriving) {
-        s3_data_latched := io.mem.resp.bits
+    val s3DataLatched = Reg(UInt(32.W))
+    when(memRespArriving) {
+        s3DataLatched := io.mem.resp.bits
     }
-
 
     // --- Broadcast Arbitration (Output Logic) ---
     io.broadcastOut.valid := false.B
@@ -144,8 +143,8 @@ class LoadStoreAdaptor extends CycleAwareModule {
     // Priority 1: Load Results (Stage 3)
     // Priority 2: Store "Ready to Commit" Notification (Stage 2)
 
-    val s3_killed = io.flush.checkKilled(s3_bits.robTag)
-    val isLoadS3 = !s3_bits.info.isStore
+    val s3Killed = io.flush.checkKilled(s3Bits.robTag)
+    val isLoadS3 = !s3Bits.info.isStore
 
     // Debug Print for Memory Accesses
     when(Elaboration.printOnMemAccess.B) {
@@ -156,33 +155,33 @@ class LoadStoreAdaptor extends CycleAwareModule {
             )
         }
         // Load Print (at Result Broadcast)
-        when(s3_valid && !s3_killed && isLoadS3) {
+        when(s3Valid && !s3Killed && isLoadS3) {
             printf(
-              p"LOAD: Addr=0x${Hexadecimal(s3_addr)} Data=0x${Hexadecimal(io.broadcastOut.bits.data)}\n"
+              p"LOAD: Addr=0x${Hexadecimal(s3Addr)} Data=0x${Hexadecimal(io.broadcastOut.bits.data)}\n"
             )
         }
     }
 
-    when(s3_valid && !s3_killed) {
+    when(s3Valid && !s3Killed) {
         // Broadcast Load Result or Store-Writeback-Done
         io.broadcastOut.valid := true.B
-        io.broadcastOut.bits.pdst := s3_bits.pdst
-        io.broadcastOut.bits.robTag := s3_bits.robTag
+        io.broadcastOut.bits.pdst := s3Bits.pdst
+        io.broadcastOut.bits.robTag := s3Bits.robTag
         io.broadcastOut.bits.data := Mux(
-          mem_resp_arriving,
+          memRespArriving,
           io.mem.resp.bits,
-          s3_data_latched
+          s3DataLatched
         )
         io.broadcastOut.bits.writeEn := isLoadS3
     }.elsewhen(
-      s2_valid && isStoreS2 && !s2_st_ready_sent && !io.flush.checkKilled(
-        s2_bits.robTag
+      s2Valid && isStoreS2 && !s2StReadySent && !io.flush.checkKilled(
+        s2Bits.robTag
       )
     ) {
         // Store notification: "I have my operands, I'm ready for the ROB head to find me"
         io.broadcastOut.valid := true.B
-        io.broadcastOut.bits.pdst := s2_bits.pdst
-        io.broadcastOut.bits.robTag := s2_bits.robTag
+        io.broadcastOut.bits.pdst := s2Bits.pdst
+        io.broadcastOut.bits.robTag := s2Bits.robTag
         io.broadcastOut.bits.writeEn := false.B
     }
 }

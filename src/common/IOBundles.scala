@@ -113,15 +113,15 @@ class FlushBundle extends Bundle {
     val robHead = UInt(ROB_WIDTH.W)
 
     def isYounger(tag: UInt): Bool = {
-        val head_le_flush = robHead <= flushTag
-        val tag_ge_robHead = tag >= robHead
-        val tag_le_flush = tag <= flushTag
-        val is_older_or_same = Mux(
-          head_le_flush,
-          (tag_ge_robHead && tag_le_flush),
-          (tag_ge_robHead || tag_le_flush)
+        val headLeFlush = robHead <= flushTag
+        val tagGeRobHead = tag >= robHead
+        val tagLeFlush = tag <= flushTag
+        val isOlderOrSame = Mux(
+          headLeFlush,
+          (tagGeRobHead && tagLeFlush),
+          (tagGeRobHead || tagLeFlush)
         )
-        !is_older_or_same
+        !isOlderOrSame
     }
 
     def checkKilled(tag: UInt): Bool = {
