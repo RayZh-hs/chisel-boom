@@ -4,3 +4,5 @@
 - `terminology.md`: Definitions of key terms used throughout the project.
 - `speculative.md`: Explanation of speculative features in the simplified boom architecture.
 - `memory.md`: Details on the memory system and its implementation.
+- `mmio.md`: Overview of memory-mapped I/O in the project.
+- `bugs.md`: Tracks known issues and bugs within the project.
