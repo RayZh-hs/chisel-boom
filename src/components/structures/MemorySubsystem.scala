@@ -7,9 +7,9 @@ import common.Configurables._
 
 class MemorySubsystem extends Module {
     val io = IO(new Bundle {
-        val upstream = new MemoryInterface
-        val lsu = Flipped(new MemoryInterface)
-        val mmio = Flipped(new MemoryInterface)
+        val upstream = Flipped(new MemoryRequest)
+        val lsu = new MemoryRequest
+        val mmio = new MemoryRequest
     })
 
     val isMMIO = io.upstream.req.bits.addr(31) === 1.U
@@ -20,9 +20,17 @@ class MemorySubsystem extends Module {
     io.mmio.req.valid := io.upstream.req.valid && isMMIO
     io.mmio.req.bits := io.upstream.req.bits
 
+    io.upstream.req.ready := Mux(isMMIO, io.mmio.req.ready, io.lsu.req.ready)
+
     // Response Handling (1 cycle latency)
     val respValid = io.lsu.resp.valid || io.mmio.resp.valid
     val rawData = Mux(io.lsu.resp.valid, io.lsu.resp.bits, io.mmio.resp.bits)
+
+    io.upstream.resp.valid := respValid
+    io.upstream.resp.bits := rawData
+    
+    io.lsu.resp.ready := io.upstream.resp.ready
+    io.mmio.resp.ready := io.upstream.resp.ready
 
     // Pipeline the request info for formatting
     val reqReg = RegNext(io.upstream.req.bits)

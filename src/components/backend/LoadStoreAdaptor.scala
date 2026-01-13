@@ -26,7 +26,7 @@ class LoadStoreAdaptor extends CycleAwareModule {
         val robHead = Input(UInt(ROB_WIDTH.W))
 
         // Memory Interface
-        val mem = Flipped(new MemoryInterface)
+        val mem = new MemoryRequest
     })
 
     val lsq = Module(new SequentialIssueBuffer(new LoadStoreInfo, 8, "LSQ"))
@@ -35,6 +35,9 @@ class LoadStoreAdaptor extends CycleAwareModule {
     lsq.io.in <> io.issueIn
     lsq.io.broadcast := io.broadcastIn
     lsq.io.flush := io.flush
+
+    // Always ready to accept memory responses (we latch them)
+    io.mem.resp.ready := true.B
 
     // --- Pipeline Registers ---
     // S1: LSQ Head -> PRF Read
@@ -53,6 +56,8 @@ class LoadStoreAdaptor extends CycleAwareModule {
     // S3: Memory Response -> Broadcast
     val s3Valid = RegInit(false.B)
     val s3Bits = Reg(new SequentialBufferEntry(new LoadStoreInfo))
+    val s3DataLatched = Reg(UInt(32.W))
+    val s3DataLatchedValid = RegInit(false.B)
 
     // --- Pipeline Control (Flexible Flow) ---
     // S3 moves if broadcast is accepted
@@ -67,7 +72,7 @@ class LoadStoreAdaptor extends CycleAwareModule {
     // S2 is ready to advance if:
     // 1. It's a Load (it will fire memory req and move to S3)
     // 2. It's a Store and it's time to commit
-    val s2FireReq = (isLoadS2 || canCommitStoreS2) && s3Ready
+    val s2FireReq = (isLoadS2 || canCommitStoreS2) && s3Ready && io.mem.req.ready
     val s2Ready = s2FireReq || !s2Valid
 
     val s1Ready = s2Ready || !s1Valid
@@ -122,19 +127,20 @@ class LoadStoreAdaptor extends CycleAwareModule {
         )
         s3Bits := s2Bits
         s3Addr := effAddr
+        s3DataLatchedValid := false.B
     }.elsewhen(io.flush.checkKilled(s3Bits.robTag)) {
         s3Valid := false.B
+        s3DataLatchedValid := false.B
     }
 
     // --- S3 Data Capture Logic ---
-    // Since latency is 1 cycle, data arrives 1 cycle after a request fires.
-    val memRespArriving = RegNext(s2FireReq && isLoadS2, init = false.B)
-
-    // Register to hold the data in case of a stall
-    val s3DataLatched = Reg(UInt(32.W))
-    when(memRespArriving) {
+    when(io.mem.resp.valid) {
         s3DataLatched := io.mem.resp.bits
+        s3DataLatchedValid := true.B
     }
+
+    val s3DataValid = io.mem.resp.valid || s3DataLatchedValid || s3Bits.info.isStore
+    val s3Data = Mux(io.mem.resp.valid, io.mem.resp.bits, s3DataLatched)
 
     // --- Broadcast Arbitration (Output Logic) ---
     io.broadcastOut.valid := false.B
@@ -162,16 +168,12 @@ class LoadStoreAdaptor extends CycleAwareModule {
         }
     }
 
-    when(s3Valid && !s3Killed) {
+    when(s3Valid && s3DataValid && !s3Killed) {
         // Broadcast Load Result or Store-Writeback-Done
         io.broadcastOut.valid := true.B
         io.broadcastOut.bits.pdst := s3Bits.pdst
         io.broadcastOut.bits.robTag := s3Bits.robTag
-        io.broadcastOut.bits.data := Mux(
-          memRespArriving,
-          io.mem.resp.bits,
-          s3DataLatched
-        )
+        io.broadcastOut.bits.data := s3Data
         io.broadcastOut.bits.writeEn := isLoadS3
     }.elsewhen(
       s2Valid && isStoreS2 && !s2StReadySent && !io.flush.checkKilled(
