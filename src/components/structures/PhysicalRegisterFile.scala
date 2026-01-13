@@ -6,19 +6,30 @@ import common.Configurables._
 
 import common.RegBusyStatus
 
-class PhysicalRegisterFile(numRegs: Int, numReadPorts: Int, numWritePorts: Int, dataWidth: Int) extends Module {
+class PhysicalRegisterFile(
+    numRegs: Int,
+    numReadPorts: Int,
+    numWritePorts: Int,
+    dataWidth: Int
+) extends Module {
     val io = IO(new Bundle {
         // Read Ports
-        val read = Vec(numReadPorts, new Bundle {
-            val addr = Input(UInt(log2Ceil(numRegs).W))
-            val data = Output(UInt(dataWidth.W))
-        })
+        val read = Vec(
+          numReadPorts,
+          new Bundle {
+              val addr = Input(UInt(log2Ceil(numRegs).W))
+              val data = Output(UInt(dataWidth.W))
+          }
+        )
         // Write Ports
-        val write = Vec(numWritePorts, new Bundle {
-            val addr = Input(UInt(log2Ceil(numRegs).W))
-            val data = Input(UInt(dataWidth.W))
-            val en = Input(Bool())
-        })
+        val write = Vec(
+          numWritePorts,
+          new Bundle {
+              val addr = Input(UInt(log2Ceil(numRegs).W))
+              val data = Input(UInt(dataWidth.W))
+              val en = Input(Bool())
+          }
+        )
         // Busy Table Interface
         val setBusy = Flipped(Valid(UInt(log2Ceil(numRegs).W)))
         val setReady = Flipped(Valid(UInt(log2Ceil(numRegs).W)))
@@ -49,10 +60,15 @@ class PhysicalRegisterFile(numRegs: Int, numReadPorts: Int, numWritePorts: Int, 
 
     // Busy Table Updates
     // Assertion first - setBusy and setReady should never target same register in same cycle
-    when(io.setBusy.valid && io.setReady.valid && (io.setBusy.bits === io.setReady.bits)) {
-        chisel3.assert(false.B, "Attempting to set the same register busy and ready in the same cycle! should not happen since free list have delay.")
+    when(
+      io.setBusy.valid && io.setReady.valid && (io.setBusy.bits === io.setReady.bits)
+    ) {
+        chisel3.assert(
+          false.B,
+          "Attempting to set the same register busy and ready in the same cycle! should not happen since free list have delay."
+        )
     }
-    
+
     // setReady first, then setBusy takes precedence (more common to set busy on new dispatch)
     when(io.setReady.valid) {
         busyTable(io.setReady.bits) := false.B
@@ -63,7 +79,7 @@ class PhysicalRegisterFile(numRegs: Int, numReadPorts: Int, numWritePorts: Int, 
     when(io.setBusy.valid) {
         busyTable(io.setBusy.bits) := true.B
     }
-    
+
     // Register 0 is always ready and always 0
     busyTable(0) := false.B
     regFile(0) := 0.U

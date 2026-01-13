@@ -19,16 +19,24 @@ class RegisterAliasTable(
         val readL = Input(Vec(nReadPorts, UInt(5.W)))
         val readP = Output(Vec(nReadPorts, UInt(PREG_WIDTH.W)))
 
-        val update = Vec(nUpdatePorts, Flipped(Valid(new Bundle {
-            val ldst = UInt(5.W)
-            val pdst = UInt(PREG_WIDTH.W)
-        })))
+        val update = Vec(
+          nUpdatePorts,
+          Flipped(Valid(new Bundle {
+              val ldst = UInt(5.W)
+              val pdst = UInt(PREG_WIDTH.W)
+          }))
+        )
     })
 
-    val rollback = IO(Vec(nRollbackPorts, Flipped(Valid(new Bundle {
-        val ldst = UInt(5.W)
-        val stalePdst = UInt(PREG_WIDTH.W)
-    }))))
+    val rollback = IO(
+      Vec(
+        nRollbackPorts,
+        Flipped(Valid(new Bundle {
+            val ldst = UInt(5.W)
+            val stalePdst = UInt(PREG_WIDTH.W)
+        }))
+      )
+    )
 
     // Map Table: Logical to Physical Register Mapping
     // x0 is always mapped to p0
