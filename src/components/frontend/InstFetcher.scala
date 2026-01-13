@@ -77,16 +77,10 @@ class InstFetcher extends CycleAwareModule {
 
     when(queue.io.enq.fire) {
         printf(
-          p"FETCH: PC=0x${Hexadecimal(queue.io.enq.bits.pc)} Inst=0x${Hexadecimal(queue.io.enq.bits.inst)}\n"
+          p"FETCH: PC=0x${Hexadecimal(queue.io.enq.bits.pc)} Inst=0x${Hexadecimal(queue.io.enq.bits.inst)} Predict=${queue.io.enq.bits.predict} PredictedTarget=0x${Hexadecimal(queue.io.enq.bits.predictedTarget)}\n"
         )
     }
     when(io.pcOverwrite.valid) {
         printf(p"FETCH: Redirect to 0x${Hexadecimal(io.pcOverwrite.bits)}\n")
-    }
-    // Debug print for prediction
-    when(io.targetPC.valid && fetch_allowed && !io.pcOverwrite.valid) {
-        printf(
-          p"FETCH: BTB Predicted Target 0x${Hexadecimal(io.targetPC.bits)}\n"
-        )
     }
 }
