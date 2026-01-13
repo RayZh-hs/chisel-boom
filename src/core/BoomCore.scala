@@ -71,7 +71,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
 
     // BTB integration
     btb.io.pc := fetcher.io.instAddr
-    fetcher.io.targetPC := btb.io.target
+    fetcher.io.btbResult := btb.io.target
 
     // Memory interface for fetcher
     imem.io.addr := fetcher.io.instAddr
