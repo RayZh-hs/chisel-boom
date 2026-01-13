@@ -33,7 +33,10 @@ class MemorySubsystem extends Module {
     io.mmio.resp.ready := io.upstream.resp.ready
 
     // Pipeline the request info for formatting
-    val reqReg = RegNext(io.upstream.req.bits)
+    val reqReg = Reg(new LoadStoreAction)
+    when(io.upstream.req.fire) {
+        reqReg := io.upstream.req.bits // Latch request info
+    }
     val addrOffset = reqReg.addr(1, 0)
 
     // Process Data (Sign Extension)

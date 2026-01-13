@@ -39,7 +39,7 @@ class LoadStoreAdaptor extends CycleAwareModule {
     val s2Data2 = Reg(UInt(32.W))
     val s2StReadySent = RegInit(false.B)
 
-    val s3Valid = RegInit(false.B)
+    val s3MetadataValid = RegInit(false.B)
     val s3Bits = Reg(new SequentialBufferEntry(new LoadStoreInfo))
     val s3DataLatched = Reg(UInt(32.W))
     val s3DataLatchedValid = RegInit(false.B)
@@ -52,10 +52,10 @@ class LoadStoreAdaptor extends CycleAwareModule {
     val s3DataValid = io.mem.resp.valid || s3DataLatchedValid || isStoreS3
 
     // 2. Determine if S3 is "Done" (Valid AND Data Ready AND Consumer Accepted)
-    val s3FireOrCleared = s3Valid && s3DataValid && io.broadcastOut.ready
+    val s3FireOrCleared = s3MetadataValid && s3DataValid && io.broadcastOut.ready
 
     // 3. S3 is Ready for new input if it's empty OR if it just finished firing
-    val s3Ready = !s3Valid || s3FireOrCleared
+    val s3Ready = !s3MetadataValid || s3FireOrCleared
 
     // --- S2 Control Logic ---
 
@@ -119,12 +119,12 @@ class LoadStoreAdaptor extends CycleAwareModule {
     // If S2 fires, S3 takes the data.
     // If S2 doesn't fire, but S3 fired (drained), S3 becomes invalid.
     when(s2FireReq) {
-        s3Valid := true.B && !io.flush.checkKilled(s2Bits.robTag)
+        s3MetadataValid := true.B && !io.flush.checkKilled(s2Bits.robTag)
         s3Bits := s2Bits
         s3Addr := effAddr
         s3DataLatchedValid := false.B // Reset latch for new op
     }.elsewhen(s3FireOrCleared || io.flush.checkKilled(s3Bits.robTag)) {
-        s3Valid := false.B
+        s3MetadataValid := false.B
         s3DataLatchedValid := false.B
     }
 
@@ -143,7 +143,7 @@ class LoadStoreAdaptor extends CycleAwareModule {
     val s3Killed = io.flush.checkKilled(s3Bits.robTag)
     val isLoadS3 = !s3Bits.info.isStore
 
-    when(s3Valid && s3DataValid && !s3Killed) {
+    when(s3MetadataValid && s3DataValid && !s3Killed) {
         // Priority 1: S3 finishes (Load result or Store done)
         io.broadcastOut.valid := true.B
         io.broadcastOut.bits.pdst := s3Bits.pdst
@@ -169,7 +169,7 @@ class LoadStoreAdaptor extends CycleAwareModule {
               p"STORE: Addr=0x${Hexadecimal(io.mem.req.bits.addr)} Data=0x${Hexadecimal(io.mem.req.bits.data)}\n"
             )
         }
-        when(io.broadcastOut.fire && s3Valid && isLoadS3) {
+        when(io.broadcastOut.fire && s3MetadataValid && isLoadS3) {
             printf(
               p"LOAD: Addr=0x${Hexadecimal(s3Addr)} Data=0x${Hexadecimal(io.broadcastOut.bits.data)}\n"
             )
