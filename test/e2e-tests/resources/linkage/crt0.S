@@ -10,8 +10,7 @@ _start:
     call main
 
     # After main returns, write the return value (a0) to a special address
-    # Address 0x80000008 corresponds to the Exit Device
-    li t0, 0x80000008
+    li t0, 0xFFFFFFFF
     sw a0, 0(t0)
 
 loop:
