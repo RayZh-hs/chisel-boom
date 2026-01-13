@@ -45,7 +45,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     val lsu = Module(new LoadStoreUnit)
     val printDevice = Module(new PrintDevice)
     val exitDevice = Module(new ExitDevice)
-    val mmio = Module(new MMIORouter(Seq("h80000000".U, "h80000008".U)))
+    val mmio = Module(new MMIORouter(Seq("h80000000".U, "hFFFFFFFF".U)))
     val memory = Module(new MemorySubsystem)
     val lsAdaptor = Module(new LoadStoreAdaptor)
 
