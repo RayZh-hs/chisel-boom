@@ -59,7 +59,4 @@ class BranchUnit extends CycleAwareModule {
     io.target := target
     io.result := result
 
-    printf(
-      p"BRU: pc=0x${Hexadecimal(io.pc)} inA=0x${Hexadecimal(io.inA)} inB=0x${Hexadecimal(io.inB)} bruOp=${io.bruOp} cmpOp=${io.cmpOp} => taken=$taken target=0x${Hexadecimal(target)} result=0x${Hexadecimal(result)}\n"
-    )
 }

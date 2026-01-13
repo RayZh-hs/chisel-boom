@@ -116,11 +116,9 @@ class BRUAdaptor extends CycleAwareModule {
     )
     val mispredict = s3_mispredict
     io.brUpdate.mispredict := mispredict
-
-    printf(
-      p"BRU: PC=0x${Hexadecimal(s3_bits.info.pc)}, mispredicted=${s3_bits.info.predict}\n"
-    )
-    printf(
-      p"BRU: taken=${bru.io.taken}, target=0x${Hexadecimal(bru.io.target)}, result=0x${Hexadecimal(bru.io.result)}\n"
-    )
+    when(io.brUpdate.valid) {
+      printf(
+        p"BRU Update, PC: 0x${Hexadecimal(io.brUpdate.pc)}, Taken: ${io.brUpdate.taken}, Target: 0x${Hexadecimal(io.brUpdate.target)}, Mispredict: ${io.brUpdate.mispredict}\n"
+      )
+    }
 }
