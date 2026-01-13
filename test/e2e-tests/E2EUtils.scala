@@ -2,6 +2,7 @@ package e2e
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
+import scala.jdk.CollectionConverters._
 import scala.sys.process.Process
 import chiseltest._
 import chiseltest.simulator.VerilatorCFlags
@@ -137,6 +138,24 @@ object E2EUtils {
         val linkLd = linkageDir.resolve("link.ld")
         val crt0 = linkageDir.resolve("crt0.S")
         val mathC = linkageDir.resolve("math.c")
+
+        // Check dependencies (source, linker script, startup code, headers)
+        val includeDir = cDir.resolve("include")
+        val headerFiles = if (Files.isDirectory(includeDir)) {
+            Files.list(includeDir).iterator().asScala.toList
+        } else {
+            Nil
+        }
+        val dependencies = Seq(cFile, linkLd, crt0) ++ headerFiles
+
+        // If hex exists and is newer than all dependencies, skip rebuild
+        if (Files.exists(hex)) {
+            val hexTime = Files.getLastModifiedTime(hex).toMillis
+            val upToDate = !dependencies.exists(d => 
+                Files.exists(d) && Files.getLastModifiedTime(d).toMillis > hexTime
+            )
+            if (upToDate) return hex
+        }
 
         val compileCmd = Seq(
           gcc,

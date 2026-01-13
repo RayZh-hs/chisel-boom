@@ -6,9 +6,10 @@ import core.BoomCore
 import Configurables._
 
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, Path, Paths, StandardCopyOption}
 import scala.jdk.CollectionConverters._
 import scala.sys.process.Process
+import firrtl.options.TargetDirAnnotation
 
 class E2ETests extends AnyFunSuite with ChiselScalatestTester {
     import E2EUtils._
@@ -16,6 +17,10 @@ class E2ETests extends AnyFunSuite with ChiselScalatestTester {
     if (sys.props.contains("verbose") || sys.props.contains("v")) {
         common.Configurables.verbose = true
     }
+
+    // Shared path for the hex file to avoid recompilation of BoomCore
+    // We place it outside the specific test run directory so it persists/is accessible
+    private val sharedHexPath = genDir.resolve("shared_program.hex")
 
     if (toolchain.nonEmpty) {
         val cFiles =
@@ -31,11 +36,19 @@ class E2ETests extends AnyFunSuite with ChiselScalatestTester {
         cFiles.foreach { cFile =>
             val name = cFile.getFileName.toString.stripSuffix(".c")
             test(s"C test: $name") {
-                val expected = readExpected(cFile)
-                val hex = buildHexFor(cFile)
-
-                test(new BoomCore(hex.toString))
-                    .withAnnotations(testAnnotations) { dut =>
+                val expected = readExpected(name)
+                val sourceHex = buildHexFor(cFile)
+                
+                // Copy the specific test's hex to the shared location
+                // This allows the pre-compiled BoomCore to read "shared_program.hex"
+                // which is effectively swapped out for each test case
+                Files.copy(sourceHex, sharedHexPath, StandardCopyOption.REPLACE_EXISTING)
+                
+                // Use the shared path for the reused core instance
+                test(new BoomCore(sharedHexPath.toAbsolutePath.toString))
+                    .withAnnotations(
+                      Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
+                    ) { dut =>
                         dut.clock.setTimeout(MAX_CYCLE_COUNT)
 
                         val simRes =
