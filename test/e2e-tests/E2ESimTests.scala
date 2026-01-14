@@ -15,6 +15,9 @@ class E2ESimTests extends AnyFunSuite with ChiselScalatestTester {
 
     if (sys.props.contains("verbose") || sys.props.contains("v")) {
         common.Configurables.verbose = true
+    } else {
+        common.Configurables.verbose = false
+        common.Configurables.Elaboration.prune()
     }
 
     if (toolchain.nonEmpty) {
