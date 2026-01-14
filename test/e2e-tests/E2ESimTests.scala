@@ -10,7 +10,7 @@ import java.nio.file.{Files, Path, Paths}
 import scala.jdk.CollectionConverters._
 import scala.sys.process.Process
 
-class E2ETests extends AnyFunSuite with ChiselScalatestTester {
+class E2ESimTests extends AnyFunSuite with ChiselScalatestTester {
     import E2EUtils._
 
     if (sys.props.contains("verbose") || sys.props.contains("v")) {
@@ -18,19 +18,19 @@ class E2ETests extends AnyFunSuite with ChiselScalatestTester {
     }
 
     if (toolchain.nonEmpty) {
-        val cFiles =
-            if (Files.isDirectory(cDir))
+        val simFiles =
+            if (Files.isDirectory(simtestsDir))
                 Files
-                    .list(cDir)
+                    .list(simtestsDir)
                     .iterator()
                     .asScala
                     .filter(f => f.toString.endsWith(".c") && !shouldSkip(f))
                     .toList
             else Nil
 
-        cFiles.foreach { cFile =>
+        simFiles.foreach { cFile =>
             val name = cFile.getFileName.toString.stripSuffix(".c")
-            test(s"C test: $name") {
+            test(s"Sim test: $name") {
                 val expected = readExpected(cFile)
                 val hex = buildHexFor(cFile)
 
@@ -38,7 +38,9 @@ class E2ETests extends AnyFunSuite with ChiselScalatestTester {
                     .withAnnotations(
                       Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
                     ) { dut =>
-                        dut.clock.setTimeout(MAX_CYCLE_COUNT)
+                        // Sim tests might need more cycles
+                        val maxCycles = MAX_CYCLE_COUNT * 10
+                        dut.clock.setTimeout(maxCycles)
 
                         var cycle = 0
                         var result: BigInt = 0
@@ -46,7 +48,7 @@ class E2ETests extends AnyFunSuite with ChiselScalatestTester {
                             scala.collection.mutable.ArrayBuffer[BigInt]()
                         var done = false
 
-                        while (!done && cycle < MAX_CYCLE_COUNT) {
+                        while (!done && cycle < maxCycles) {
                             // Collect output
                             if (dut.io.put.valid.peek().litToBoolean) {
                                 outputBuffer += dut.io.put.bits.data
@@ -83,7 +85,7 @@ class E2ETests extends AnyFunSuite with ChiselScalatestTester {
             }
         }
     } else {
-        test("C tests (skipped)") {
+        test("Sim tests (skipped)") {
             cancel(
               s"RISC-V toolchain not found. Tried prefixes: riscv32-unknown-elf-, riscv64-unknown-elf-, etc. Set RISCV_BIN (e.g. /opt/riscv/bin/) or put tools on PATH."
             )

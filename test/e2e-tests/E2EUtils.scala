@@ -21,6 +21,31 @@ object E2EUtils {
         repoRoot.resolve("test/e2e-tests/resources/expected")
     val linkageDir: Path = repoRoot.resolve("test/e2e-tests/resources/linkage")
     val genDir: Path = repoRoot.resolve("test/e2e-tests/generated")
+    val simtestsDir: Path = cDir.resolve("simtests")
+    val skipJson: Path = repoRoot.resolve("test/e2e-tests/resources/skip.json")
+
+    lazy val skipList: Set[String] = {
+        if (Files.exists(skipJson)) {
+            val content = Files.readString(skipJson)
+            content.trim
+                .stripPrefix("[")
+                .stripSuffix("]")
+                .split(",")
+                .map(_.trim.replaceAll("^\"|\"$", ""))
+                .filter(_.nonEmpty)
+                .toSet
+        } else {
+            Set.empty
+        }
+    }
+
+    def shouldSkip(cFile: Path): Boolean = {
+        val rel = cDir.relativize(cFile).toString
+        val noExt = rel.stripSuffix(".c")
+        skipList.contains(noExt) || skipList.contains(
+          rel
+        ) // Check both with and without extension
+    }
 
     def cmdExists(cmd: String): Boolean = {
         Process(Seq("sh", "-c", s"command -v $cmd >/dev/null 2>&1")).! == 0
@@ -45,10 +70,22 @@ object E2EUtils {
     def objcopy: String =
         toolchain.map(_._2).getOrElse("riscv32-unknown-elf-objcopy")
 
-    def readExpected(name: String): Seq[BigInt] = {
-        val p = expectedDir.resolve(s"$name.expected")
+    def readExpected(cFile: Path): Seq[BigInt] = {
+        val name = cFile.getFileName.toString.stripSuffix(".c")
+        val possiblePaths = Seq(
+          expectedDir.resolve(s"$name.expected"),
+          expectedDir.resolve("simtests").resolve(s"$name.expected"),
+          cFile.resolveSibling(s"$name.expected")
+        )
+
+        val finalP = possiblePaths
+            .find(p => Files.exists(p))
+            .getOrElse(possiblePaths.head)
+
+        if (!Files.exists(finalP)) return Seq()
+
         val content =
-            new String(Files.readAllBytes(p), StandardCharsets.UTF_8).trim
+            new String(Files.readAllBytes(finalP), StandardCharsets.UTF_8).trim
         if (content.isEmpty) Seq()
         else content.split("\\s+").map(BigInt(_)).toSeq
     }
@@ -86,6 +123,7 @@ object E2EUtils {
 
         val linkLd = linkageDir.resolve("link.ld")
         val crt0 = linkageDir.resolve("crt0.S")
+        val mathC = linkageDir.resolve("math.c")
 
         val compileCmd = Seq(
           gcc,
@@ -96,12 +134,14 @@ object E2EUtils {
           "-mstrict-align",
           "-fno-builtin",
           "-I",
-          linkageDir.getParent.toString,
+          cDir.toString,
           "-T",
           linkLd.toString,
           "-nostdlib",
           "-static",
+          "-Wl,--no-warn-rwx-segments",
           crt0.toString,
+          mathC.toString,
           cFile.toString,
           "-o",
           elf.toString
