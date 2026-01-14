@@ -27,7 +27,7 @@ jobs:
       uses: veryl-lang/setup-verilator@v1
 
     - name: Setup RISCV Toolchain
-      uses: colinaaa/setup-riscv-gnu-toolchain@v1.0.2
+      uses: gregdavill/setup-riscv-gnu-toolchain@v2.0
 
     - name: Run tests
       run: mill test
