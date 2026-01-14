@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ "main" ]
 
+env:
+  OBJCACHE: "env" 
+  CCACHE_DISABLE: 1
+
 jobs:
   test:
     runs-on: ubuntu-latest

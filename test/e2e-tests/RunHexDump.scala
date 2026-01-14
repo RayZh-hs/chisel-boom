@@ -1,6 +1,7 @@
 package e2e
 
 import chiseltest._
+import chiseltest.simulator.VerilatorCFlags
 import core.BoomCore
 import java.nio.file.{Path, Paths, Files}
 import common.Configurables._
@@ -32,7 +33,11 @@ object RunHexDump extends App {
 
     RawTester.test(
       new BoomCore(hexFile.toString),
-      Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
+      Seq(
+        WriteVcdAnnotation,
+        VerilatorBackendAnnotation,
+        VerilatorCFlags(Seq("-Wno-type-limits"))
+      )
     ) { dut =>
         dut.clock.setTimeout(MAX_CYCLE_COUNT)
         println("Simulation started.")
