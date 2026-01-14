@@ -30,50 +30,66 @@ This project uses the **Mill** build tool.
 - **JDK 11+**
 - **Mill**
 - **Verilator** (for simulation)
+- **RV32I Toolchain** (for simulation)
 - **Silicon Compiler** (for synthesis)
 
-For simpler script execution, you can optionally use [Mango](https://github.com/Mango-CLI/Mango).
+For quick script execution, we recommend using [Mango](https://github.com/Mango-CLI/Mango) since this repo comes with a Mango shorthand suite.
 
-### Running Tests (Manual)
+### Running Tests
 
-To run the full test suite (Unit tests + End-to-End tests):
+You can run tests using:
+
+```bash
+mango test
+mango test e2e
+mango test unit
+```
+
+Alternatively, to run the full test suite (Unit tests + End-to-End tests) do:
+
 ```bash
 mill test
 ```
 
-To compile a single `.c` file and run it on the simulator:
+### Simulation
+
+You can run the chiselsim-based simulator with Verilator backend using:
+
+```bash
+mango simulate <testcase-name>
+```
+
+This will output the hex dump and the path to the log file. You can find the set of available test cases in `test/e2e-tests/resources/c`.
+
+To compile a single `.c` file and run it on the simulator, use:
+
 ```bash
 mill test.runMain e2e.RunCFile test/e2e-tests/resources/c/add_to_100.c
 ```
 
 Pass in `--verbose` for detailed printf output during the simulation process.
 
-### Running Tests (Mango)
-
-To run all tests using Mango:
-```bash
-mango test
-```
-
-To execute a specific C test file under `test/e2e-tests/resources/c/`:
-```bash
-mango run <script-name>
-```
-
-This will compile and simulate the specified C file, outputting the hex dump and the path to the log file.
-
 ### Elaboration
 
-To generate Verilog files:
+If your sole purpose is synthesize, you may leave out the path to hex file and an empty memory will be used.
+
+Using Mango:
+
 ```bash
-mill runMain VerilogEmission <path-to-hex-file>
+mango elaborate (<path-to-hex-file>)
+```
+
+Using mill:
+
+```bash
+mill runMain VerilogEmission (<path-to-hex-file>)
 ```
 
 The system verilog generated will be located in `synthesis/output/`.
 
 ### Synthesis
 
-To run synthesis using Silicon Compiler, configure the apptainer path in `.env`(see `.env.example`) and execute at project root:
+To run synthesis using Silicon Compiler, configure the apptainer path in `.env`(see `.env.example`).
 
 Using Mango:
 ```bash

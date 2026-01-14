@@ -1,0 +1,15 @@
+#!/bin/bash
+set -e
+
+# Declare requirements
+function requires() {
+    if ! command -v $1 &>/dev/null; then
+        echo "Requires $1"
+        exit 1
+    fi
+}
+
+requires mill
+
+# Pass on everything to: mill runMain VerilogEmission "$@"
+mill --color false --disable-ticker runMain VerilogEmission "$@"

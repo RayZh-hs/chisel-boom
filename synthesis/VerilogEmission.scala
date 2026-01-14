@@ -6,13 +6,22 @@ import java.io.File
 object VerilogEmission {
     def main(args: Array[String]): Unit = {
         // Expecting one argument: path to hex file for memory initialization
-        if (args.length != 1) {
-            println("Usage: VerilogEmission <hex-file>")
+        if (args.length > 1) {
+            println("Usage: VerilogEmission (hex-file)")
             sys.exit(1)
         }
 
+        // If none is given, create an empty hex file in /tmp
+        if (args.length == 0) {
+            val tempHexFile = "/tmp/empty.hex"
+            new File(tempHexFile).createNewFile()
+            println(
+              s"No hex file provided. Using empty hex file at '$tempHexFile'."
+            )
+        }
+
         val buildDir = "synthesis/generated"
-        val hexFile = args(0)
+        val hexFile = if (args.length == 1) args(0) else "/tmp/empty.hex"
 
         // Create output directory
         new File(buildDir).mkdirs()

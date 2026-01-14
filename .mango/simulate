@@ -15,7 +15,7 @@ requires riscv32-unknown-elf-objdump
 # Check if at least one test name is provided
 if [ "$#" -eq 0 ]; then
     echo "Error: No test name provided."
-    echo "Usage: run <test-name>"
+    echo "Usage: simulate <test-name>"
     exit 1
 fi
 
