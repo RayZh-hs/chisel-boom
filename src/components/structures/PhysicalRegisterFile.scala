@@ -5,13 +5,14 @@ import chisel3.util._
 import common.Configurables._
 
 import common.RegBusyStatus
+import utility.CycleAwareModule
 
 class PhysicalRegisterFile(
     numRegs: Int,
     numReadPorts: Int,
     numWritePorts: Int,
     dataWidth: Int
-) extends Module {
+) extends CycleAwareModule {
     val io = IO(new Bundle {
         // Read Ports
         val read = Vec(

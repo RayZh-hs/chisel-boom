@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import common._
 import common.Configurables._
+import utility.CycleAwareModule
 
 /** Register Alias Table (RAT)
   *
@@ -13,7 +14,7 @@ class RegisterAliasTable(
     val nReadPorts: Int,
     val nUpdatePorts: Int,
     val nRollbackPorts: Int
-) extends Module {
+) extends CycleAwareModule {
     val io = IO(new Bundle {
         // Read ports for logical to physical mapping
         val readL = Input(Vec(nReadPorts, UInt(5.W)))
