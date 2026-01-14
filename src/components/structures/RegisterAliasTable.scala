@@ -26,6 +26,10 @@ class RegisterAliasTable(
               val pdst = UInt(PREG_WIDTH.W)
           }))
         )
+
+        val debugBroadcastValid =
+            if (Configurables.Elaboration.printOnBroadcast) Some(Input(Bool()))
+            else None
     })
 
     val rollback = IO(
@@ -58,6 +62,16 @@ class RegisterAliasTable(
     for (i <- 0 until nRollbackPorts) {
         when(rollback(i).valid && rollback(i).bits.ldst =/= 0.U) {
             mapTable(rollback(i).bits.ldst) := rollback(i).bits.stalePdst
+        }
+    }
+
+    if (Configurables.Elaboration.printOnBroadcast) {
+        when(io.debugBroadcastValid.get) {
+            printf("RAT Snapshot: Logical -> Physical:\n")
+            for (i <- 0 until 32) {
+                printf(" x%d -> p%d ", i.U, mapTable(i))
+            }
+            printf("\n")
         }
     }
 }
