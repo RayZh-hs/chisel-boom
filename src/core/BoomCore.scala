@@ -84,8 +84,14 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     // Decoder connections
     decoder.io.in <> ifQueue.io.deq
 
+    val decoderDispatcherQueue = Module(
+      new Queue(new DecodeToDispatchBundle, entries = 2, pipe = true, flow = false)
+    )
     // Dispatcher connections
-    dispatcher.io.instInput <> decoder.io.out
+    decoderDispatcherQueue.io.enq <> decoder.io.out
+    dispatcher.io.instInput <> decoderDispatcherQueue.io.deq
+
+    decoderDispatcherQueue.reset := reset.asBool || fetcher.io.pcOverwrite.valid
 
     // RAT and FreeList connections
     rat.io.readL(0) := dispatcher.io.ratAccess.lrs1
