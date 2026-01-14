@@ -88,7 +88,9 @@ class MockDRAM(conf: MemConfig, latency: Int, sizeBytes: Int) extends Module {
   // 7. Drive IO
   io.resp <> outQueue.io.deq
 
-  // We are ready as long as the Queue isn't about to burst.
-  // (In a real infinite-bandwidth mock, we might ignore this, but it's good practice)
-  io.req.ready := true.B 
+  // We are ready as long as the Queue has space to buffer responses.
+  io.req.ready := outQueue.io.enq.ready
+
+  // Ensure that responses are not lost if the output queue overflows
+  assert(!(delayedResp.valid && !outQueue.io.enq.ready), "MockDRAM response dropped: outQueue is full")
 }
