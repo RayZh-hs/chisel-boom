@@ -22,6 +22,9 @@ jobs:
       uses: zhutmost/setup-mill@main
       with:
         mill-version: 0.12.7
+    
+    - name: Install Verilator
+      uses: veryl-lang/setup-verilator@v1
 
     - name: Run tests
       run: mill test
