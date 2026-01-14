@@ -1,6 +1,6 @@
 #include "include/extern.h"
 
-int N = 8;
+int N;
 int row[8];
 int col[8];
 int d[2][16];
@@ -28,6 +28,7 @@ void search(int c) {
 }
 
 int main() {
+  N = 8;
   search(0);
   return 0;  // 171
 }
