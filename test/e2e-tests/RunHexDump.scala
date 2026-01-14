@@ -6,13 +6,13 @@ import java.nio.file.{Path, Paths, Files}
 import common.Configurables._
 import e2e.Configurables._
 
-object RunCFile extends App {
+object RunHexDump extends App {
     val argList = args.toList
     val verbose = argList.contains("-v") || argList.contains("--verbose")
     val positionalArgs = argList.filterNot(arg => arg.startsWith("-"))
 
     if (positionalArgs.isEmpty) {
-        println("Usage: RunCFile [options] <path_to_c_file>")
+        println("Usage: RunHexDump [options] <path_to_hex_file>")
         println("Options:")
         println("  -v, --verbose    Enable verbose debug output")
         sys.exit(1)
@@ -21,36 +21,17 @@ object RunCFile extends App {
     // Set the global verbose flag
     common.Configurables.verbose = verbose
 
-    val cFileCandidate = Paths.get(positionalArgs.head).toAbsolutePath
+    val hexFile = Paths.get(positionalArgs.head).toAbsolutePath
 
-    if (!Files.exists(cFileCandidate)) {
-        println(s"File not found: $cFileCandidate")
+    if (!Files.exists(hexFile)) {
+        println(s"File not found: $hexFile")
         sys.exit(1)
     }
 
-    import E2EUtils._
-
-    if (toolchain.isEmpty) {
-        println(
-          "RISC-V toolchain not found. Please set RISCV_BIN environment variable."
-        )
-        sys.exit(1)
-    }
-
-    println(s"Compiling ${cFileCandidate}...")
-    val hex =
-        try {
-            buildHexFor(cFileCandidate)
-        } catch {
-            case e: Exception =>
-                println(s"Compilation failed: ${e.getMessage}")
-                sys.exit(1)
-        }
-
-    println(s"Running simulation using hex file: $hex")
+    println(s"Running simulation using hex file: $hexFile")
 
     RawTester.test(
-      new BoomCore(hex.toString),
+      new BoomCore(hexFile.toString),
       Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
     ) { dut =>
         dut.clock.setTimeout(MAX_CYCLE_COUNT)

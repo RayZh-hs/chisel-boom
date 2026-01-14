@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import common._
 import common.Configurables._
+import utility.CycleAwareModule
 
 /** Register Alias Table (RAT)
   *
@@ -13,7 +14,7 @@ class RegisterAliasTable(
     val nReadPorts: Int,
     val nUpdatePorts: Int,
     val nRollbackPorts: Int
-) extends Module {
+) extends CycleAwareModule {
     val io = IO(new Bundle {
         // Read ports for logical to physical mapping
         val readL = Input(Vec(nReadPorts, UInt(5.W)))
@@ -26,6 +27,10 @@ class RegisterAliasTable(
               val pdst = UInt(PREG_WIDTH.W)
           }))
         )
+
+        val debugBroadcastValid =
+            if (Configurables.Elaboration.printOnBroadcast) Some(Input(Bool()))
+            else None
     })
 
     val rollback = IO(
@@ -58,6 +63,16 @@ class RegisterAliasTable(
     for (i <- 0 until nRollbackPorts) {
         when(rollback(i).valid && rollback(i).bits.ldst =/= 0.U) {
             mapTable(rollback(i).bits.ldst) := rollback(i).bits.stalePdst
+        }
+    }
+
+    if (Configurables.Elaboration.printOnBroadcast) {
+        when(io.debugBroadcastValid.get) {
+            printf("RAT Snapshot: Logical -> Physical:\n")
+            for (i <- 0 until 32) {
+                printf(" x%d -> p%d ", i.U, mapTable(i))
+            }
+            printf("\n")
         }
     }
 }

@@ -18,6 +18,8 @@ elif [ "$#" -eq 1 ]; then
         mill test
     elif [ "$1" == "e2e" ]; then
         mill test.testOnly e2e.E2ETests
+    elif [ "$1" == "e2esim" ]; then
+        mill test.testOnly e2e.E2ESimTests
     elif [ "$1" == "unit" ]; then
         mill test.testOnly \
                         components.backend.ReOrderBufferTest \
@@ -25,10 +27,10 @@ elif [ "$#" -eq 1 ]; then
                         components.backend.PhysicalRegisterFileTest
     else
         echo "Unknown argument: $1"
-        echo "Usage: test [all|e2e|unit]"
+        echo "Usage: test [all|e2e|e2esim|unit]"
         exit 1
     fi
 else
-    echo "Usage: test [all|e2e|unit]"
+    echo "Usage: test [all|e2e|e2esim|unit]"
     exit 1
 fi

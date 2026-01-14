@@ -3,6 +3,8 @@ package e2e
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 import scala.sys.process.Process
+import chiseltest._
+import core.BoomCore
 
 object E2EUtils {
     def findRepoRoot(start: Path): Path = {
@@ -21,6 +23,29 @@ object E2EUtils {
         repoRoot.resolve("test/e2e-tests/resources/expected")
     val linkageDir: Path = repoRoot.resolve("test/e2e-tests/resources/linkage")
     val genDir: Path = repoRoot.resolve("test/e2e-tests/generated")
+    val simtestsDir: Path = cDir.resolve("simtests")
+    val skipJson: Path = repoRoot.resolve("test/e2e-tests/resources/skip.jsonc")
+
+    lazy val skipList: Set[String] = {
+        if (Files.exists(skipJson)) {
+            val content = Files.readString(skipJson, StandardCharsets.UTF_8)
+            // Remove block comments and line comments, then extract all quoted strings.
+            val withoutBlock = content.replaceAll("(?s)/\\*.*?\\*/", "")
+            val withoutLine = withoutBlock.replaceAll("(?m)//.*$", "")
+            val strRegex = "\"([^\"]*)\"".r
+            strRegex.findAllMatchIn(withoutLine).map(_.group(1)).toSet
+        } else {
+            Set.empty
+        }
+    }
+
+    def shouldSkip(cFile: Path): Boolean = {
+        val rel = cDir.relativize(cFile).toString
+        val noExt = rel.stripSuffix(".c")
+        skipList.contains(noExt) || skipList.contains(
+          rel
+        ) // Check both with and without extension
+    }
 
     def cmdExists(cmd: String): Boolean = {
         Process(Seq("sh", "-c", s"command -v $cmd >/dev/null 2>&1")).! == 0
@@ -45,10 +70,22 @@ object E2EUtils {
     def objcopy: String =
         toolchain.map(_._2).getOrElse("riscv32-unknown-elf-objcopy")
 
-    def readExpected(name: String): Seq[BigInt] = {
-        val p = expectedDir.resolve(s"$name.expected")
+    def readExpected(cFile: Path): Seq[BigInt] = {
+        val name = cFile.getFileName.toString.stripSuffix(".c")
+        val possiblePaths = Seq(
+          expectedDir.resolve(s"$name.expected"),
+          expectedDir.resolve("simtests").resolve(s"$name.expected"),
+          cFile.resolveSibling(s"$name.expected")
+        )
+
+        val finalP = possiblePaths
+            .find(p => Files.exists(p))
+            .getOrElse(possiblePaths.head)
+
+        if (!Files.exists(finalP)) return Seq()
+
         val content =
-            new String(Files.readAllBytes(p), StandardCharsets.UTF_8).trim
+            new String(Files.readAllBytes(finalP), StandardCharsets.UTF_8).trim
         if (content.isEmpty) Seq()
         else content.split("\\s+").map(BigInt(_)).toSeq
     }
@@ -86,6 +123,7 @@ object E2EUtils {
 
         val linkLd = linkageDir.resolve("link.ld")
         val crt0 = linkageDir.resolve("crt0.S")
+        val mathC = linkageDir.resolve("math.c")
 
         val compileCmd = Seq(
           gcc,
@@ -96,12 +134,14 @@ object E2EUtils {
           "-mstrict-align",
           "-fno-builtin",
           "-I",
-          linkageDir.getParent.toString,
+          cDir.toString,
           "-T",
           linkLd.toString,
           "-nostdlib",
           "-static",
+          "-Wl,--no-warn-rwx-segments",
           crt0.toString,
+          mathC.toString,
           cFile.toString,
           "-o",
           elf.toString
@@ -136,5 +176,44 @@ object E2EUtils {
 
         writeHexFromBinary(bin, hex)
         hex
+    }
+
+    case class SimulationResult(
+        result: BigInt,
+        output: Seq[BigInt],
+        cycles: Int,
+        timedOut: Boolean
+    )
+
+    def runSimulation(
+        dut: BoomCore,
+        maxCycles: Int = Configurables.MAX_CYCLE_COUNT,
+        debugCallback: (Int) => Unit = _ => ()
+    ): SimulationResult = {
+        var cycle = 0
+        var result: BigInt = 0
+        var outputBuffer = scala.collection.mutable.ArrayBuffer[BigInt]()
+        var done = false
+
+        while (!done && cycle < maxCycles) {
+            debugCallback(cycle)
+
+            if (dut.io.put.valid.peek().litToBoolean) {
+                outputBuffer += dut.io.put.bits.data
+                    .peek()
+                    .litValue
+                    .toInt
+            }
+
+            if (dut.io.exit.valid.peek().litToBoolean) {
+                result = dut.io.exit.bits.data.peek().litValue.toInt
+                done = true
+            } else {
+                dut.clock.step(1)
+                cycle += 1
+            }
+        }
+
+        SimulationResult(result, outputBuffer.toSeq, cycle, !done)
     }
 }
