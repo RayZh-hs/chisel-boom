@@ -27,7 +27,7 @@ class MemorySubsystem extends Module {
     // Pipeline the request info for formatting
     val reqReg = RegNext(io.upstream.req.bits)
     val addrOffset = reqReg.addr(1, 0)
-    
+
     // Process Data (Sign Extension)
     val rbyte = MuxLookup(addrOffset, 0.U)(
       Seq(

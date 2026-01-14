@@ -13,11 +13,13 @@ object `package` extends RootModule with ScalaModule {
       ivy"org.chipsalliance:chisel-plugin_2.13.12:6.0.0"
     )
 
+    def sources = T.sources(millSourcePath / "src", millSourcePath / "synthesis")
+
     object test extends ScalaTests with TestModule.ScalaTest {
         def sources = T.sources(millSourcePath)
         def ivyDeps = Agg(
-            ivy"org.scalatest::scalatest:3.2.19",
-            ivy"edu.berkeley.cs::chiseltest:6.0.0"
+          ivy"org.scalatest::scalatest:3.2.19",
+          ivy"edu.berkeley.cs::chiseltest:6.0.0"
         )
         def testFramework = "org.scalatest.tools.Framework"
     }

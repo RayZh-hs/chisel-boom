@@ -1,2 +1,3 @@
+synthesize: synthesize
 clean: clean
 run: run

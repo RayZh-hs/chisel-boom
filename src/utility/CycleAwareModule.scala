@@ -17,8 +17,13 @@ object CycleAwareModule {
 }
 
 class CycleAwareModule extends Module {
-    val cycleCount = RegInit(0.U(log2Ceil(MAX_CYCLE_COUNT).W))
-    cycleCount := cycleCount + 1.U
+    val cycleCount =
+        if (Configurables.Elaboration.cycleAwareness)
+            Some(RegInit(0.U(log2Ceil(MAX_CYCLE_COUNT).W)))
+        else None
+    if (cycleCount.isDefined) {
+        cycleCount.get := cycleCount.get + 1.U
+    }
 
     /** Custom printf that prepends the current cycle count.
       *
@@ -29,18 +34,36 @@ class CycleAwareModule extends Module {
       */
     def printf(fmt: String, args: Any*): Unit = {
         if (Configurables.verbose) {
-            val fmtWithCycle = s"[cycle: %d] $fmt"
-            val argsWithCycle =
-                Seq(cycleCount) ++ args.map(_.asInstanceOf[Bits])
-            chisel3.printf(fmtWithCycle, argsWithCycle: _*)
+            // Only add cycle count if enabled
+            if (Configurables.Elaboration.cycleAwareness) {
+                assert(
+                  cycleCount.isDefined,
+                  "Cycle count register is not defined, but cycle awareness is enabled."
+                )
+                val fmtWithCycle = s"[cycle: %d] $fmt"
+                val argsWithCycle =
+                    Seq(cycleCount.get) ++ args.map(_.asInstanceOf[Bits])
+                chisel3.printf(fmtWithCycle, argsWithCycle: _*)
+            } else {
+                chisel3.printf(fmt, args.map(_.asInstanceOf[Bits]): _*)
+            }
         }
     }
 
     // Overload to support the p"..." interpolator style (Idiomatic Chisel)
     def printf(p: Printable): Unit = {
         if (Configurables.verbose) {
-            val pWithCycle = p"[cycle: ${Decimal(cycleCount)}] " + p
-            chisel3.printf(pWithCycle)
+            // Only add cycle count if enabled
+            if (Configurables.Elaboration.cycleAwareness) {
+                assert(
+                  cycleCount.isDefined,
+                  "Cycle count register is not defined, but cycle awareness is enabled."
+                )
+                val pWithCycle = p"[cycle: ${Decimal(cycleCount.get)}] " + p
+                chisel3.printf(pWithCycle)
+            } else {
+                chisel3.printf(p)
+            }
         }
     }
 }

@@ -4,7 +4,6 @@ import chisel3._
 import chisel3.util._
 import common._
 
-
 class ArithmeticLogicUnit extends Module {
     val io = IO(new Bundle {
         val inA = Input(UInt(32.W))
@@ -19,7 +18,7 @@ class ArithmeticLogicUnit extends Module {
         is(ALUOpType.ADD) { res := io.inA + io.inB }
         is(ALUOpType.SUB) { res := io.inA - io.inB }
         is(ALUOpType.AND) { res := io.inA & io.inB }
-        is(ALUOpType.OR)  { res := io.inA | io.inB }
+        is(ALUOpType.OR) { res := io.inA | io.inB }
         is(ALUOpType.XOR) { res := io.inA ^ io.inB }
         is(ALUOpType.SLL) { res := io.inA << io.inB(4, 0) }
         is(ALUOpType.SRL) { res := io.inA >> io.inB(4, 0) }
