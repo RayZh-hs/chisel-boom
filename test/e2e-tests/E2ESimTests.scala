@@ -45,43 +45,22 @@ class E2ESimTests extends AnyFunSuite with ChiselScalatestTester {
                         val maxCycles = MAX_CYCLE_COUNT * 10
                         dut.clock.setTimeout(maxCycles)
 
-                        var cycle = 0
-                        var result: BigInt = 0
-                        var outputBuffer =
-                            scala.collection.mutable.ArrayBuffer[BigInt]()
-                        var done = false
-
-                        while (!done && cycle < maxCycles) {
-                            // Collect output
-                            if (dut.io.put.valid.peek().litToBoolean) {
-                                outputBuffer += dut.io.put.bits.data
-                                    .peek()
-                                    .litValue
-                            }
-
-                            if (dut.io.exit.valid.peek().litToBoolean) {
-                                result = dut.io.exit.bits.data.peek().litValue
-                                done = true
-                            } else {
-                                dut.clock.step(1)
-                                cycle += 1
-                            }
-                        }
+                        val simRes = E2EUtils.runSimulation(dut, maxCycles)
 
                         assert(
-                          done,
-                          s"Simulation timed out after $cycle cycles"
+                          !simRes.timedOut,
+                          s"Simulation timed out after ${simRes.cycles} cycles"
                         )
 
-                        if (outputBuffer.isEmpty && expected.length == 1) {
+                        if (simRes.output.isEmpty && expected.length == 1) {
                             assert(
-                              result == expected.head,
-                              s"Expected return value ${expected.head}, got $result (No output captured)"
+                              simRes.result == expected.head,
+                              s"Expected return value ${expected.head}, got ${simRes.result} (No output captured)"
                             )
                         } else {
                             assert(
-                              outputBuffer.toSeq == expected,
-                              s"Expected $expected, got ${outputBuffer.toSeq}"
+                              simRes.output == expected,
+                              s"Expected $expected, got ${simRes.output}"
                             )
                         }
                     }

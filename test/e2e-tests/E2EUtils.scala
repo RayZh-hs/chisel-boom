@@ -3,6 +3,8 @@ package e2e
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 import scala.sys.process.Process
+import chiseltest._
+import core.BoomCore
 
 object E2EUtils {
     def findRepoRoot(start: Path): Path = {
@@ -22,7 +24,7 @@ object E2EUtils {
     val linkageDir: Path = repoRoot.resolve("test/e2e-tests/resources/linkage")
     val genDir: Path = repoRoot.resolve("test/e2e-tests/generated")
     val simtestsDir: Path = cDir.resolve("simtests")
-    val skipJson: Path = repoRoot.resolve("test/e2e-tests/resources/skip.json")
+    val skipJson: Path = repoRoot.resolve("test/e2e-tests/resources/skip.jsonc")
 
     lazy val skipList: Set[String] = {
         if (Files.exists(skipJson)) {
@@ -174,5 +176,44 @@ object E2EUtils {
 
         writeHexFromBinary(bin, hex)
         hex
+    }
+
+    case class SimulationResult(
+        result: BigInt,
+        output: Seq[BigInt],
+        cycles: Int,
+        timedOut: Boolean
+    )
+
+    def runSimulation(
+        dut: BoomCore,
+        maxCycles: Int = Configurables.MAX_CYCLE_COUNT,
+        debugCallback: (Int) => Unit = _ => ()
+    ): SimulationResult = {
+        var cycle = 0
+        var result: BigInt = 0
+        var outputBuffer = scala.collection.mutable.ArrayBuffer[BigInt]()
+        var done = false
+
+        while (!done && cycle < maxCycles) {
+            debugCallback(cycle)
+
+            if (dut.io.put.valid.peek().litToBoolean) {
+                outputBuffer += dut.io.put.bits.data
+                    .peek()
+                    .litValue
+                    .toInt
+            }
+
+            if (dut.io.exit.valid.peek().litToBoolean) {
+                result = dut.io.exit.bits.data.peek().litValue.toInt
+                done = true
+            } else {
+                dut.clock.step(1)
+                cycle += 1
+            }
+        }
+
+        SimulationResult(result, outputBuffer.toSeq, cycle, !done)
     }
 }

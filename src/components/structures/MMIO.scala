@@ -46,7 +46,7 @@ class MMIODevice extends CycleAwareModule {
 
 class PrintDevice extends MMIODevice {
     when(io.req.valid && !io.req.bits.isLoad) {
-        printf(p"@PRINT:${io.req.bits.data.asUInt}\n")
+        printf(p"@PRINT:${io.req.bits.data.asSInt}\n")
     }
 }
 
