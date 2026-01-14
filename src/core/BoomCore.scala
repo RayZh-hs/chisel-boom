@@ -6,6 +6,7 @@ import utility.CycleAwareModule
 import components.frontend._
 import components.backend._
 import components.structures._
+import components.memory._
 import common._
 import common.Configurables._
 import components.structures.{
@@ -42,16 +43,42 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     val bruAdaptor = Module(new BRUAdaptor)
 
     // Memory Subsystem and MMIO Devices
-    val lsu = Module(new LoadStoreUnit)
+    // val lsu = Module(new LoadStoreUnit) // Removed: Replaced by Cache+DRAM inside MemorySubsystem
     val printDevice = Module(new PrintDevice)
     val exitDevice = Module(new ExitDevice)
     val mmio = Module(new MMIORouter(Seq("h80000000".U, "hFFFFFFFF".U)))
     val memory = Module(new MemorySubsystem)
     val lsAdaptor = Module(new LoadStoreAdaptor)
 
+    // --- Unified Memory System Integration ---
+    val memConf = MemConfig(idWidth = 4, addrWidth = 32, dataWidth = 128)
+    val dram = Module(new MockDRAM(memConf, latency = 20, sizeBytes = Derived.MEM_SIZE, initFile = Some(hexFile)))
+
+    // Arbiter for DRAM Requests (2 Masters: D-Cache (0), I-Cache (1))
+    val dramArb = Module(new RRArbiter(new MemRequest(memConf), 2))
+    
+    // Connect D-Cache (memory) to Arbiter Port 0
+    dramArb.io.in(0) <> memory.io.dram.req
+    
+    // Connect I-Cache (imem) to Arbiter Port 1
+    dramArb.io.in(1) <> imem.io.dram.req
+    
+    // Connect Arbiter to DRAM
+    dram.io.req <> dramArb.io.out
+    
+    // Broadcast DRAM Response to both
+    // They will filter based on ID (D-Cache: 0,1; I-Cache: 2,3)
+    memory.io.dram.resp.valid := dram.io.resp.valid
+    memory.io.dram.resp.bits := dram.io.resp.bits
+    imem.io.dram.resp.valid := dram.io.resp.valid
+    imem.io.dram.resp.bits := dram.io.resp.bits
+    
+    // Backpressure: DRAM ready if both listeners are ready
+    dram.io.resp.ready := memory.io.dram.resp.ready && imem.io.dram.resp.ready
+
     // Generic memory routing: Adaptor -> MemorySubsystem -> (LSU | MMIO)
     memory.io.upstream <> lsAdaptor.io.mem
-    lsu.io <> memory.io.lsu
+    // lsu.io <> memory.io.lsu // Removed
     mmio.io.upstream <> memory.io.mmio
 
     printDevice.io <> mmio.io.devices(0)
@@ -76,6 +103,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     // Memory interface for fetcher
     imem.io.addr := fetcher.io.instAddr
     fetcher.io.instData := imem.io.inst
+    fetcher.io.instValid := imem.io.respValid
 
     // Frontend queue (in-stage buffer between fetcher and decoder)
     ifQueue.io.enq <> fetcher.io.ifOut

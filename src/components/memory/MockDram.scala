@@ -3,62 +3,58 @@ package components.memory
 import chisel3._
 import chisel3.util._
 
-class MockDRAM(conf: MemConfig, latency: Int, sizeBytes: Int) extends Module {
-  val io = IO(new SimpleMemIO(conf))
+import chisel3.util.experimental.{loadMemoryFromFile, loadMemoryFromFileInline}
+
+class MockDRAM(conf: MemConfig, latency: Int, sizeBytes: Int, initFile: Option[String] = None) extends Module {
+  val io = IO(Flipped(new SimpleMemIO(conf)))
 
   // 1. The Memory Storage
-  // We use a Vec of Bytes to make masking easy. 
-  // Depth = sizeBytes / (dataWidth / 8)
   val bytesPerWord = conf.dataWidth / 8
   val depth        = sizeBytes / bytesPerWord
   
-  // This Mem is "Magic" (Simulation only usually) - synchronous read/write
-  val ram = SyncReadMem(depth, Vec(bytesPerWord, UInt(8.W)))
+  // Use Mem (Combinational Read) to allow Read-Modify-Write for masked writes on UInt
+  // We need UInt (Ground Type) to support loadMemoryFromFileInline
+  val ram = Mem(depth, UInt(conf.dataWidth.W))
+  
+  if (initFile.isDefined) {
+    loadMemoryFromFileInline(ram, initFile.get)
+  }
 
   // 2. Address Calculation
-  // Convert byte-address to word-index
-  // Note: specific to the fact that addr is usually byte-aligned
   val index = io.req.bits.addr >> log2Ceil(bytesPerWord)
 
-  // 3. Write Logic
-  // Convert UInt mask to Seq[Bool] for the Mem write mask
-  val writeMask = io.req.bits.mask.asBools
-  // Split input data into bytes
-  val writeBytes = VecInit(Seq.tabulate(bytesPerWord) { i => 
-    io.req.bits.data(8*(i+1)-1, 8*i) 
-  })
-
-  // Perform Write immediately (DRAMs buffer writes instantly in the controller)
+  // 3. Write Logic (Read-Modify-Write)
   when(io.req.fire && io.req.bits.isWr) {
-    ram.write(index, writeBytes, writeMask)
+    val oldDataBits = ram(index)
+    val newDataBits = io.req.bits.data
+    val maskBits    = io.req.bits.mask // 1 bit per byte
+    
+    // Reconstruct new word byte-by-byte
+    val mergedBytes = VecInit(Seq.tabulate(bytesPerWord) { i =>
+        val byteMask = maskBits(i)
+        val oldByte = oldDataBits(8 * i + 7, 8 * i)
+        val newByte = newDataBits(8 * i + 7, 8 * i)
+        Mux(byteMask, newByte, oldByte)
+    })
+    
+    ram(index) := mergedBytes.asUInt
   }
 
   // 4. Read Logic
-  // We read every cycle if there is a valid read request.
-  // SyncReadMem output is available next cycle (latency = 1)
-  val memOut = ram.read(index, io.req.fire && !io.req.bits.isWr)
+  // Mem has 0 latency. We add 1 cycle register to match SyncReadMem behavior.
+  val memOut = RegNext(ram(index))
   
   // Reconstruct bytes back to UInt
   val readData = Wire(UInt(conf.dataWidth.W))
-  readData := memOut.asUInt
+  readData := memOut
 
   // 5. The Latency Pipeline (Simulating High Latency)
-  // We need to carry the metadata (ID, etc) alongside the memory access delay.
-  
   class PipelinePacket extends Bundle {
     val id   = UInt(conf.idWidth.W)
     val data = UInt(conf.dataWidth.W)
-    val isRd = Bool() // Only send response if it was a read
+    val isRd = Bool() // Only send response if it was a read (or write ack)
   }
 
-  // This pipe models the fixed latency of the DRAM arrays
-  // We adjust latency - 1 because SyncReadMem already takes 1 cycle
-  val pipeIn = Wire(new PipelinePacket)
-  pipeIn.id   := io.req.bits.id
-  pipeIn.data := readData // Note: This data is actually from the *previous* cycle's read request in strict hardware terms, 
-                          // but for a behavioral mock, we can cheat or use a proper pipeline.
-                          // Let's do it cleanly:
-  
   // CLEAN PIPELINE APPROACH:
   // Step A: Preserve Request Metadata in a shift register corresponding to Mem Read Latency
   val reqInFlight = RegNext(io.req.bits)
@@ -79,7 +75,8 @@ class MockDRAM(conf: MemConfig, latency: Int, sizeBytes: Int) extends Module {
   // 6. Output Queue (Simulating Bandwidth & Backpressure)
   // Even if DRAM is fast, the Cache might not be ready to receive.
   // We need a Queue to store completed results.
-  val outQueue = Module(new Queue(new MemResponse(conf), entries = 4))
+  val queueSize = latency + 64 // Increased buffer
+  val outQueue = Module(new Queue(new MemResponse(conf), entries = queueSize))
 
   outQueue.io.enq.valid := delayedResp.valid
   outQueue.io.enq.bits.data := delayedResp.bits.data
@@ -88,8 +85,21 @@ class MockDRAM(conf: MemConfig, latency: Int, sizeBytes: Int) extends Module {
   // 7. Drive IO
   io.resp <> outQueue.io.deq
 
-  // We are ready as long as the Queue has space to buffer responses.
-  io.req.ready := outQueue.io.enq.ready
+  // Track inflight requests to ensure we don't overflow the queue
+  // counting requests that are in the pipeline but haven't reached the queue yet
+  val inFlightCount = RegInit(0.U(32.W))
+  
+  when (io.req.fire && !delayedResp.valid) {
+    inFlightCount := inFlightCount + 1.U
+  } .elsewhen (!io.req.fire && delayedResp.valid) {
+    inFlightCount := inFlightCount - 1.U
+  }
+  
+  // We can convert to SInt to avoid underflow if logic bug, but correct logic shouldn't underflow
+  // Logic: Total items (in pipe + in queue) must be < Capacity
+  
+  val totalOccupancy = inFlightCount + outQueue.io.count
+  io.req.ready := totalOccupancy < queueSize.U
 
   // Ensure that responses are not lost if the output queue overflows
   assert(!(delayedResp.valid && !outQueue.io.enq.ready), "MockDRAM response dropped: outQueue is full")

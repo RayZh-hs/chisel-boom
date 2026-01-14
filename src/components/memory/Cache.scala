@@ -5,7 +5,8 @@ import chisel3.util._
 
 case class CacheConfig(
     nSetsWidth: Int,
-    nCacheLineWidth: Int 
+    nCacheLineWidth: Int,
+    idOffset: Int = 0 
 )
 
 class CachePort extends Bundle {
@@ -23,7 +24,7 @@ class Cache(conf: CacheConfig) extends Module {
     val io = IO(new Bundle {
         val port = new CachePort
         val dram = new SimpleMemIO(
-          MemConfig(idWidth = 2, addrWidth = 32, dataWidth = (1 << conf.nCacheLineWidth) * 8)
+          MemConfig(idWidth = 4, addrWidth = 32, dataWidth = (1 << conf.nCacheLineWidth) * 8)
         )
     })
 
@@ -32,8 +33,8 @@ class Cache(conf: CacheConfig) extends Module {
     val nBytes = 1 << conf.nCacheLineWidth
     val tagWidth = 32 - conf.nSetsWidth - conf.nCacheLineWidth
     
-    val WR_ID = 0.U(2.W)
-    val RD_ID = 1.U(2.W)
+    val WR_ID = (0 + conf.idOffset).U(4.W)
+    val RD_ID = (1 + conf.idOffset).U(4.W)
 
     class CacheEntry extends Bundle {
         val valid = Bool()
@@ -97,7 +98,7 @@ class Cache(conf: CacheConfig) extends Module {
     // DRAM Interface Defaults
     io.dram.req.valid := false.B
     io.dram.req.bits := DontCare
-    io.dram.resp.ready := false.B 
+    io.dram.resp.ready := true.B 
 
     when(state === sTagCheck) {
         val hit = tagRead.valid && (tagRead.tag === reg_tag)
@@ -120,11 +121,15 @@ class Cache(conf: CacheConfig) extends Module {
                 state := sIdle
             } .otherwise {
                 // Read Hit Logic
+                // We always return the word-aligned data to support the
+                // byte/halfword selection logic in MemorySubsystem
+                val aligned_offset = Cat(reg_offset(conf.nCacheLineWidth - 1, 2), 0.U(2.W))
+                
                 io.port.rdata := Cat(
-                    dataRead((reg_offset + 3.U).asUInt),
-                    dataRead((reg_offset + 2.U).asUInt),
-                    dataRead((reg_offset + 1.U).asUInt),
-                    dataRead(reg_offset.asUInt)
+                    dataRead((aligned_offset + 3.U).asUInt),
+                    dataRead((aligned_offset + 2.U).asUInt),
+                    dataRead((aligned_offset + 1.U).asUInt),
+                    dataRead(aligned_offset.asUInt)
                 )
                 io.port.respValid := true.B
                 state := sIdle
