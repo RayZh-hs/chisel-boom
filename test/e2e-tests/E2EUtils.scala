@@ -54,6 +54,7 @@ object E2EUtils {
     lazy val toolchain: Option[(String, String)] = {
         val binDir = sys.env.get("RISCV_BIN").map(_ + "/").getOrElse("")
         val prefixes = Seq(
+          "riscv-none-elf-",
           "riscv32-unknown-elf-",
           "riscv64-unknown-elf-",
           "riscv64-linux-gnu-",
