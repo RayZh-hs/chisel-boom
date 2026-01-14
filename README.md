@@ -6,6 +6,14 @@
   </picture>
 </p>
 
+<div align="center">
+
+[![Scala](https://img.shields.io/badge/scala-2.13.12-red)](https://www.scala-lang.org/)
+[![Chisel](https://img.shields.io/badge/chisel-6.0.0-blue)](https://www.chisel-lang.org/)
+[![CI](https://github.com/RayZh-hs/chisel-boom/actions/workflows/ci.yml/badge.svg)](https://github.com/RayZh-hs/chisel-boom/actions/workflows/ci.yml)
+
+</div>
+
 This repository contains a simplified chisel implementation of an Out-of-Order processor, inspired by the **Berkeley Out-of-Order Machine (BOOM)**.
 
 ## 📢 Features
