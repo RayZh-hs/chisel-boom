@@ -1,4 +1,5 @@
 [
     "simtests/pi",          // too many cycles
+    "simtests/basicopt1",   // too many cycles
     "simtests/qsort",       // inst cannot fit in icache
 ]
