@@ -26,7 +26,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     // Component Instantiation
     val fetcher = Module(new InstFetcher)
     val ifQueue = Module(
-      new Queue(new FetchToDecodeBundle, entries = 4, pipe = true, flow = true)
+      new Queue(new FetchToDecodeBundle, entries = 2, pipe = false, flow = true)
     )
     val decoder = Module(new InstDecoder)
     val dispatcher = Module(new InstDispatcher)
@@ -85,7 +85,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     decoder.io.in <> ifQueue.io.deq
 
     val decoderDispatcherQueue = Module(
-      new Queue(new DecodeToDispatchBundle, entries = 2, pipe = true, flow = false)
+      new Queue(new DecodedInstBundle, entries = 2, pipe = false, flow = false)
     )
     // Dispatcher connections
     decoderDispatcherQueue.io.enq <> decoder.io.out
@@ -110,69 +110,85 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     rob.io.dispatch <> dispatcher.io.robOutput
 
     // Dispatch to Issue Buffers
-    val instOutput = dispatcher.io.instOutput
-    val isALU = instOutput.bits.fUnitType === FunUnitType.ALU
-    val isBRU = instOutput.bits.fUnitType === FunUnitType.BRU
-    val isLSU = instOutput.bits.fUnitType === FunUnitType.MEM
+
+    class DispatcherQueueEntry extends Bundle {
+        val inst = new DecodedInstBundle
+        val robTag = UInt(ROB_WIDTH.W)
+    }
+
+    val dispatcherInstQueue = Module(
+      new Queue(new DispatcherQueueEntry, entries = 2, pipe = false, flow = false)
+    )
+    dispatcherInstQueue.io.enq.valid := dispatcher.io.instOutput.valid
+    dispatcherInstQueue.io.enq.bits.inst := dispatcher.io.instOutput.bits
+    dispatcherInstQueue.io.enq.bits.robTag := rob.io.robTag
+    dispatcher.io.instOutput.ready := dispatcherInstQueue.io.enq.ready
+
+    dispatcherInstQueue.reset := reset.asBool || fetcher.io.pcOverwrite.valid
+
+    val instOutput = dispatcherInstQueue.io.deq
+    val isALU = instOutput.bits.inst.fUnitType === FunUnitType.ALU
+    val isBRU = instOutput.bits.inst.fUnitType === FunUnitType.BRU
+    val isLSU = instOutput.bits.inst.fUnitType === FunUnitType.MEM
 
     // PRF Busy Table check for dispatch
-    prf.io.readyAddrs(0) := instOutput.bits.prs1
-    prf.io.readyAddrs(1) := instOutput.bits.prs2
+    prf.io.readyAddrs(0) := instOutput.bits.inst.prs1
+    prf.io.readyAddrs(1) := instOutput.bits.inst.prs2
     val src1Ready = prf.io.isReady(0)
     val src2Ready = prf.io.isReady(1)
 
     // ALU Issue Buffer Enqueue
     aluIB.io.in.valid := instOutput.valid && isALU && !rob.io.rollback.valid
-    aluIB.io.in.bits.robTag := rob.io.robTag
-    aluIB.io.in.bits.pdst := instOutput.bits.pdst
-    aluIB.io.in.bits.src1 := instOutput.bits.prs1
-    aluIB.io.in.bits.src2 := instOutput.bits.prs2
+    aluIB.io.in.bits.robTag := instOutput.bits.robTag
+    aluIB.io.in.bits.pdst := instOutput.bits.inst.pdst
+    aluIB.io.in.bits.src1 := instOutput.bits.inst.prs1
+    aluIB.io.in.bits.src2 := instOutput.bits.inst.prs2
     aluIB.io.in.bits.src1Ready := src1Ready
     aluIB.io.in.bits.src2Ready := src2Ready
-    aluIB.io.in.bits.imm := instOutput.bits.imm
-    aluIB.io.in.bits.useImm := instOutput.bits.useImm
-    aluIB.io.in.bits.info.aluOp := instOutput.bits.aluOpType
+    aluIB.io.in.bits.imm := instOutput.bits.inst.imm
+    aluIB.io.in.bits.useImm := instOutput.bits.inst.useImm
+    aluIB.io.in.bits.info.aluOp := instOutput.bits.inst.aluOpType
     if (Configurables.Elaboration.pcInIssueBuffer) {
-        aluIB.io.in.bits.pc.get := instOutput.bits.pc
+        aluIB.io.in.bits.pc.get := instOutput.bits.inst.pc
     }
 
     // BRU Issue Buffer Enqueue
     bruIB.io.in.valid := instOutput.valid && isBRU && !rob.io.rollback.valid
-    bruIB.io.in.bits.robTag := rob.io.robTag
-    bruIB.io.in.bits.pdst := instOutput.bits.pdst
-    bruIB.io.in.bits.src1 := instOutput.bits.prs1
-    bruIB.io.in.bits.src2 := instOutput.bits.prs2
+    bruIB.io.in.bits.robTag := instOutput.bits.robTag
+    bruIB.io.in.bits.pdst := instOutput.bits.inst.pdst
+    bruIB.io.in.bits.src1 := instOutput.bits.inst.prs1
+    bruIB.io.in.bits.src2 := instOutput.bits.inst.prs2
     bruIB.io.in.bits.src1Ready := src1Ready
     bruIB.io.in.bits.src2Ready := src2Ready
-    bruIB.io.in.bits.imm := instOutput.bits.imm
-    bruIB.io.in.bits.useImm := instOutput.bits.useImm
-    bruIB.io.in.bits.info.bruOp := instOutput.bits.bruOpType
-    bruIB.io.in.bits.info.cmpOp := instOutput.bits.cmpOpType
-    bruIB.io.in.bits.info.pc := instOutput.bits.pc
-    bruIB.io.in.bits.info.predict := instOutput.bits.predict
-    bruIB.io.in.bits.info.predictedTarget := instOutput.bits.predictedTarget
+    bruIB.io.in.bits.imm := instOutput.bits.inst.imm
+    bruIB.io.in.bits.useImm := instOutput.bits.inst.useImm
+    bruIB.io.in.bits.info.bruOp := instOutput.bits.inst.bruOpType
+    bruIB.io.in.bits.info.cmpOp := instOutput.bits.inst.cmpOpType
+    bruIB.io.in.bits.info.pc := instOutput.bits.inst.pc
+    bruIB.io.in.bits.info.predict := instOutput.bits.inst.predict
+    bruIB.io.in.bits.info.predictedTarget := instOutput.bits.inst.predictedTarget
     if (Configurables.Elaboration.pcInIssueBuffer) {
-        bruIB.io.in.bits.pc.get := instOutput.bits.pc
+        bruIB.io.in.bits.pc.get := instOutput.bits.inst.pc
     }
 
     // LSU Issue Buffer Enqueue
     lsAdaptor.io.issueIn.valid := instOutput.valid && isLSU && !rob.io.rollback.valid
-    lsAdaptor.io.issueIn.bits.robTag := rob.io.robTag
-    lsAdaptor.io.issueIn.bits.pdst := instOutput.bits.pdst
-    lsAdaptor.io.issueIn.bits.src1 := instOutput.bits.prs1
-    lsAdaptor.io.issueIn.bits.src2 := instOutput.bits.prs2
+    lsAdaptor.io.issueIn.bits.robTag := instOutput.bits.robTag
+    lsAdaptor.io.issueIn.bits.pdst := instOutput.bits.inst.pdst
+    lsAdaptor.io.issueIn.bits.src1 := instOutput.bits.inst.prs1
+    lsAdaptor.io.issueIn.bits.src2 := instOutput.bits.inst.prs2
     lsAdaptor.io.issueIn.bits.src1Ready := src1Ready
     lsAdaptor.io.issueIn.bits.src2Ready := Mux(
-      instOutput.bits.isStore,
+      instOutput.bits.inst.isStore,
       src2Ready,
       true.B
     ) // Not used for loads
-    lsAdaptor.io.issueIn.bits.info.opWidth := instOutput.bits.opWidth
-    lsAdaptor.io.issueIn.bits.info.isStore := instOutput.bits.isStore
-    lsAdaptor.io.issueIn.bits.info.isUnsigned := instOutput.bits.isUnsigned
-    lsAdaptor.io.issueIn.bits.info.imm := instOutput.bits.imm
+    lsAdaptor.io.issueIn.bits.info.opWidth := instOutput.bits.inst.opWidth
+    lsAdaptor.io.issueIn.bits.info.isStore := instOutput.bits.inst.isStore
+    lsAdaptor.io.issueIn.bits.info.isUnsigned := instOutput.bits.inst.isUnsigned
+    lsAdaptor.io.issueIn.bits.info.imm := instOutput.bits.inst.imm
     if (Configurables.Elaboration.pcInIssueBuffer) {
-        lsAdaptor.io.issueIn.bits.pc.get := instOutput.bits.pc
+        lsAdaptor.io.issueIn.bits.pc.get := instOutput.bits.inst.pc
     }
 
     instOutput.ready := Mux(
@@ -186,8 +202,8 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     ) && rob.io.dispatch.ready
 
     // PRF Busy Table Update (Set Busy on Dispatch)
-    prf.io.setBusy.valid := instOutput.valid && instOutput.ready && instOutput.bits.pdst =/= 0.U
-    prf.io.setBusy.bits := instOutput.bits.pdst
+    prf.io.setBusy.valid := instOutput.valid && instOutput.ready && instOutput.bits.inst.pdst =/= 0.U
+    prf.io.setBusy.bits := instOutput.bits.inst.pdst
 
     // Issue Buffer to Adaptor connections
     aluAdaptor.io.issueIn <> aluIB.io.out

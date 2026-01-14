@@ -23,7 +23,7 @@ class FetchToDecodeBundle extends Bundle {
   *   Memory access uops assume: `paddr` is `prs1`, `psrc` is `prs2`, `pdst` is
   *   `pdst`.
   */
-class DecodeToDispatchBundle extends Bundle {
+class DecodedInstBundle extends Bundle {
     // - categorizing operation
     val fUnitType = FunUnitType() // functional unit type
     val aluOpType = ALUOpType()

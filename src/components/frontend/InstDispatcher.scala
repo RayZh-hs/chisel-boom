@@ -14,8 +14,8 @@ import components.backend.ROBEntry
   */
 class InstDispatcher extends CycleAwareModule {
     val io = IO(new Bundle {
-        val instInput = Flipped(Decoupled(new DecodeToDispatchBundle))
-        val instOutput = Decoupled(new DecodeToDispatchBundle)
+        val instInput = Flipped(Decoupled(new DecodedInstBundle))
+        val instOutput = Decoupled(new DecodedInstBundle)
 
         val robOutput = Decoupled(new DispatchToROBBundle)
 

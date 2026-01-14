@@ -8,7 +8,7 @@ import common.Configurables._
 class InstDecoder extends Module {
     val io = IO(new Bundle {
         val in = Flipped(Decoupled(new FetchToDecodeBundle))
-        val out = Decoupled(new DecodeToDispatchBundle)
+        val out = Decoupled(new DecodedInstBundle)
     })
 
     val inst = io.in.bits.inst
