@@ -14,10 +14,11 @@
 // 4
 
 int N;
-int M = 0;
+int M;
 int check[20];
 
 int main() {
+  M = 0;
   N = 10;
   int i = 0;
   while (i <= N)

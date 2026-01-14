@@ -1,0 +1,5 @@
+[
+    "simtests/bulgarian",   // too many cycles
+    "simtests/pi",          // too many cycles
+    "simtests/qsort",       // inst cannot fit in icache
+]

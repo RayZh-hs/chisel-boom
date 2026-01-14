@@ -4,7 +4,7 @@
 // reduction REMARKS: nothing.
 
 int a[10100];
-int n = 10000;
+int n;
 
 int qsrt(int l, int r) {
   int i = l;
@@ -31,6 +31,7 @@ int qsrt(int l, int r) {
 }
 
 int main() {
+  n = 10000;
   int i;
   for (i = 1; i <= n; i++)
     a[i] = n + 1 - i;

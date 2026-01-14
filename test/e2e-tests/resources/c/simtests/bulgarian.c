@@ -9,8 +9,8 @@ int n;
 int h;
 int now;
 int a[100];
-int A = 48271;
-int M = 2147483647;
+int A;
+int M;
 int Q;
 int R;
 int seed = 1;
@@ -88,6 +88,8 @@ void move() {
   now++;
 }
 int main() {
+  A = 48271;
+  M = 2147483647;
   int i = 0;
   int temp = 0;
   int count = 0;

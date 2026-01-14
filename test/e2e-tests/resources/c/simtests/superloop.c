@@ -2,14 +2,14 @@
 // Target: use loops to calculate calculator of 6!
 //@author yixi
 
-int N;
-int h = 99;
-int i = 100;
-int j = 101;
-int k = 102;
-int total = 0;
-
 int main() {
+  int N;
+  int h = 99;
+  int i = 100;
+  int j = 101;
+  int k = 102;
+  int total = 0;
+
   int a;
   int b;
   int c;

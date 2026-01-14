@@ -26,14 +26,12 @@ object E2EUtils {
 
     lazy val skipList: Set[String] = {
         if (Files.exists(skipJson)) {
-            val content = Files.readString(skipJson)
-            content.trim
-                .stripPrefix("[")
-                .stripSuffix("]")
-                .split(",")
-                .map(_.trim.replaceAll("^\"|\"$", ""))
-                .filter(_.nonEmpty)
-                .toSet
+            val content = Files.readString(skipJson, StandardCharsets.UTF_8)
+            // Remove block comments and line comments, then extract all quoted strings.
+            val withoutBlock = content.replaceAll("(?s)/\\*.*?\\*/", "")
+            val withoutLine = withoutBlock.replaceAll("(?m)//.*$", "")
+            val strRegex = "\"([^\"]*)\"".r
+            strRegex.findAllMatchIn(withoutLine).map(_.group(1)).toSet
         } else {
             Set.empty
         }
