@@ -5,11 +5,11 @@
 // Load:	12183	Store:	55	Jumped:	23 A better result is welcomed. ------
 // From JinTianxing.
 
-int A = 1;
-int B = 1;
-int C = 1;
 
 int main() {
+  int A = 1;
+  int B = 1;
+  int C = 1;
   while (C < (1 << 29) && C > -(1 << 29)) {
     A = ((((((((C - A + B) - (A + B)) + ((C - A + B) - (A + B))) +
              (((C - A + B) - (A + B)) + (C - A + B))) -

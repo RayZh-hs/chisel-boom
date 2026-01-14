@@ -244,6 +244,8 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     btb.io.update.valid := brUpdate.valid
     btb.io.update.bits.pc := brUpdate.pc
     btb.io.update.bits.target := brUpdate.target
+    btb.io.update.bits.taken := brUpdate.taken
+    btb.io.update.bits.mispredict := brUpdate.mispredict
 
     rob.io.brUpdate.valid := mispredict
     rob.io.brUpdate.bits.robTag := brUpdate.robTag
