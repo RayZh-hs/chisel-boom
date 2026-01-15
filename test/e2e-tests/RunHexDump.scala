@@ -5,6 +5,7 @@ import core.BoomCore
 import java.nio.file.{Path, Paths, Files}
 import common.Configurables._
 import e2e.Configurables._
+import E2EUtils._
 
 object RunHexDump extends App {
     val argList = args.toList
@@ -30,6 +31,7 @@ object RunHexDump extends App {
 
     println(s"Running simulation using hex file: $hexFile")
 
+    setupSimulation()
     RawTester.test(
       new BoomCore(hexFile.toString),
       Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)

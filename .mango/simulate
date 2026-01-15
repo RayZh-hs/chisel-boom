@@ -32,7 +32,7 @@ for test in "$@"; do
     test_name=$(basename "$test")
 
     # Build and run tests
-    mill --color false --disable-ticker test.runMain e2e.RunCFile test/e2e-tests/resources/c/$test.c --verbose 2>&1 | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' > test_run_dir/$test_name.log
+    mill --color false --disable-ticker -Dreport=true test.runMain e2e.RunCFile test/e2e-tests/resources/c/$test.c --verbose 2>&1 | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' > test_run_dir/$test_name.log
     riscv32-unknown-elf-objdump -d test/e2e-tests/generated/$test_name.elf > test_run_dir/$test_name.dump
 
     # Output the file path
