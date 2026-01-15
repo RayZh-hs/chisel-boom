@@ -25,14 +25,16 @@ class BranchTargetBuffer extends Module {
     }
     val buffer = SyncReadMem(32, new BTBEntry)
     val valids = RegInit(0.U(32.W))
+    val counters = RegInit(VecInit(Seq.fill(32)(0.U(2.W))))
     val index = io.pc(6, 2)
     val tag = io.pc(31, 7)
 
     val validReg = RegNext(valids(index))
     val tagReg = RegNext(tag)
     val entry = buffer.read(index)
+    val countReg = RegNext(counters(index))
 
-    when(validReg && entry.tag === tagReg) {
+    when(validReg && entry.tag === tagReg && countReg(1)) {
         io.target.valid := true.B
         io.target.bits := entry.target
     }.otherwise {
@@ -47,11 +49,13 @@ class BranchTargetBuffer extends Module {
         newEntry.tag := updTag
         newEntry.target := io.update.bits.target
 
+        val cnt = counters(updIndex)
         when(io.update.bits.taken) {
             buffer.write(updIndex, newEntry)
             valids := valids | (1.U << updIndex)
+            counters(updIndex) := Mux(cnt === 3.U, 3.U, cnt + 1.U)
         }.otherwise {
-            valids := valids & ~(1.U << updIndex)
+            counters(updIndex) := Mux(cnt === 0.U, 0.U, cnt - 1.U)
         }
     }
 }
