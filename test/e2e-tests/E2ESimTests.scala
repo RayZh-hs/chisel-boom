@@ -2,6 +2,7 @@ package e2e
 
 import org.scalatest.funsuite.AnyFunSuite
 import chiseltest._
+import chiseltest.simulator.VerilatorCFlags
 import core.BoomCore
 import Configurables._
 
@@ -39,7 +40,11 @@ class E2ESimTests extends AnyFunSuite with ChiselScalatestTester {
 
                 test(new BoomCore(hex.toString))
                     .withAnnotations(
-                      Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
+                      Seq(
+                        WriteVcdAnnotation,
+                        VerilatorBackendAnnotation,
+                        VerilatorCFlags(Seq("-Wno-type-limits"))
+                      )
                     ) { dut =>
                         // Sim tests might need more cycles
                         val maxCycles = MAX_CYCLE_COUNT * 10

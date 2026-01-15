@@ -2,6 +2,7 @@ package e2e
 
 import org.scalatest.funsuite.AnyFunSuite
 import chiseltest._
+import chiseltest.simulator.VerilatorCFlags
 import core.BoomCore
 import Configurables._
 
@@ -36,7 +37,11 @@ class E2ETests extends AnyFunSuite with ChiselScalatestTester {
 
                 test(new BoomCore(hex.toString))
                     .withAnnotations(
-                      Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
+                      Seq(
+                        WriteVcdAnnotation,
+                        VerilatorBackendAnnotation,
+                        VerilatorCFlags(Seq("-Wno-type-limits"))
+                      )
                     ) { dut =>
                         dut.clock.setTimeout(MAX_CYCLE_COUNT)
 
