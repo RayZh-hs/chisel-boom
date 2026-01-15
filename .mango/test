@@ -1,0 +1,36 @@
+#!/bin/bash
+set -e
+
+# Declare requirements
+function requires() {
+    if ! command -v $1 &>/dev/null; then
+        echo "Requires $1"
+        exit 1
+    fi
+}
+
+requires mill
+
+if [ "$#" -eq 0 ]; then
+    mill test
+elif [ "$#" -eq 1 ]; then
+    if [ "$1" == "all" ]; then
+        mill test
+    elif [ "$1" == "e2e" ]; then
+        mill test.testOnly e2e.E2ETests
+    elif [ "$1" == "e2esim" ]; then
+        mill test.testOnly e2e.E2ESimTests
+    elif [ "$1" == "unit" ]; then
+        mill test.testOnly \
+                        components.backend.ReOrderBufferTest \
+                        components.backend.IssueBufferTest \
+                        components.backend.PhysicalRegisterFileTest
+    else
+        echo "Unknown argument: $1"
+        echo "Usage: test [all|e2e|e2esim|unit]"
+        exit 1
+    fi
+else
+    echo "Usage: test [all|e2e|e2esim|unit]"
+    exit 1
+fi

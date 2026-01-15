@@ -5,13 +5,14 @@ import chisel3.util._
 import common.Configurables._
 
 import common.RegBusyStatus
+import utility.CycleAwareModule
 
 class PhysicalRegisterFile(
     numRegs: Int,
     numReadPorts: Int,
     numWritePorts: Int,
     dataWidth: Int
-) extends Module {
+) extends CycleAwareModule {
     val io = IO(new Bundle {
         // Read Ports
         val read = Vec(
@@ -83,4 +84,14 @@ class PhysicalRegisterFile(
     // Register 0 is always ready and always 0
     busyTable(0) := false.B
     regFile(0) := 0.U
+
+    if (Elaboration.printOnBroadcast) {
+        when(io.setReady.valid) {
+            printf("PRF Snapshot: Physical -> Value: \n")
+            for (i <- 0 until numRegs) {
+                printf(" p%d -> 0x%x ", i.U, regFile(i))
+            }
+            printf("\n")
+        }
+    }
 }

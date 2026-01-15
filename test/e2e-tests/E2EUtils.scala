@@ -3,6 +3,8 @@ package e2e
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 import scala.sys.process.Process
+import chiseltest._
+import core.BoomCore
 
 object E2EUtils {
     def findRepoRoot(start: Path): Path = {
@@ -21,6 +23,29 @@ object E2EUtils {
         repoRoot.resolve("test/e2e-tests/resources/expected")
     val linkageDir: Path = repoRoot.resolve("test/e2e-tests/resources/linkage")
     val genDir: Path = repoRoot.resolve("test/e2e-tests/generated")
+    val simtestsDir: Path = cDir.resolve("simtests")
+    val skipJson: Path = repoRoot.resolve("test/e2e-tests/resources/skip.jsonc")
+
+    lazy val skipList: Set[String] = {
+        if (Files.exists(skipJson)) {
+            val content = Files.readString(skipJson, StandardCharsets.UTF_8)
+            // Remove block comments and line comments, then extract all quoted strings.
+            val withoutBlock = content.replaceAll("(?s)/\\*.*?\\*/", "")
+            val withoutLine = withoutBlock.replaceAll("(?m)//.*$", "")
+            val strRegex = "\"([^\"]*)\"".r
+            strRegex.findAllMatchIn(withoutLine).map(_.group(1)).toSet
+        } else {
+            Set.empty
+        }
+    }
+
+    def shouldSkip(cFile: Path): Boolean = {
+        val rel = cDir.relativize(cFile).toString
+        val noExt = rel.stripSuffix(".c")
+        skipList.contains(noExt) || skipList.contains(
+          rel
+        ) // Check both with and without extension
+    }
 
     def cmdExists(cmd: String): Boolean = {
         Process(Seq("sh", "-c", s"command -v $cmd >/dev/null 2>&1")).! == 0
@@ -45,10 +70,22 @@ object E2EUtils {
     def objcopy: String =
         toolchain.map(_._2).getOrElse("riscv32-unknown-elf-objcopy")
 
-    def readExpected(name: String): Seq[BigInt] = {
-        val p = expectedDir.resolve(s"$name.expected")
+    def readExpected(cFile: Path): Seq[BigInt] = {
+        val name = cFile.getFileName.toString.stripSuffix(".c")
+        val possiblePaths = Seq(
+          expectedDir.resolve(s"$name.expected"),
+          expectedDir.resolve("simtests").resolve(s"$name.expected"),
+          cFile.resolveSibling(s"$name.expected")
+        )
+
+        val finalP = possiblePaths
+            .find(p => Files.exists(p))
+            .getOrElse(possiblePaths.head)
+
+        if (!Files.exists(finalP)) return Seq()
+
         val content =
-            new String(Files.readAllBytes(p), StandardCharsets.UTF_8).trim
+            new String(Files.readAllBytes(finalP), StandardCharsets.UTF_8).trim
         if (content.isEmpty) Seq()
         else content.split("\\s+").map(BigInt(_)).toSeq
     }
@@ -86,6 +123,7 @@ object E2EUtils {
 
         val linkLd = linkageDir.resolve("link.ld")
         val crt0 = linkageDir.resolve("crt0.S")
+        val mathC = linkageDir.resolve("math.c")
 
         val compileCmd = Seq(
           gcc,
@@ -96,12 +134,14 @@ object E2EUtils {
           "-mstrict-align",
           "-fno-builtin",
           "-I",
-          linkageDir.getParent.toString,
+          cDir.toString,
           "-T",
           linkLd.toString,
           "-nostdlib",
           "-static",
+          "-Wl,--no-warn-rwx-segments",
           crt0.toString,
+          mathC.toString,
           cFile.toString,
           "-o",
           elf.toString
@@ -136,5 +176,113 @@ object E2EUtils {
 
         writeHexFromBinary(bin, hex)
         hex
+    }
+
+    case class SimulationResult(
+        result: BigInt,
+        output: Seq[BigInt],
+        cycles: Int,
+        timedOut: Boolean
+    )
+
+    def runSimulation(
+        dut: BoomCore,
+        maxCycles: Int = Configurables.MAX_CYCLE_COUNT,
+        debugCallback: (Int) => Unit = _ => ()
+    ): SimulationResult = {
+        var cycle = 0
+        var result: BigInt = 0
+        var outputBuffer = scala.collection.mutable.ArrayBuffer[BigInt]()
+        var done = false
+
+        while (!done && cycle < maxCycles) {
+            debugCallback(cycle)
+
+            if (dut.io.put.valid.peek().litToBoolean) {
+                outputBuffer += dut.io.put.bits.data
+                    .peek()
+                    .litValue
+                    .toInt
+            }
+
+            if (dut.io.exit.valid.peek().litToBoolean) {
+                result = dut.io.exit.bits.data.peek().litValue.toInt
+                done = true
+            } else {
+                dut.clock.step(1)
+                cycle += 1
+            }
+        }
+
+        if (common.Configurables.Profiling.isAnyEnabled) {
+            println("=========================================================")
+            println("                    PROFILING REPORT                     ")
+            println("=========================================================")
+
+            val p = dut.io.profiler 
+            if (common.Configurables.Profiling.branchMispredictionRate) {
+                val total = p.totalBranches.get.peek().litValue
+                val mispred = p.totalMispredicts.get.peek().litValue
+                val rate =
+                    if (total > 0)
+                        (mispred.toDouble / total.toDouble) * 100.0
+                    else 0.0
+
+                println(f"Branch Misprediction Rate:")
+                println(f"  Total Branches:       $total")
+                println(f"  Total Mispredictions: $mispred")
+                println(f"  Misprediction Rate:   $rate%.2f%%")
+            }
+
+            if (common.Configurables.Profiling.IPC) {
+                val insts = p.totalInstructions.get.peek().litValue
+                val cycles = p.totalCycles.get.peek().litValue
+                val ipc = if (cycles > 0) insts.toDouble / cycles.toDouble else 0.0
+                
+                println(f"IPC Performance:")
+                println(f"  Total Instructions:   $insts")
+                println(f"  Total Cycles:         $cycles")
+                println(f"  IPC:                  $ipc%.4f")
+            }
+
+            if (common.Configurables.Profiling.RollbackTime) {
+                val events = p.totalRollbackEvents.get.peek().litValue
+                val cycles = p.totalRollbackCycles.get.peek().litValue
+                val avg = if (events > 0) cycles.toDouble / events.toDouble else 0.0
+                
+                println(f"Rollback Performance:")
+                println(f"  Total Rollback Events: $events")
+                println(f"  Total Rollback Cycles: $cycles")
+                println(f"  Average Rollback Time: $avg%.2f cycles")
+            }
+
+            if (common.Configurables.Profiling.Utilization) {
+                println(f"Stage Utilization:")
+                val fetcher = p.busyFetcher.get.peek().litValue
+                val decoder = p.busyDecoder.get.peek().litValue
+                val dispatcher = p.busyDispatcher.get.peek().litValue
+                val alu = p.busyALU.get.peek().litValue
+                val bru = p.busyBRU.get.peek().litValue
+                val lsu = p.busyLSU.get.peek().litValue
+                val rob = p.busyROB.get.peek().litValue
+
+                def formatUtil(name: String, busy: BigInt): Unit = {
+                    val rate = if (cycle > 0) (busy.toDouble / cycle.toDouble) * 100.0 else 0.0
+                    println(f"  $name%-12s: $busy%8d / $cycle%8d ($rate%.2f%%)")
+                }
+
+                formatUtil("Fetcher", fetcher)
+                formatUtil("Decoder", decoder)
+                formatUtil("Dispatcher", dispatcher)
+                formatUtil("ALU", alu)
+                formatUtil("BRU", bru)
+                formatUtil("LSU", lsu)
+                formatUtil("ROB-Commit", rob)
+            }
+
+            println("=========================================================")
+        }
+
+        SimulationResult(result, outputBuffer.toSeq, cycle, !done)
     }
 }

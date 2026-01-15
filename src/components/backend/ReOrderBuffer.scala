@@ -29,6 +29,7 @@ class ReOrderBuffer extends CycleAwareModule {
             val mispredict = Bool()
         }))
         val rollback = Output(Valid(new RollbackBundle))
+        val isRollingBack = if (Configurables.Profiling.RollbackTime) Some(Output(Bool())) else None
         val head = Output(UInt(ROB_WIDTH.W))
     })
 
@@ -103,6 +104,7 @@ class ReOrderBuffer extends CycleAwareModule {
     io.rollback.bits.ldst := entryToRollback.ldst
     io.rollback.bits.pdst := entryToRollback.pdst
     io.rollback.bits.stalePdst := entryToRollback.stalePdst
+    io.isRollingBack.foreach(_ := isRollingBack)
 
     // Commit
     val headEntry = robRam(head)

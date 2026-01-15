@@ -1,3 +1,5 @@
-synthesize: synthesize
+test: test
+simulate: simulate sim
+elaborate: elaborate
+synthesize: synthesize synth
 clean: clean
-run: run

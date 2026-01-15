@@ -14,6 +14,8 @@ class BranchTargetBuffer extends Module {
         val update = Input(Valid(new Bundle {
             val pc = UInt(32.W)
             val target = UInt(32.W)
+            val taken = Bool()
+            val mispredict = Bool()
         }))
     })
 
@@ -44,7 +46,12 @@ class BranchTargetBuffer extends Module {
         val newEntry = Wire(new BTBEntry)
         newEntry.tag := updTag
         newEntry.target := io.update.bits.target
-        buffer.write(updIndex, newEntry)
-        valids := valids | (1.U << updIndex)
+
+        when(io.update.bits.taken) {
+            buffer.write(updIndex, newEntry)
+            valids := valids | (1.U << updIndex)
+        }.otherwise {
+            valids := valids & ~(1.U << updIndex)
+        }
     }
 }

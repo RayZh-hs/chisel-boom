@@ -16,6 +16,7 @@ class ALUAdaptor extends Module {
         val prfRead = new PRFReadBundle
 
         val flush = Input(new FlushBundle)
+        val busy = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
     })
 
     val alu = Module(new ArithmeticLogicUnit)
@@ -35,6 +36,8 @@ class ALUAdaptor extends Module {
     val s3Valid = RegInit(false.B)
     val s3Bits = Reg(new IssueBufferEntry(new ALUInfo))
     val s3Result = Reg(UInt(32.W))
+
+    io.busy.foreach(_ := s1Valid || s2Valid || s3Valid)
 
     // Pipeline Control: A stage moves if the next stage can accept it
     val s3Ready = io.broadcastOut.ready || !s3Valid

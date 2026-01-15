@@ -27,6 +27,7 @@ class LoadStoreAdaptor extends CycleAwareModule {
 
         // Memory Interface
         val mem = Flipped(new MemoryInterface)
+        val busy = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
     })
 
     val lsq = Module(new SequentialIssueBuffer(new LoadStoreInfo, 8, "LSQ"))
@@ -53,6 +54,8 @@ class LoadStoreAdaptor extends CycleAwareModule {
     // S3: Memory Response -> Broadcast
     val s3Valid = RegInit(false.B)
     val s3Bits = Reg(new SequentialBufferEntry(new LoadStoreInfo))
+
+    io.busy.foreach(_ := s1Valid || s2Valid || s3Valid)
 
     // --- Pipeline Control (Flexible Flow) ---
     // S3 moves if broadcast is accepted
