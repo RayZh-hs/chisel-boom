@@ -1,6 +1,6 @@
 package e2e
 
-import chiseltest._
+import chisel3.simulator.EphemeralSimulator._
 import core.BoomCore
 import java.nio.file.{Path, Paths, Files}
 import common.Configurables._
@@ -30,13 +30,8 @@ object RunHexDump extends App {
 
     println(s"Running simulation using hex file: $hexFile")
 
-    RawTester.test(
-      new BoomCore(hexFile.toString),
-      E2EUtils.testAnnotations
-    ) { dut =>
-        dut.clock.setTimeout(MAX_CYCLE_COUNT)
+    simulate(new BoomCore(hexFile.toString)) { dut =>
         println("Simulation started.")
-
         val simRes = E2EUtils.runSimulation(dut, MAX_CYCLE_COUNT)
 
         Thread.sleep(500) // Wait for final prints to flush

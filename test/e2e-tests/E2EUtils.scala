@@ -4,9 +4,8 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 import scala.jdk.CollectionConverters._
 import scala.sys.process.Process
-import chiseltest._
-import chiseltest.simulator.VerilatorCFlags
-import firrtl2.annotations.Annotation
+import chisel3._
+import chisel3.simulator.EphemeralSimulator._
 import core.BoomCore
 
 object E2EUtils {
@@ -14,12 +13,6 @@ object E2EUtils {
     val isCI: Boolean =
         sys.env.get("CI").contains("true") || sys.env.contains("GITHUB_ACTIONS")
 
-    // Common test annotations for all simulations
-    val testAnnotations: Seq[Annotation] = Seq(
-      VerilatorBackendAnnotation,
-      VerilatorCFlags(Seq("-Wno-type-limits"))
-    ) ++ (if (Configurables.ENABLE_VCD && !isCI) Seq(WriteVcdAnnotation)
-          else Seq.empty)
     def findRepoRoot(start: Path): Path = {
         var cur = start
         while (cur != null && !Files.exists(cur.resolve("build.mill"))) {
@@ -222,6 +215,11 @@ object E2EUtils {
         maxCycles: Int = Configurables.MAX_CYCLE_COUNT,
         debugCallback: (Int) => Unit = _ => ()
     ): SimulationResult = {
+
+        dut.reset.poke(true.B)
+        dut.clock.step()
+        dut.reset.poke(false.B)
+        
         var cycle = 0
         var result: BigInt = 0
         var outputBuffer = scala.collection.mutable.ArrayBuffer[BigInt]()
@@ -232,13 +230,11 @@ object E2EUtils {
 
             if (dut.io.put.valid.peek().litToBoolean) {
                 outputBuffer += dut.io.put.bits.data
-                    .peek()
-                    .litValue
-                    .toInt
+                    .peek().litValue
             }
 
             if (dut.io.exit.valid.peek().litToBoolean) {
-                result = dut.io.exit.bits.data.peek().litValue.toInt
+                result = dut.io.exit.bits.data.peek().litValue
                 done = true
             } else {
                 dut.clock.step(1)

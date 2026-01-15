@@ -37,7 +37,7 @@ class E2ETests extends AnyFunSuite {
         cFiles.foreach { cFile =>
             val name = cFile.getFileName.toString.stripSuffix(".c")
             test(s"C test: $name") {
-                val expected = readExpected(name)
+                val expected = readExpected(cFile)
                 val sourceHex = buildHexFor(cFile)
                 
                 // Copy the specific test's hex to the shared location

@@ -1,7 +1,7 @@
 package e2e
 
 import org.scalatest.funsuite.AnyFunSuite
-import chiseltest._
+import chisel3.simulator.EphemeralSimulator._
 import core.BoomCore
 import Configurables._
 
@@ -10,7 +10,7 @@ import java.nio.file.{Files, Path, Paths}
 import scala.jdk.CollectionConverters._
 import scala.sys.process.Process
 
-class E2ESimTests extends AnyFunSuite with ChiselScalatestTester {
+class E2ESimTests extends AnyFunSuite {
     import E2EUtils._
 
     if (sys.props.contains("verbose") || sys.props.contains("v")) {
@@ -37,11 +37,14 @@ class E2ESimTests extends AnyFunSuite with ChiselScalatestTester {
                 val expected = readExpected(cFile)
                 val hex = buildHexFor(cFile)
 
-                test(new BoomCore(hex.toString))
-                    .withAnnotations(testAnnotations) { dut =>
+                simulate(new BoomCore(hex.toString)) { dut =>
                         // Sim tests might need more cycles
+
+                        dut.reset.poke(true.B)
+                        dut.clock.step()
+                        dut.reset.poke(false.B)
+                        
                         val maxCycles = MAX_CYCLE_COUNT * 10
-                        dut.clock.setTimeout(maxCycles)
 
                         val simRes = E2EUtils.runSimulation(dut, maxCycles)
 
