@@ -40,7 +40,8 @@ object VerilogEmission {
           "--split-verilog"
         )
 
-        // Prune elaboration options for synthesis
+        // Prune optional profiling and elaboration wiring for synthesis
+        Profiling.prune()
         Elaboration.prune()
         ChiselStage.emitSystemVerilogFile(
           new BoomCore(hexFile),
