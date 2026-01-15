@@ -373,4 +373,18 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         dontTouch(lsuBusyCount)
         dontTouch(robBusyCount)
     }
+
+    if (Configurables.Profiling.RollbackTime) {
+        val rollbackEvents = RegInit(0.U(32.W))
+        val rollbackCycles = RegInit(0.U(32.W))
+
+        when(mispredict) { rollbackEvents := rollbackEvents + 1.U }
+        when(rob.io.isRollingBack.get) { rollbackCycles := rollbackCycles + 1.U }
+
+        io.profiler.totalRollbackEvents.get := rollbackEvents
+        io.profiler.totalRollbackCycles.get := rollbackCycles
+
+        dontTouch(rollbackEvents)
+        dontTouch(rollbackCycles)
+    }
 }

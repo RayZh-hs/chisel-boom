@@ -20,10 +20,11 @@ object Configurables {
         var branchMispredictionRate: Boolean = true    // Track branch misprediction rate
         var Utilization:             Boolean = true    // Track utilization of various structures
         var IPC:                     Boolean = true    // Track IPC (Instructions Per Cycle)
+        var RollbackTime:            Boolean = true    // Track average rollback time
 
         // Shorthand for any profiling option being enabled
         def isAnyEnabled: Boolean = {
-            branchMispredictionRate || Utilization || IPC
+            branchMispredictionRate || Utilization || IPC || RollbackTime
         }
 
         // Utility for automatic pruning in synthesis.
@@ -32,6 +33,7 @@ object Configurables {
             branchMispredictionRate = false
             Utilization = false
             IPC = false
+            RollbackTime = false
         }
     }
 

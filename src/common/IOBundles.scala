@@ -166,4 +166,8 @@ class BoomCoreProfileBundle extends Bundle {
     val busyBRU = optfield(Utilization, UInt(32.W))
     val busyLSU = optfield(Utilization, UInt(32.W))
     val busyROB = optfield(Utilization, UInt(32.W))
+
+    // Rollback
+    val totalRollbackEvents = optfield(RollbackTime, UInt(32.W))
+    val totalRollbackCycles = optfield(RollbackTime, UInt(32.W))
 }

@@ -245,6 +245,17 @@ object E2EUtils {
                 println(f"  IPC:                  $ipc%.4f")
             }
 
+            if (common.Configurables.Profiling.RollbackTime) {
+                val events = p.totalRollbackEvents.get.peek().litValue
+                val cycles = p.totalRollbackCycles.get.peek().litValue
+                val avg = if (events > 0) cycles.toDouble / events.toDouble else 0.0
+                
+                println(f"Rollback Performance:")
+                println(f"  Total Rollback Events: $events")
+                println(f"  Total Rollback Cycles: $cycles")
+                println(f"  Average Rollback Time: $avg%.2f cycles")
+            }
+
             if (common.Configurables.Profiling.Utilization) {
                 println(f"Stage Utilization:")
                 val fetcher = p.busyFetcher.get.peek().litValue
