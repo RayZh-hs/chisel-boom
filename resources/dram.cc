@@ -118,14 +118,15 @@ extern "C" void dram_tick(
         if (head.countdown == 0 && resp_ready) {
             *resp_valid = 1;
             *resp_id = head.id;
-            resp_data[0] = head.data[0];
-            resp_data[1] = head.data[1];
-            resp_data[2] = head.data[2];
-            resp_data[3] = head.data[3];
-            
             if(debug_log.is_open()) {
-                 debug_log << "[DPI-C] RESP ID: " << head.id << " Data[0]: 0x" << std::hex << head.data[0] << std::dec << std::endl;
+                 debug_log << "[DPI-C] Popping RESP ID: " << head.id 
+                 << " Data: " << std::hex 
+                 << head.data[3] << "_" << head.data[2] << "_" << head.data[1] << "_" << head.data[0] 
+                 << std::dec << std::endl;
             }
+
+            // Use memcpy to avoid any type/pointer arithmetic issues
+            memcpy(resp_data, head.data, 16);
 
             resp_queue.erase(resp_queue.begin());
         }
@@ -192,8 +193,13 @@ extern "C" void dram_tick(
                               << " -> Data: " << std::setw(8) << resp.data[0] << " " << std::setw(8) << resp.data[1] 
                               << " ..." << std::dec << std::endl;
                 }
+            } // Close in_range
+            
+            if(debug_log.is_open()) {
+                debug_log << "[DPI-C] Pushing RESP to Queue. ID: " << resp.id << " Data: " 
+                          << std::hex << resp.data[3] << "_" << resp.data[2] << "_" << resp.data[1] << "_" << resp.data[0] << std::dec << std::endl;
             }
             resp_queue.push_back(resp);
-        }
-    }
-}
+        } // Close else
+    } // Close if(req_valid)
+} // Close function

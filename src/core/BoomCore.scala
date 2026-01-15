@@ -108,6 +108,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     imem.io.addr := fetcher.io.instAddr
     fetcher.io.instData := imem.io.inst
     fetcher.io.instValid := imem.io.respValid
+    fetcher.io.instReady := imem.io.ready
 
     // Frontend queue (in-stage buffer between fetcher and decoder)
     ifQueue.io.enq <> fetcher.io.ifOut

@@ -2,6 +2,8 @@ package components.memory
 
 import chisel3._
 import chisel3.util._
+import common._
+import common.Configurables._
 
 case class CacheConfig(
     nSetsWidth: Int,
@@ -42,7 +44,9 @@ class Cache(conf: CacheConfig) extends Module {
         val dirty = Bool()
     }
 
+    // Use SyncReadMem with Vec for realistic synthesis mapping
     val mem = SyncReadMem(nSets, Vec(nBytes, UInt(8.W)))
+    // val mem = Mem(nSets, UInt((nBytes * 8).W)) 
     val tags = SyncReadMem(nSets, new CacheEntry)
 
     // Simplified State Machine: Unified DRAM Access State
@@ -76,7 +80,10 @@ class Cache(conf: CacheConfig) extends Module {
     io.port.ready := (state === sIdle)
 
     val tagRead = tags.read(read_index, read_enable)
+    // Read directly as Vec
     val dataRead = mem.read(read_index, read_enable)
+    // val dataReadUInt = RegNext(mem(read_index))
+    // val dataRead = dataReadUInt.asTypeOf(Vec(nBytes, UInt(8.W)))
 
     when(io.port.valid && io.port.ready) {
         reqReg.addr := io.port.addr
@@ -106,12 +113,20 @@ class Cache(conf: CacheConfig) extends Module {
         when(hit) {
             when(reqReg.isWr) {
                 // Write Hit Logic
-                val wdataBytes = VecInit(Seq.tabulate(4)(i => reqReg.wdata(8 * i + 7, 8 * i)))
-                val repeatedData = VecInit(Seq.fill(nBytes / 4)(wdataBytes).flatten)
-                val fullMaskUInt = reqReg.wmask << reg_offset
-                val maskVec = VecInit(fullMaskUInt.asBools.take(nBytes))
+                val wdataBytesSeq = Seq.tabulate(4)(i => reqReg.wdata(8 * i + 7, 8 * i))
+                val repeatedData = VecInit(Seq.fill(nBytes / 4)(wdataBytesSeq).flatten)
 
+                val fullMaskUInt = reqReg.wmask << reg_offset
+                // CORRECT MASK logic
+                val maskVec = VecInit(Seq.tabulate(nBytes)(i => fullMaskUInt(i)))
+                
+                if(Configurables.Elaboration.printOnMemAccess) {
+                    printf(p"CACHE HIT WR: Addr=0x${Hexadecimal(reqReg.addr)} Idx=${reg_index} Mask=${Hexadecimal(fullMaskUInt)} MaskVec=${Hexadecimal(maskVec.asUInt)} Data=${Hexadecimal(reqReg.wdata)}\n")
+                }
+
+                // Standard Chisel Masked Write
                 mem.write(reg_index, repeatedData, maskVec)
+
                 val tag_update = Wire(new CacheEntry)
                 tag_update := tagRead
                 tag_update.dirty := true.B
@@ -125,12 +140,14 @@ class Cache(conf: CacheConfig) extends Module {
                 // byte/halfword selection logic in MemorySubsystem
                 val aligned_offset = Cat(reg_offset(conf.nCacheLineWidth - 1, 2), 0.U(2.W))
                 
-                io.port.rdata := Cat(
+                val rdata = Cat(
                     dataRead((aligned_offset + 3.U).asUInt),
                     dataRead((aligned_offset + 2.U).asUInt),
                     dataRead((aligned_offset + 1.U).asUInt),
                     dataRead(aligned_offset.asUInt)
                 )
+                io.port.rdata := rdata
+
                 io.port.respValid := true.B
                 state := sIdle
             }
@@ -196,7 +213,8 @@ class Cache(conf: CacheConfig) extends Module {
                 val respDataVec = VecInit(Seq.tabulate(nBytes)(i => io.dram.resp.bits.data(8 * i + 7, 8 * i)))
                 
                 // Write to Data RAM
-                mem.write(reg_index, respDataVec)
+                val allOnesMask = VecInit(Seq.fill(nBytes)(true.B))
+                mem.write(reg_index, respDataVec, allOnesMask)
                 
                 // Write to Tag RAM
                 val newTag = Wire(new CacheEntry)

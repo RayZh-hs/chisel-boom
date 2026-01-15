@@ -10,6 +10,7 @@ class InstructionMemory(val hexFilePath: String) extends Module {
         val addr = Input(UInt(32.W))
         val inst = Output(UInt(32.W))
         val respValid = Output(Bool())
+        val ready = Output(Bool())
         val dram = new SimpleMemIO(MemConfig(idWidth = 4, addrWidth = 32, dataWidth = 128))
     })
 
@@ -33,4 +34,5 @@ class InstructionMemory(val hexFilePath: String) extends Module {
     // Output
     io.inst := cache.io.port.rdata
     io.respValid := cache.io.port.respValid
+    io.ready := cache.io.port.ready
 }

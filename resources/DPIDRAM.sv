@@ -26,14 +26,14 @@ module DPIDRAM #(
         input  int          req_id,
         input  longint      req_addr,
         input  logic        req_isWr,
-        input  logic [127:0] req_data,
+        input  bit [127:0]  req_data,
         input  int          req_mask,
         input  logic        resp_ready,
         
         output logic        req_ready,
         output logic        resp_valid,
         output int          resp_id,
-        output logic [127:0] resp_data
+        output bit [127:0]  resp_data
     );
 
     initial begin
@@ -54,7 +54,7 @@ module DPIDRAM #(
     logic        next_req_ready;
     logic        next_resp_valid;
     int          next_resp_id;
-    logic [127:0] next_resp_data;
+    bit [127:0]  next_resp_data;
 
     assign req_ready      = dpi_req_ready;
     assign resp_valid     = dpi_resp_valid;

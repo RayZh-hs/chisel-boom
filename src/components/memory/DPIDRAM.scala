@@ -13,7 +13,7 @@ class DPIDRAMIO(conf: MemConfig) extends Bundle {
 class DPIDRAM(conf: MemConfig, hexFile: String) extends BlackBox(Map("FILENAME" -> hexFile)) with HasBlackBoxResource {
     val io = IO(new DPIDRAMIO(conf))
 
-    // Force rebuild 3
+    // Force rebuild 8
     addResource("/DPIDRAM.sv")
     addResource("/dram.cc")
 }
