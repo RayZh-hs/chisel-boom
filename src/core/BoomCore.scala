@@ -33,7 +33,9 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     val dispatcher = Module(new InstDispatcher)
     val rat = Module(new RegisterAliasTable(3, 1, 1))
     val freeList = Module(new FreeList(Derived.PREG_COUNT, 32))
-    val imem = Module(new InstructionMemory(hexFile))
+    val icache = Module(
+        new ICache(CacheConfig(nSetsWidth = 6, nCacheLineWidth = 4, idOffset = 2))
+    )
     val btb = Module(new BranchTargetBuffer)
 
     val rob = Module(new ReOrderBuffer)
@@ -65,20 +67,20 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     dramArb.io.in(0) <> memory.io.dram.req
     
     // Connect I-Cache (imem) to Arbiter Port 1
-    dramArb.io.in(1) <> imem.io.dram.req
-    
+    dramArb.io.in(1) <> icache.io.dram.req
+
     // Connect Arbiter to DRAM
     dram.io.req <> dramArb.io.out
-    
+
     // Broadcast DRAM Response to both
     // They will filter based on ID (D-Cache: 0,1; I-Cache: 2,3)
     memory.io.dram.resp.valid := dram.io.resp.valid
     memory.io.dram.resp.bits := dram.io.resp.bits
-    imem.io.dram.resp.valid := dram.io.resp.valid
-    imem.io.dram.resp.bits := dram.io.resp.bits
-    
+    icache.io.dram.resp.valid := dram.io.resp.valid
+    icache.io.dram.resp.bits := dram.io.resp.bits
+
     // Backpressure: DRAM ready if both listeners are ready
-    dram.io.resp.ready := memory.io.dram.resp.ready && imem.io.dram.resp.ready
+    dram.io.resp.ready := memory.io.dram.resp.ready && icache.io.dram.resp.ready
 
     // Generic memory routing: Adaptor -> MemorySubsystem -> (LSU | MMIO)
     memory.io.upstream <> lsAdaptor.io.mem
@@ -105,10 +107,8 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     fetcher.io.btbResult := btb.io.target
 
     // Memory interface for fetcher
-    imem.io.addr := fetcher.io.instAddr
-    fetcher.io.instData := imem.io.inst
-    fetcher.io.instValid := imem.io.respValid
-    fetcher.io.instReady := imem.io.ready
+    icache.io.req <> fetcher.io.icache.req
+    fetcher.io.icache.resp <> icache.io.resp
 
     // Frontend queue (in-stage buffer between fetcher and decoder)
     ifQueue.io.enq <> fetcher.io.ifOut

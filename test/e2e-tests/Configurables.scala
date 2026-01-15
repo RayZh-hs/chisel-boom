@@ -3,7 +3,7 @@ package e2e
 import utility.CycleAwareModule
 
 object Configurables {
-    val MAX_CYCLE_COUNT = 1000
+    val MAX_CYCLE_COUNT = 10000
     val ENABLE_VCD: Boolean = true
 
     assert(

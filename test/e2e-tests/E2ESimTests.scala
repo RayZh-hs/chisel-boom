@@ -4,6 +4,7 @@ import org.scalatest.funsuite.AnyFunSuite
 import chisel3.simulator.EphemeralSimulator._
 import core.BoomCore
 import Configurables._
+import chisel3._
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
@@ -43,7 +44,7 @@ class E2ESimTests extends AnyFunSuite {
                         dut.reset.poke(true.B)
                         dut.clock.step()
                         dut.reset.poke(false.B)
-                        
+
                         val maxCycles = MAX_CYCLE_COUNT * 10
 
                         val simRes = E2EUtils.runSimulation(dut, maxCycles)
