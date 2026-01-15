@@ -185,10 +185,18 @@ object E2EUtils {
         timedOut: Boolean
     )
 
+    def setupSimulation() {
+        val requireReport = System.getProperty("report") == "true"
+        if (!requireReport) {
+            common.Configurables.Profiling.prune()
+        }
+    }
+
     def runSimulation(
         dut: BoomCore,
         maxCycles: Int = Configurables.MAX_CYCLE_COUNT,
-        debugCallback: (Int) => Unit = _ => ()
+        debugCallback: (Int) => Unit = _ => (),
+        report: Boolean = true
     ): SimulationResult = {
         var cycle = 0
         var result: BigInt = 0
@@ -214,7 +222,7 @@ object E2EUtils {
             }
         }
 
-        if (common.Configurables.Profiling.isAnyEnabled) {
+        if (done && report && common.Configurables.Profiling.isAnyEnabled) {
             println("=========================================================")
             println("                    PROFILING REPORT                     ")
             println("=========================================================")

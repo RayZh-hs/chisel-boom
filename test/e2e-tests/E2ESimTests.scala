@@ -37,6 +37,7 @@ class E2ESimTests extends AnyFunSuite with ChiselScalatestTester {
                 val expected = readExpected(cFile)
                 val hex = buildHexFor(cFile)
 
+                setupSimulation()
                 test(new BoomCore(hex.toString))
                     .withAnnotations(
                       Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
