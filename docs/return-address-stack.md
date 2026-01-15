@@ -27,7 +27,7 @@ When the frontend receives a CALL instruction, it pushes the return address (PC 
 The RAS Adaptor is parallel to the ID Stage. It receives raw instructions and PCs from the Instruction Fetcher and takes one cycle (just like Decoder) to exectute the RAS logic. If it determines that the PC needs to be overwritten, it will trigger:
 1. PC-Overwrite signal to the Instruction Fetcher (same when BRU identifies misprediction);
 2. Reset signal to the IF/ID Queue Buffer;
-3. Alter the pc coming from the Decoder to Dispatcher;
+3. Alter the predicted pc coming from the Decoder to Dispatcher (used to alert BRU);
 4. (PLANNED) When ID is split into two stages, clear the ID substage buffer.
 
 The PC override is speculated as:
@@ -36,11 +36,11 @@ The PC override is speculated as:
     - `PC + imm` if it is JAL.
 2. If the instruction is a RET, the target is the top address popped from the RAS.
 
-Alongside the pc, every command will carry a `rasSP` (RAS Stack Pointer) to indicate the stack pointer of RAS (before the active inst is dispatched). This information will be stored in the ROB and used during rollback to restore the RAS state.
+Alongside the pc, every command (though only B&J would need them) will carry a `rasSP` (RAS Stack Pointer) to indicate the stack pointer of RAS (before the active inst is dispatched). This information will be passed on to BRU and used during rollback to restore the RAS state.
 
 ## Rollback Handling
 
-When a misprediction is detected and a rollback is triggered, the RAS Adaptor will restore the RAS state using the `rasSP` stored in the ROB entry of the instruction that caused the misprediction.
+When a misprediction is detected and a rollback is triggered, the RAS Adaptor will restore the RAS state using the `rasSP` field of the instruction that caused the misprediction.
 
 The stored stack pointer directly overrides the current one, hopefully restoring the RAS to the correct state.
 
@@ -48,4 +48,8 @@ This reset signal takes precedence over any push/pop operations that may occur i
 
 ## Overflow Handling
 
+RAS registers are zero-initialized.
+
 When the RAS is full, the stack pointer wraps around to 0, effectively overwriting the oldest return address.
+
+Poping an empty RAS will cause the stack pointer to wrap around to the last entry, and returning that address.
