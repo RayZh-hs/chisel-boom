@@ -29,6 +29,8 @@ jobs:
     
     - name: Install Verilator
       uses: veryl-lang/setup-verilator@v1
+      with:
+        version: 5.024
 
     - name: Setup RISCV Toolchain
       uses: gregdavill/setup-riscv-gnu-toolchain@v2.0
