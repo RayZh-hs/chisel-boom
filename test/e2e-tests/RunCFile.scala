@@ -1,7 +1,6 @@
 package e2e
 
 import chiseltest._
-import chiseltest.simulator.VerilatorCFlags
 import core.BoomCore
 import java.nio.file.{Path, Paths, Files}
 import common.Configurables._
@@ -52,11 +51,7 @@ object RunCFile extends App {
 
     RawTester.test(
       new BoomCore(hex.toString),
-      Seq(
-        WriteVcdAnnotation,
-        VerilatorBackendAnnotation,
-        VerilatorCFlags(Seq("-Wno-type-limits"))
-      )
+      E2EUtils.testAnnotations
     ) { dut =>
         dut.clock.setTimeout(MAX_CYCLE_COUNT)
         println("Simulation started.")
