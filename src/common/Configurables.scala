@@ -18,16 +18,18 @@ object Configurables {
     // It will automatically be disabled in synthesis builds.
     object Profiling {
         var branchMispredictionRate: Boolean = true    // Track branch misprediction rate
+        var Utilization:             Boolean = true    // Track utilization of various structures
 
         // Shorthand for any profiling option being enabled
         def isAnyEnabled: Boolean = {
-            branchMispredictionRate
+            branchMispredictionRate || Utilization
         }
 
         // Utility for automatic pruning in synthesis.
         // This will be automatically called when building for synthesis to avoid unnecessary overhead.
         def prune() = {
             branchMispredictionRate = false
+            Utilization = false
         }
     }
 

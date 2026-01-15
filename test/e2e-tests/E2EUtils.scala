@@ -234,6 +234,30 @@ object E2EUtils {
                 println(f"  Misprediction Rate:   $rate%.2f%%")
             }
 
+            if (common.Configurables.Profiling.Utilization) {
+                println(f"Stage Utilization:")
+                val fetcher = p.busyFetcher.get.peek().litValue
+                val decoder = p.busyDecoder.get.peek().litValue
+                val dispatcher = p.busyDispatcher.get.peek().litValue
+                val alu = p.busyALU.get.peek().litValue
+                val bru = p.busyBRU.get.peek().litValue
+                val lsu = p.busyLSU.get.peek().litValue
+                val rob = p.busyROB.get.peek().litValue
+
+                def formatUtil(name: String, busy: BigInt): Unit = {
+                    val rate = if (cycle > 0) (busy.toDouble / cycle.toDouble) * 100.0 else 0.0
+                    println(f"  $name%-12s: $busy%8d / $cycle%8d ($rate%.2f%%)")
+                }
+
+                formatUtil("Fetcher", fetcher)
+                formatUtil("Decoder", decoder)
+                formatUtil("Dispatcher", dispatcher)
+                formatUtil("ALU", alu)
+                formatUtil("BRU", bru)
+                formatUtil("LSU", lsu)
+                formatUtil("ROB-Commit", rob)
+            }
+
             println("=========================================================")
         }
 

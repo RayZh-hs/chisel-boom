@@ -44,20 +44,6 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     val aluAdaptor = Module(new ALUAdaptor)
     val bruAdaptor = Module(new BRUAdaptor)
 
-    // Profiling
-    if (Configurables.Profiling.branchMispredictionRate) {
-        val totalBranches = WireInit(0.U(32.W))
-        val totalMispredicts = WireInit(0.U(32.W))
-
-        BoringUtils.addSink(totalBranches, "total_branches")
-        BoringUtils.addSink(totalMispredicts, "branch_mispredictions")
-        io.profiler.totalBranches.get := totalBranches
-        io.profiler.totalMispredicts.get := totalMispredicts
-        
-        dontTouch(totalBranches)
-        dontTouch(totalMispredicts)
-    }
-
     // Memory Subsystem and MMIO Devices
     val lsu = Module(new LoadStoreUnit)
     val printDevice = Module(new PrintDevice)
@@ -315,4 +301,60 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
 
     prf.io.clrBusy.valid := rollback.valid && (rollback.bits.pdst =/= 0.U)
     prf.io.clrBusy.bits := rollback.bits.pdst
+
+    // --- Profiling ---
+    if (Configurables.Profiling.branchMispredictionRate) {
+        val totalBranches = WireInit(0.U(32.W))
+        val totalMispredicts = WireInit(0.U(32.W))
+
+        BoringUtils.addSink(totalBranches, "total_branches")
+        BoringUtils.addSink(totalMispredicts, "branch_mispredictions")
+        io.profiler.totalBranches.get := totalBranches
+        io.profiler.totalMispredicts.get := totalMispredicts
+        
+        dontTouch(totalBranches)
+        dontTouch(totalMispredicts)
+    }
+
+    if (Configurables.Profiling.Utilization) {
+        val fetcherBusy = fetcher.io.busy.get
+        val decoderBusy = decoder.io.out.valid
+        val dispatcherBusy = dispatcher.io.instOutput.valid
+        val aluBusy = aluAdaptor.io.busy.get
+        val bruBusy = bruAdaptor.io.busy.get
+        val lsuBusy = lsAdaptor.io.busy.get
+        val robBusy = rob.io.commit.valid
+
+        val fetcherBusyCount = RegInit(0.U(32.W))
+        val decoderBusyCount = RegInit(0.U(32.W))
+        val dispatcherBusyCount = RegInit(0.U(32.W))
+        val aluBusyCount = RegInit(0.U(32.W))
+        val bruBusyCount = RegInit(0.U(32.W))
+        val lsuBusyCount = RegInit(0.U(32.W))
+        val robBusyCount = RegInit(0.U(32.W))
+
+        when(fetcherBusy) { fetcherBusyCount := fetcherBusyCount + 1.U }
+        when(decoderBusy) { decoderBusyCount := decoderBusyCount + 1.U }
+        when(dispatcherBusy) { dispatcherBusyCount := dispatcherBusyCount + 1.U }
+        when(aluBusy) { aluBusyCount := aluBusyCount + 1.U }
+        when(bruBusy) { bruBusyCount := bruBusyCount + 1.U }
+        when(lsuBusy) { lsuBusyCount := lsuBusyCount + 1.U }
+        when(robBusy) { robBusyCount := robBusyCount + 1.U }
+
+        io.profiler.busyFetcher.get := fetcherBusyCount
+        io.profiler.busyDecoder.get := decoderBusyCount
+        io.profiler.busyDispatcher.get := dispatcherBusyCount
+        io.profiler.busyALU.get := aluBusyCount
+        io.profiler.busyBRU.get := bruBusyCount
+        io.profiler.busyLSU.get := lsuBusyCount
+        io.profiler.busyROB.get := robBusyCount
+
+        dontTouch(fetcherBusyCount)
+        dontTouch(decoderBusyCount)
+        dontTouch(dispatcherBusyCount)
+        dontTouch(aluBusyCount)
+        dontTouch(bruBusyCount)
+        dontTouch(lsuBusyCount)
+        dontTouch(robBusyCount)
+    }
 }

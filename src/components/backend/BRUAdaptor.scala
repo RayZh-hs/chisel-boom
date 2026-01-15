@@ -16,6 +16,7 @@ class BRUAdaptor extends CycleAwareModule {
         val prfRead = new PRFReadBundle
         val brUpdate = Output(new BranchUpdateBundle)
         val flush = Input(new FlushBundle)
+        val busy = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
     })
 
     val bru = Module(new BranchUnit)
@@ -37,6 +38,8 @@ class BRUAdaptor extends CycleAwareModule {
     val s3UpdSent = RegInit(
       false.B
     ) // Record the update already sent even if CDB not accepted
+
+    io.busy.foreach(_ := s1Valid || s2Valid || s3Valid)
 
     val s3Ready = io.broadcastOut.ready || !s3Valid
     val s2Ready = s3Ready || !s2Valid
