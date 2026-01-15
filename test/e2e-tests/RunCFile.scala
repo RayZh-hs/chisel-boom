@@ -1,6 +1,7 @@
 package e2e
 
-import chiseltest._
+import chisel3._
+import chisel3.simulator.EphemeralSimulator._
 import core.BoomCore
 import java.nio.file.{Path, Paths, Files}
 import common.Configurables._
@@ -49,11 +50,17 @@ object RunCFile extends App {
 
     println(s"Running simulation using hex file: $hex")
 
-    RawTester.test(
-      new BoomCore(hex.toString),
-      E2EUtils.testAnnotations
-    ) { dut =>
-        dut.clock.setTimeout(MAX_CYCLE_COUNT)
+    simulate(new BoomCore(hex.toString)) { dut =>
+
+        dut.reset.poke(true.B)
+        dut.clock.step()
+        dut.reset.poke(false.B)
+
+        var cycle = 0
+        var result: BigInt = 0
+        var outputBuffer = scala.collection.mutable.ArrayBuffer[BigInt]()
+        var done = false
+
         println("Simulation started.")
 
         val simRes = E2EUtils.runSimulation(dut, MAX_CYCLE_COUNT)

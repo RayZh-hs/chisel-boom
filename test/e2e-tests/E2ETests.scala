@@ -1,7 +1,8 @@
 package e2e
 
 import org.scalatest.funsuite.AnyFunSuite
-import chiseltest._
+import chisel3._
+import chisel3.simulator.EphemeralSimulator._
 import core.BoomCore
 import Configurables._
 
@@ -11,7 +12,7 @@ import scala.jdk.CollectionConverters._
 import scala.sys.process.Process
 import firrtl.options.TargetDirAnnotation
 
-class E2ETests extends AnyFunSuite with ChiselScalatestTester {
+class E2ETests extends AnyFunSuite {
     import E2EUtils._
 
     if (sys.props.contains("verbose") || sys.props.contains("v")) {
@@ -45,11 +46,10 @@ class E2ETests extends AnyFunSuite with ChiselScalatestTester {
                 Files.copy(sourceHex, sharedHexPath, StandardCopyOption.REPLACE_EXISTING)
                 
                 // Use the shared path for the reused core instance
-                test(new BoomCore(sharedHexPath.toAbsolutePath.toString))
-                    .withAnnotations(
-                      Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
-                    ) { dut =>
-                        dut.clock.setTimeout(MAX_CYCLE_COUNT)
+                simulate(new BoomCore(sharedHexPath.toAbsolutePath.toString)) { dut =>
+                        dut.reset.poke(true.B)
+                        dut.clock.step()
+                        dut.reset.poke(false.B)
 
                         val simRes =
                             E2EUtils.runSimulation(dut, MAX_CYCLE_COUNT)

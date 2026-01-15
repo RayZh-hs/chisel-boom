@@ -2,8 +2,9 @@ package components.structures
 
 import chisel3._
 import chisel3.util._
+import utility.CycleAwareModule
 
-class FreeList(numRegs: Int, numArchRegs: Int) extends Module {
+class FreeList(numRegs: Int, numArchRegs: Int) extends CycleAwareModule {
     val numFreeRegisters = numRegs - numArchRegs
     val capacity = 1 << log2Ceil(numFreeRegisters)
     val width = log2Ceil(numRegs)
@@ -59,10 +60,16 @@ class FreeList(numRegs: Int, numArchRegs: Int) extends Module {
     when(!isInit) {
         // This assertion will trigger in simulation if the Renamer/ROB logic
         // attempts to return more registers than exist in the system.
+        val nextFreeCount = tail - head +& numEnq - doAlloc.asUInt
         assert(
-          (tail - head +& numEnq - doAlloc.asUInt) <= numFreeRegisters.U,
-          "FreeList Overflow: Architectural limit of %d regs exceeded!",
-          numFreeRegisters.U
+          nextFreeCount <= numFreeRegisters.U,
+          "FreeList Overflow: Architectural limit of %d regs exceeded! head=%d tail=%d numEnq=%d doAlloc=%d nextCount=%d",
+          numFreeRegisters.U,
+          head,
+          tail,
+          numEnq,
+          doAlloc.asUInt,
+          nextFreeCount
         )
 
         head := head + doAlloc.asUInt

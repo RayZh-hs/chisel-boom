@@ -52,7 +52,11 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
 
     // --- Unified Memory System Integration ---
     val memConf = MemConfig(idWidth = 4, addrWidth = 32, dataWidth = 128)
-    val dram = Module(new MockDRAM(memConf, latency = 20, sizeBytes = Derived.MEM_SIZE, initFile = Some(hexFile)))
+    
+    // Switch to DPI-based DRAM
+    val dram = Module(new DPIDRAM(memConf, hexFile))
+    dram.io.clock := clock
+    dram.io.reset := reset.asBool
 
     // Arbiter for DRAM Requests (2 Masters: D-Cache (0), I-Cache (1))
     val dramArb = Module(new RRArbiter(new MemRequest(memConf), 2))
@@ -300,7 +304,6 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     bruAdaptor.io.flush := flushCtrl
     lsAdaptor.io.flush := flushCtrl
 
-    rob.io.flush := false.B
 
     // Unused PRF readyAddrs
     prf.io.readyAddrs(2) := 0.U

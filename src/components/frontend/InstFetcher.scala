@@ -12,6 +12,7 @@ class InstFetcher extends CycleAwareModule {
         val instAddr =
             Output(UInt(32.W)) // Inst Addr to be routed to BTB and ICache
         val instData = Input(UInt(32.W)) // Inst Data from ICache
+        val instValid = Input(Bool()) // New: ICache Response Valid
         val btbResult = Input(Valid(UInt(32.W))) // Branch Target from BTB
         val ifOut = Decoupled(
           new FetchToDecodeBundle()
@@ -23,6 +24,7 @@ class InstFetcher extends CycleAwareModule {
     // Forward declaration: Stage 2 states
     val s2Valid = RegInit(false.B)
     val s2PC = Reg(UInt(32.W))
+    val s2Waiting = RegInit(false.B) // New: Waiting for I-Cache
 
     // =========================================================
     // Control Signals
@@ -35,7 +37,8 @@ class InstFetcher extends CycleAwareModule {
     // 1. S2 is empty (!s2_valid)
     // 2. S2 is moving to Decode (s2_fire)
     // 3. We are flushing (io.pcOverwrite) -> everything is cleared and we restart
-    val s1Ready = !s2Valid || s2Fire || io.pcOverwrite.valid
+    // 4. BUT we must not be waiting for I-Cache fill for S2
+    val s1Ready = (!s2Valid || s2Fire) && !s2Waiting || io.pcOverwrite.valid
 
     // =========================================================
     // Stage 1 (S1): PC Generation & Request
@@ -45,7 +48,7 @@ class InstFetcher extends CycleAwareModule {
     val fetchAddr = Wire(UInt(32.W))
     when(io.pcOverwrite.valid) {
         fetchAddr := io.pcOverwrite.bits
-    }.elsewhen(s2Valid && !s2Fire) {
+    }.elsewhen(s2Waiting) {
         fetchAddr := s2PC // Hold the target pc if S2 is not moving
     }.elsewhen(io.btbResult.valid) {
         fetchAddr := io.btbResult.bits
@@ -59,16 +62,25 @@ class InstFetcher extends CycleAwareModule {
     when(io.pcOverwrite.valid) {
         // Priority 1: External Flush / Exception (Overrides everything)
         nextPC := io.pcOverwrite.bits + 4.U
+        s2Waiting := false.B // Reset waiting on flush
     }.elsewhen(io.btbResult.valid) {
         // Priority 2: Branch Prediction Redirect
         nextPC := io.btbResult.bits + 4.U
+        s2Waiting := true.B // Anticipate wait for new inst
     }.elsewhen(s1Ready) {
         // Priority 3: S1 is working, so push the pc (PC + 4)
         nextPC := pc + 4.U
+        s2Waiting := true.B // We issued a fetch
     }.otherwise {
         nextPC := pc
+        // s2Waiting logic below handles persistence
     }
-    pc := nextPC
+    
+    // We only update PC if we are not stalled waiting for I-Cache
+    // If s2Waiting is true, logic below handles it:
+    when(!s2Waiting || io.instValid || io.pcOverwrite.valid) {
+         pc := nextPC
+    }
 
     // =========================================================
     // Stage 2 (S2): State Update
@@ -81,8 +93,15 @@ class InstFetcher extends CycleAwareModule {
     val s1Fire = s1Ready
 
     when(s1Fire) {
-        s2Valid := true.B
+        // Transition to S2 (Waiting for Data)
         s2PC := fetchAddr
+        s2Waiting := true.B 
+        // s2Valid is NOT true yet. It becomes true when instValid arrives.
+        s2Valid := false.B
+    }.elsewhen(s2Waiting && io.instValid) {
+        // Data Arrived
+        s2Valid := true.B
+        s2Waiting := false.B
     }.elsewhen(s2Fire) {
         s2Valid := false.B
     }
