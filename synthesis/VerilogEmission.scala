@@ -40,13 +40,21 @@ object VerilogEmission {
           "--split-verilog"
         )
 
+        val firtoolOpts = Array(
+          "-disable-all-randomization",
+          "-preserve-values=named",  // Preserves signal names for timing reports [web:1][web:9]
+          // "-strip-debug-info",    // Removed to allow debugging
+          "--repl-seq-mem",
+          "--repl-seq-mem-file=mems.conf"
+        )
+
         // Prune optional profiling and elaboration wiring for synthesis
         Profiling.prune()
         Elaboration.prune()
         ChiselStage.emitSystemVerilogFile(
           new BoomCore(hexFile),
           args = genArgs,
-          firtoolOpts = Array("-disable-all-randomization", "-strip-debug-info")
+          firtoolOpts = firtoolOpts
         )
 
         println(s"Design elaborated to $buildDir")
