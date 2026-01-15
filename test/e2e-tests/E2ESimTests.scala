@@ -1,8 +1,6 @@
 package e2e
 
 import org.scalatest.funsuite.AnyFunSuite
-import chiseltest._
-import core.BoomCore
 import Configurables._
 
 import java.nio.charset.StandardCharsets
@@ -10,7 +8,7 @@ import java.nio.file.{Files, Path, Paths}
 import scala.jdk.CollectionConverters._
 import scala.sys.process.Process
 
-class E2ESimTests extends AnyFunSuite with ChiselScalatestTester {
+class E2ESimTests extends AnyFunSuite {
     import E2EUtils._
 
     if (sys.props.contains("verbose") || sys.props.contains("v")) {
@@ -37,32 +35,25 @@ class E2ESimTests extends AnyFunSuite with ChiselScalatestTester {
                 val expected = readExpected(cFile)
                 val hex = buildHexFor(cFile)
 
-                setupSimulation()
-                test(new BoomCore(hex.toString))
-                    .withAnnotations(testAnnotations) { dut =>
-                        // Sim tests might need more cycles
-                        val maxCycles = MAX_CYCLE_COUNT
-                        dut.clock.setTimeout(maxCycles)
+                val maxCycles = MAX_CYCLE_COUNT
+                val simRes = runTestWithHex(hex, maxCycles)
 
-                        val simRes = E2EUtils.runSimulation(dut, maxCycles)
+                assert(
+                  !simRes.timedOut,
+                  s"Simulation timed out after ${simRes.cycles} cycles"
+                )
 
-                        assert(
-                          !simRes.timedOut,
-                          s"Simulation timed out after ${simRes.cycles} cycles"
-                        )
-
-                        if (simRes.output.isEmpty && expected.length == 1) {
-                            assert(
-                              simRes.result == expected.head,
-                              s"Expected return value ${expected.head}, got ${simRes.result} (No output captured)"
-                            )
-                        } else {
-                            assert(
-                              simRes.output == expected,
-                              s"Expected $expected, got ${simRes.output}"
-                            )
-                        }
-                    }
+                if (simRes.output.isEmpty && expected.length == 1) {
+                    assert(
+                      simRes.result == expected.head,
+                      s"Expected return value ${expected.head}, got ${simRes.result} (No output captured)"
+                    )
+                } else {
+                    assert(
+                      simRes.output == expected,
+                      s"Expected $expected, got ${simRes.output}"
+                    )
+                }
             }
         }
     } else {

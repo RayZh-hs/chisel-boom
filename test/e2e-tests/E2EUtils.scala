@@ -1,11 +1,11 @@
 package e2e
 
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, Path, Paths, StandardCopyOption}
+import scala.jdk.CollectionConverters._
 import scala.sys.process.Process
-import chiseltest._
-import chiseltest.simulator.VerilatorCFlags
-import firrtl2.annotations.Annotation
+import chisel3._
+import chisel3.simulator.EphemeralSimulator._
 import core.BoomCore
 
 object E2EUtils {
@@ -13,12 +13,6 @@ object E2EUtils {
     val isCI: Boolean =
         sys.env.get("CI").contains("true") || sys.env.contains("GITHUB_ACTIONS")
 
-    // Common test annotations for all simulations
-    val testAnnotations: Seq[Annotation] = Seq(
-      VerilatorBackendAnnotation,
-      VerilatorCFlags(Seq("-Wno-type-limits"))
-    ) ++ (if (Configurables.ENABLE_VCD && !isCI) Seq(WriteVcdAnnotation)
-          else Seq.empty)
     def findRepoRoot(start: Path): Path = {
         var cur = start
         while (cur != null && !Files.exists(cur.resolve("build.mill"))) {
@@ -35,6 +29,7 @@ object E2EUtils {
         repoRoot.resolve("test/e2e-tests/resources/expected")
     val linkageDir: Path = repoRoot.resolve("test/e2e-tests/resources/linkage")
     val genDir: Path = repoRoot.resolve("test/e2e-tests/generated")
+    val sharedHexPath: Path = genDir.resolve("shared_program.hex")
     val simtestsDir: Path = cDir.resolve("simtests")
     val skipJson: Path = repoRoot.resolve("test/e2e-tests/resources/skip.jsonc")
 
@@ -138,6 +133,26 @@ object E2EUtils {
         val crt0 = linkageDir.resolve("crt0.S")
         val mathC = linkageDir.resolve("math.c")
 
+        // Check dependencies (source, linker script, startup code, headers)
+        val includeDir = cDir.resolve("include")
+        val headerFiles = if (Files.isDirectory(includeDir)) {
+            Files.list(includeDir).iterator().asScala.toList
+        } else {
+            Nil
+        }
+        val dependencies = Seq(cFile, linkLd, crt0) ++ headerFiles
+
+        // If hex exists and is newer than all dependencies, skip rebuild
+        if (Files.exists(hex)) {
+            val hexTime = Files.getLastModifiedTime(hex).toMillis
+            val upToDate = !dependencies.exists(d =>
+                Files.exists(d) && Files
+                    .getLastModifiedTime(d)
+                    .toMillis > hexTime
+            )
+            if (upToDate) return hex
+        }
+
         val compileCmd = Seq(
           gcc,
           "-march=rv32i",
@@ -200,9 +215,26 @@ object E2EUtils {
 
     def setupSimulation() {
         val requireReport = System.getProperty("report") == "true"
+        // println(s"requireReport=$requireReport, isAnyEnabled=${common.Configurables.Profiling.isAnyEnabled}")
         if (!requireReport) {
             common.Configurables.Profiling.prune()
         }
+    }
+
+    def runTestWithHex(
+        hexPath: Path,
+        maxCycles: Int = Configurables.MAX_CYCLE_COUNT
+    ): SimulationResult = {
+        setupSimulation()
+        // Shared path for the hex file to avoid recompilation of BoomCore
+        // We place it outside the specific test run directory so it persists/is accessible
+        Files.copy(hexPath, sharedHexPath, StandardCopyOption.REPLACE_EXISTING)
+
+        var res: SimulationResult = null
+        simulate(new BoomCore(sharedHexPath.toAbsolutePath.toString)) { dut =>
+            res = runSimulation(dut, maxCycles)
+        }
+        res
     }
 
     def runSimulation(
@@ -211,26 +243,73 @@ object E2EUtils {
         debugCallback: (Int) => Unit = _ => (),
         report: Boolean = true
     ): SimulationResult = {
+
+        dut.reset.poke(true.B)
+        dut.clock.step()
+        dut.reset.poke(false.B)
+
         var cycle = 0
         var result: BigInt = 0
         var outputBuffer = scala.collection.mutable.ArrayBuffer[BigInt]()
         var done = false
 
+        val batchSize = 4096
+
         while (!done && cycle < maxCycles) {
             debugCallback(cycle)
 
-            if (dut.io.put.valid.peek().litToBoolean) {
-                outputBuffer += dut.io.put.bits.data
-                    .peek()
-                    .litValue
-                    .toInt
+            // Run in batches
+            try {
+                // Step for a batch (or remainder)
+                val steps = Math.min(batchSize, maxCycles - cycle)
+                dut.clock.step(steps)
+                cycle += steps
+            } catch {
+                case e: Exception
+                    if e.getMessage != null && (e.getMessage.contains(
+                      "stop"
+                    ) || e.getMessage.contains("Stop") || e.getMessage.contains(
+                      "simulation has already finished"
+                    )) =>
+                    done = true
+                case e: Throwable =>
+                    val str = e.toString
+                    val msg = if (e.getMessage != null) e.getMessage else ""
+                    if (
+                      str.contains("StopException") || str.contains(
+                        "stop"
+                      ) || msg.contains("simulation has already finished")
+                    ) {
+                        done = true
+                    } else {
+                        throw e
+                    }
             }
 
+            // Check for exit condition (latched)
+            // Even if simulation stopped, peekable state should remain
             if (dut.io.exit.valid.peek().litToBoolean) {
-                result = dut.io.exit.bits.data.peek().litValue.toInt
+                result = dut.io.exit.bits.peek().litValue
                 done = true
-            } else {
+            }
+
+            // Drain debug output queue
+            // We use a small loop to drain up to 'batchSize' elements or until empty
+            var drained = 0
+            while (drained < 64 && dut.io.put.valid.peek().litToBoolean) {
+                val outVal = dut.io.put.bits.peek().litValue
+                // Convert unsigned 32-bit to signed 32-bit BigInt
+                val outSigned =
+                    if (outVal >= BigInt("80000000", 16))
+                        outVal - BigInt("100000000", 16)
+                    else outVal
+                outputBuffer += outSigned
+
+                // Handshake
+                dut.io.put.ready.poke(true.B)
                 dut.clock.step(1)
+                dut.io.put.ready.poke(false.B)
+                drained += 1
                 cycle += 1
             }
         }
@@ -285,121 +364,33 @@ object E2EUtils {
                 val fetcher = p.busyFetcher.get.peek().litValue
                 val decoder = p.busyDecoder.get.peek().litValue
                 val dispatcher = p.busyDispatcher.get.peek().litValue
-                val issueALU = p.busyIssueALU.get.peek().litValue
-                val issueBRU = p.busyIssueBRU.get.peek().litValue
                 val alu = p.busyALU.get.peek().litValue
                 val bru = p.busyBRU.get.peek().litValue
                 val lsu = p.busyLSU.get.peek().litValue
-                val writeback = p.busyWriteback.get.peek().litValue
                 val rob = p.busyROB.get.peek().litValue
-
-                // Fetch throughput counts
-                val countFetcher = p.countFetcher.get.peek().litValue
-                val countDecoder = p.countDecoder.get.peek().litValue
-                val countDispatcher = p.countDispatcher.get.peek().litValue
-                val countIssueALU = p.countIssueALU.get.peek().litValue
-                val countIssueBRU = p.countIssueBRU.get.peek().litValue
-                val countLSU = p.countLSU.get.peek().litValue
-                val countWriteback = p.countWriteback.get.peek().litValue
-                
-                // Dependency Waits
-                val waitDepALU = p.waitDepALU.get.peek().litValue
-                val waitDepBRU = p.waitDepBRU.get.peek().litValue
-
-                // Fetch new stall signals
-                val fetcherStallBuffer = p.fetcherStallBuffer.get.peek().litValue
-                val decoderStallDispatch = p.decoderStallDispatch.get.peek().litValue
-                val dispatcherStallFreeList = p.dispatcherStallFreeList.get.peek().litValue
-                val dispatcherStallROB = p.dispatcherStallROB.get.peek().litValue
-                val dispatcherStallIssue = p.dispatcherStallIssue.get.peek().litValue
-                val issueALUStallOperands = p.issueALUStallOperands.get.peek().litValue
-                val issueALUStallPort = p.issueALUStallPort.get.peek().litValue
-                val issueBRUStallOperands = p.issueBRUStallOperands.get.peek().litValue
-                val issueBRUStallPort = p.issueBRUStallPort.get.peek().litValue
-                val lsuStallCommit = p.lsuStallCommit.get.peek().litValue
 
                 def formatUtil(name: String, busy: BigInt): Unit = {
                     val rate = if (cycle > 0) (busy.toDouble / cycle.toDouble) * 100.0 else 0.0
                     println(f"  $name%-12s: $busy%8d / $cycle%8d ($rate%.2f%%)")
                 }
-                
-                def formatUtilWithThroughput(name: String, busy: BigInt, processed: BigInt): Unit = {
-                    val rate = if (cycle > 0) (busy.toDouble / cycle.toDouble) * 100.0 else 0.0
-                    val throughput = if (busy > 0) processed.toDouble / busy.toDouble else 0.0
-                    println(f"  $name%-12s: $busy%8d / $cycle%8d ($rate%.2f%%) [TP: $throughput%.2f instr/busy-cycle]")
-                }
 
-                def formatSubUtil(name: String, busy: BigInt): Unit = {
-                    val rate = if (cycle > 0) (busy.toDouble / cycle.toDouble) * 100.0 else 0.0
-                    println(f"    $name%-18s: $busy%8d / $cycle%8d ($rate%.2f%%)")
-                }
-
-                formatUtilWithThroughput("Fetcher", fetcher, countFetcher)
-                formatSubUtil("Stall-Buffer", fetcherStallBuffer)
-                
-                formatUtilWithThroughput("Decoder", decoder, countDecoder)
-                formatSubUtil("Stall-Dispatch", decoderStallDispatch)
-
-                formatUtilWithThroughput("Dispatcher", dispatcher, countDispatcher)
-                formatSubUtil("Stall-FreeList", dispatcherStallFreeList)
-                formatSubUtil("Stall-ROB", dispatcherStallROB)
-                formatSubUtil("Stall-Issue", dispatcherStallIssue)
-
-                formatUtil("Issue-ALU", issueALU)
-                formatSubUtil("Stall-Operands", issueALUStallOperands)
-                formatSubUtil("Stall-Port", issueALUStallPort)
-                val avgWaitALU = if(countIssueALU > 0) waitDepALU.toDouble / countIssueALU.toDouble else 0.0
-                println(f"    Avg Dep Latency   : $avgWaitALU%.2f cycles/instr")
-
-                formatUtil("Issue-BRU", issueBRU)
-                formatSubUtil("Stall-Operands", issueBRUStallOperands)
-                formatSubUtil("Stall-Port", issueBRUStallPort)
-                val avgWaitBRU = if(countIssueBRU > 0) waitDepBRU.toDouble / countIssueBRU.toDouble else 0.0
-                println(f"    Avg Dep Latency   : $avgWaitBRU%.2f cycles/instr")
-
+                formatUtil("Fetcher", fetcher)
+                formatUtil("Decoder", decoder)
+                formatUtil("Dispatcher", dispatcher)
                 formatUtil("ALU", alu)
                 formatUtil("BRU", bru)
-                formatUtilWithThroughput("LSU", lsu, countLSU)
-                formatSubUtil("Stall-Commit", lsuStallCommit)
-
-                formatUtilWithThroughput("Writeback", writeback, countWriteback)
-                formatUtil("ROB-Commit", rob)
-
-                println(f"Average Queue/Buffer Depth:")
-                // Fetch Depth
-                val fetchD = if(cycle > 0) p.fetchQueueDepth.get.peek().litValue.toDouble / cycle.toDouble else 0.0
-                println(f"  Fetch Queue : $fetchD%.2f")
-
-                // Issue ALU Depth
-                val issueALUD = if(cycle > 0) p.issueALUDepth.get.peek().litValue.toDouble / cycle.toDouble else 0.0
-                val issueBRUD = if(cycle > 0) p.issueBRUDepth.get.peek().litValue.toDouble / cycle.toDouble else 0.0
-                println(f"  Issue ALU   : $issueALUD%.2f")
-                println(f"  Issue BRU   : $issueBRUD%.2f")
-
-                // LSU Depth
-                val lsuD = if(cycle > 0) p.lsuQueueDepth.get.peek().litValue.toDouble / cycle.toDouble else 0.0
-                println(f"  LSU Buffer  : $lsuD%.2f")
-
-                // ROB Depth
-                val robD = if(cycle > 0) p.robDepth.get.peek().litValue.toDouble / cycle.toDouble else 0.0
-                println(f"  ROB         : $robD%.2f")
-                
-                println(f"Speculation Stats:")
-                val retired = p.totalInstructions.get.peek().litValue
-                val dispatched = countDispatcher // Use Dispatch count as proxy for total speculative dispatched
-                val squashed = if(dispatched > retired) dispatched - retired else 0
-                println(f"  Total Dispatched    : $dispatched")
-                println(f"  Total Retired       : $retired")
-                println(f"  Squashed Instructions: $squashed")
-
-
-                formatUtil("Writeback", writeback)
+                formatUtil("LSU", lsu)
                 formatUtil("ROB-Commit", rob)
             }
 
             println("=========================================================")
         }
 
-        SimulationResult(result, outputBuffer.toSeq, cycle, !done)
+        SimulationResult(
+          result,
+          outputBuffer.toSeq,
+          cycle,
+          !done && cycle >= maxCycles
+        )
     }
 }

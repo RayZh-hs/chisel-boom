@@ -15,6 +15,9 @@ class InstructionMemory(val hexFilePath: String) extends Module {
 
     // Initialize instruction memory from hex file
     loadMemoryFromFileInline(imem, hexFilePath)
+    when(io.addr(1, 0) =/= 0.U) {
+        printf("InstructionMemory: Bad Fetch Addr -> %x\n", io.addr)
+    }
     assert(
       io.addr(1, 0) === 0.U,
       "Instruction fetch address must be 4-byte aligned"

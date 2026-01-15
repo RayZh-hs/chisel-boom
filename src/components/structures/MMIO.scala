@@ -45,13 +45,32 @@ class MMIODevice extends CycleAwareModule {
 }
 
 class PrintDevice extends MMIODevice {
-    when(io.req.valid && !io.req.bits.isLoad) {
-        printf(p"@PRINT:${io.req.bits.data.asSInt}\n")
-    }
+    val debugOut = IO(Decoupled(UInt(32.W)))
+
+    // A large enough queue to buffer output
+    // The testbench should drain this frequently enough
+    val queue = Module(new Queue(UInt(32.W), 256))
+    chisel3.assert(queue.io.enq.ready, "PrintDevice queue is full!")
+    val write = io.req.valid && !io.req.bits.isLoad
+
+    queue.io.enq.valid := write
+    queue.io.enq.bits := io.req.bits.data
+    
+    // Connect to output
+    debugOut <> queue.io.deq
 }
 
 class ExitDevice extends MMIODevice {
+    val exitOut = IO(Output(Valid(UInt(32.W))))
+    
+    val stopping = RegInit(false.B)
+    val exitCode = Reg(UInt(32.W))
+
+    exitOut.valid := stopping
+    exitOut.bits := exitCode
+
     when(io.req.valid && !io.req.bits.isLoad) {
-        printf(p"@EXIT: Exit Code = ${io.req.bits.data.asUInt}\n")
+        stopping := true.B
+        exitCode := io.req.bits.data
     }
 }

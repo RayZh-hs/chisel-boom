@@ -20,8 +20,8 @@ import components.structures.{
 
 class BoomCore(val hexFile: String) extends CycleAwareModule {
     val io = IO(new Bundle {
-        val exit = Output(Valid(new LoadStoreAction))
-        val put = Output(Valid(new LoadStoreAction))
+        val exit = Output(Valid(UInt(32.W)))
+        val put = Decoupled(UInt(32.W))
         val profiler = Output(new BoomCoreProfileBundle)
     })
 
@@ -61,12 +61,9 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     exitDevice.io <> mmio.io.devices(1)
 
     // Expose exit device to top level
-    io.exit.valid := exitDevice.io.req.valid && !exitDevice.io.req.bits.isLoad
-    io.exit.bits := exitDevice.io.req.bits
-
-    io.put.valid := printDevice.io.req.valid && !printDevice.io.req.bits.isLoad
-    io.put.bits := printDevice.io.req.bits
-
+    io.exit <> exitDevice.exitOut
+    io.put <> printDevice.debugOut
+    
     val prf = Module(new PhysicalRegisterFile(Derived.PREG_COUNT, 6, 1, 32))
     val bc = Module(new BroadcastChannel)
 

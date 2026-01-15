@@ -11,6 +11,10 @@ class IssueBufferTest extends AnyFlatSpec with Matchers {
     "IssueBuffer" should "enqueue and issue an instruction when operands are ready" in {
         simulate(new IssueBuffer(new ALUInfo, 4, "IB")) { dut =>
             // Enqueue an instruction with ready operands
+            dut.reset.poke(true.B)
+            dut.clock.step()
+            dut.reset.poke(false.B)
+
             dut.io.in.valid.poke(true.B)
             dut.io.in.bits.robTag.poke(1.U)
             dut.io.in.bits.pdst.poke(10.U)
@@ -34,6 +38,11 @@ class IssueBufferTest extends AnyFlatSpec with Matchers {
     it should "wait for broadcast to wake up instructions" in {
         simulate(new IssueBuffer(new ALUInfo, 4, "IB")) { dut =>
             // Enqueue an instruction with non-ready src1
+            dut.reset.poke(true.B)
+            dut.clock.step()
+            dut.reset.poke(false.B)
+            
+            dut.io.broadcast.valid.poke(false.B)
             dut.io.in.valid.poke(true.B)
             dut.io.in.bits.src1.poke(5.U)
             dut.io.in.bits.src1Ready.poke(false.B)
@@ -61,6 +70,10 @@ class IssueBufferTest extends AnyFlatSpec with Matchers {
         // 2. Tag 2 (The branch, keep)
         // 3. Tag 3 (Younger, kill)
         simulate(new IssueBuffer(new ALUInfo, 8, "IB")) { dut =>
+            dut.reset.poke(true.B)
+            dut.clock.step()
+            dut.reset.poke(false.B)
+
             dut.io.in.valid.poke(true.B)
             dut.io.in.bits.robTag.poke(1.U)
             dut.io.in.bits.src1.poke(10.U) // Waiting on P10
@@ -111,6 +124,9 @@ class IssueBufferTest extends AnyFlatSpec with Matchers {
             // 61 -> Safe
             // 2  -> Safe
             // 3  -> Kill
+            dut.reset.poke(true.B)
+            dut.clock.step()
+            dut.reset.poke(false.B)
 
             dut.io.in.valid.poke(true.B)
             dut.io.in.bits.robTag.poke(61.U)
