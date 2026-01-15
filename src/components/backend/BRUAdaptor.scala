@@ -7,6 +7,7 @@ import common.Configurables._
 import components.structures.BranchUnit
 import components.structures.{BRUInfo, IssueBufferEntry}
 import utility.CycleAwareModule
+import chisel3.util.experimental.BoringUtils
 
 class BRUAdaptor extends CycleAwareModule {
     val io = IO(new Bundle {
@@ -120,5 +121,20 @@ class BRUAdaptor extends CycleAwareModule {
         printf(
           p"BRU Update, PC: 0x${Hexadecimal(io.brUpdate.pc)}, Taken: ${io.brUpdate.taken}, Target: 0x${Hexadecimal(io.brUpdate.target)}, Mispredict: ${io.brUpdate.mispredict}\n"
         )
+    }
+
+    if (Configurables.Profiling.branchMispredictionRate) {
+        val totalBranchCounter = RegInit(0.U(32.W))
+        val mispredictCounter = RegInit(0.U(32.W))
+
+        when(io.brUpdate.valid) {
+            totalBranchCounter := totalBranchCounter + 1.U
+            when(io.brUpdate.mispredict) {
+                mispredictCounter := mispredictCounter + 1.U
+            }
+        }
+
+        BoringUtils.addSource(totalBranchCounter, "total_branches")
+        BoringUtils.addSource(mispredictCounter, "branch_mispredictions")
     }
 }

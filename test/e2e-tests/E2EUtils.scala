@@ -214,6 +214,29 @@ object E2EUtils {
             }
         }
 
+        if (common.Configurables.Profiling.isAnyEnabled) {
+            println("=========================================================")
+            println("                    PROFILING REPORT                     ")
+            println("=========================================================")
+
+            val p = dut.io.profiler 
+            if (common.Configurables.Profiling.branchMispredictionRate) {
+                val total = p.totalBranches.get.peek().litValue
+                val mispred = p.totalMispredicts.get.peek().litValue
+                val rate =
+                    if (total > 0)
+                        (mispred.toDouble / total.toDouble) * 100.0
+                    else 0.0
+
+                println(f"Branch Misprediction Rate:")
+                println(f"  Total Branches:       $total")
+                println(f"  Total Mispredictions: $mispred")
+                println(f"  Misprediction Rate:   $rate%.2f%%")
+            }
+
+            println("=========================================================")
+        }
+
         SimulationResult(result, outputBuffer.toSeq, cycle, !done)
     }
 }

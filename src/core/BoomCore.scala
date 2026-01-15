@@ -2,6 +2,7 @@ package core
 
 import chisel3._
 import chisel3.util._
+import chisel3.util.experimental.BoringUtils
 import utility.CycleAwareModule
 import components.frontend._
 import components.backend._
@@ -21,7 +22,9 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     val io = IO(new Bundle {
         val exit = Output(Valid(new LoadStoreAction))
         val put = Output(Valid(new LoadStoreAction))
+        val profiler = Output(new BoomCoreProfileBundle)
     })
+
 
     // Component Instantiation
     val fetcher = Module(new InstFetcher)
@@ -40,6 +43,20 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     val bruIB = Module(new IssueBuffer(new BRUInfo, 4, "BRU_IB"))
     val aluAdaptor = Module(new ALUAdaptor)
     val bruAdaptor = Module(new BRUAdaptor)
+
+    // Profiling
+    if (Configurables.Profiling.branchMispredictionRate) {
+        val totalBranches = WireInit(0.U(32.W))
+        val totalMispredicts = WireInit(0.U(32.W))
+
+        BoringUtils.addSink(totalBranches, "total_branches")
+        BoringUtils.addSink(totalMispredicts, "branch_mispredictions")
+        io.profiler.totalBranches.get := totalBranches
+        io.profiler.totalMispredicts.get := totalMispredicts
+        
+        dontTouch(totalBranches)
+        dontTouch(totalMispredicts)
+    }
 
     // Memory Subsystem and MMIO Devices
     val lsu = Module(new LoadStoreUnit)

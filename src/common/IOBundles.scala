@@ -144,3 +144,13 @@ class MemoryInterface extends Bundle {
     val req = Flipped(Valid(new LoadStoreAction))
     val resp = Valid(UInt(32.W))
 }
+
+class BoomCoreProfileBundle extends Bundle {
+    import common.Configurables.Profiling._
+    def optfield[T <: Data](cond: Boolean, gen: => T): Option[T] = {
+        if (cond) Some(gen) else None
+    }
+
+    val totalBranches = optfield(branchMispredictionRate, UInt(32.W))
+    val totalMispredicts = optfield(branchMispredictionRate, UInt(32.W))
+}

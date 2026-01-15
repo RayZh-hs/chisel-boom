@@ -19,6 +19,11 @@ object Configurables {
     object Profiling {
         var branchMispredictionRate: Boolean = true    // Track branch misprediction rate
 
+        // Shorthand for any profiling option being enabled
+        def isAnyEnabled: Boolean = {
+            branchMispredictionRate
+        }
+
         // Utility for automatic pruning in synthesis.
         // This will be automatically called when building for synthesis to avoid unnecessary overhead.
         def prune() = {
