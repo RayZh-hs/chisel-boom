@@ -19,10 +19,11 @@ object Configurables {
     object Profiling {
         var branchMispredictionRate: Boolean = true    // Track branch misprediction rate
         var Utilization:             Boolean = true    // Track utilization of various structures
+        var IPC:                     Boolean = true    // Track IPC (Instructions Per Cycle)
 
         // Shorthand for any profiling option being enabled
         def isAnyEnabled: Boolean = {
-            branchMispredictionRate || Utilization
+            branchMispredictionRate || Utilization || IPC
         }
 
         // Utility for automatic pruning in synthesis.
@@ -30,6 +31,7 @@ object Configurables {
         def prune() = {
             branchMispredictionRate = false
             Utilization = false
+            IPC = false
         }
     }
 

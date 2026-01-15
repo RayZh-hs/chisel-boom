@@ -154,6 +154,10 @@ class BoomCoreProfileBundle extends Bundle {
     val totalBranches = optfield(branchMispredictionRate, UInt(32.W))
     val totalMispredicts = optfield(branchMispredictionRate, UInt(32.W))
 
+    // IPC
+    val totalInstructions = optfield(IPC, UInt(64.W))
+    val totalCycles = optfield(IPC, UInt(64.W))
+
     // Utilization
     val busyFetcher = optfield(Utilization, UInt(32.W))
     val busyDecoder = optfield(Utilization, UInt(32.W))

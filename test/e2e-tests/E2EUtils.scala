@@ -234,6 +234,17 @@ object E2EUtils {
                 println(f"  Misprediction Rate:   $rate%.2f%%")
             }
 
+            if (common.Configurables.Profiling.IPC) {
+                val insts = p.totalInstructions.get.peek().litValue
+                val cycles = p.totalCycles.get.peek().litValue
+                val ipc = if (cycles > 0) insts.toDouble / cycles.toDouble else 0.0
+                
+                println(f"IPC Performance:")
+                println(f"  Total Instructions:   $insts")
+                println(f"  Total Cycles:         $cycles")
+                println(f"  IPC:                  $ipc%.4f")
+            }
+
             if (common.Configurables.Profiling.Utilization) {
                 println(f"Stage Utilization:")
                 val fetcher = p.busyFetcher.get.peek().litValue

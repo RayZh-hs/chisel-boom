@@ -316,6 +316,22 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         dontTouch(totalMispredicts)
     }
 
+    if (Configurables.Profiling.IPC) {
+        val instructionCount = RegInit(0.U(64.W))
+        val cycleCount = RegInit(0.U(64.W))
+
+        when (rob.io.commit.valid && rob.io.commit.ready) {
+            instructionCount := instructionCount + 1.U
+        }
+        cycleCount := cycleCount + 1.U
+
+        io.profiler.totalInstructions.get := instructionCount
+        io.profiler.totalCycles.get := cycleCount
+
+        dontTouch(instructionCount)
+        dontTouch(cycleCount)
+    }
+
     if (Configurables.Profiling.Utilization) {
         val fetcherBusy = fetcher.io.busy.get
         val decoderBusy = decoder.io.out.valid
