@@ -45,10 +45,14 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
         
         val stallOperands = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
         val stallPort = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
+
+        val count = if (common.Configurables.Profiling.Utilization) Some(Output(UInt(log2Ceil(numEntries + 1).W))) else None
     })
 
     val buffer = Reg(Vec(numEntries, new IssueBufferEntry(gen)))
     val valid = RegInit(VecInit(Seq.fill(numEntries)(false.B)))
+
+    io.count.foreach(_ := PopCount(valid))
 
     when(io.flush.valid) {
         for (i <- 0 until numEntries) {
