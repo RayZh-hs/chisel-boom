@@ -1,0 +1,74 @@
+#!/bin/bash
+set -e
+
+# Declare requirements
+function requires() {
+    if ! command -v $1 &>/dev/null; then
+        echo "Requires $1"
+        exit 1
+    fi
+}
+
+requires riscv32-unknown-elf-gcc
+requires riscv32-unknown-elf-objdump
+
+do_compile=false
+do_simulation=false
+
+if [[ "$1" == "compile" || "$1" == "comp" ]]; then
+    do_compile=true
+elif [[ "$1" == "simulate" || "$1" == "sim" ]]; then
+    do_compile=true
+    do_simulation=true
+else
+    echo "Usage: $0 [compile|simulate] <test-name>"
+    exit 1
+fi
+
+test_name="$2"
+if [[ -z "$test_name" ]]; then
+    echo "Please provide a test name."
+    exit 1
+fi
+
+# Navigate to the Mango repository root
+cd $MANGO_REPO_PATH
+
+# Check if test file exists
+test_file="test/e2e-tests/resources/hex/${test_name}.s"
+if [[ ! -f "$test_file" ]]; then
+    echo "Test file $test_file does not exist."
+    exit 1
+fi
+
+# Compile the test
+mkdir -p test/e2e-tests/generated/hex
+dest_elf="test/e2e-tests/generated/hex/${test_name}.elf"
+dest_hex="test/e2e-tests/resources/hex/${test_name}.hex"
+dest_dump="test/e2e-tests/resources/hex/${test_name}.dump"
+if $do_compile; then
+    riscv32-unknown-elf-gcc -march=rv32i -mabi=ilp32 -O0 -ffreestanding \
+        -mstrict-align -fno-builtin -nostdlib -static \
+        -Wl,-T,test/e2e-tests/resources/linkage/link.ld \
+        -o "$dest_elf" "$test_file"
+
+    if [[ $? -ne 0 ]]; then
+        echo "Compilation failed for $test_name."
+        exit 1
+    fi
+    echo "- Compiled ${test_name}.s to $dest_elf."
+
+    # Generate dump and hex files
+    riscv32-unknown-elf-objdump -d "$dest_elf" > "$dest_dump"
+    echo "- Generated dump file at $dest_dump."
+    riscv32-unknown-elf-objcopy -O verilog "$dest_elf" "$dest_hex"
+    echo "- Generated hex file at $dest_hex."
+fi
+
+if $do_simulation; then
+    # Run mill test.runMain e2e.RunHexDump with the generated hex file
+    requires mill
+    mill --color false --disable-ticker test.runMain e2e.RunHexDump "$dest_hex" --verbose 2>&1 \
+        | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' > test_run_dir/$test_name.log
+    echo "- Log captured at test_run_dir/$test_name.log."
+fi
