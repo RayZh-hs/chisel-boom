@@ -223,6 +223,7 @@ object E2EUtils {
         }
 
         if (done && report && common.Configurables.Profiling.isAnyEnabled) {
+            Thread.sleep(100) // Wait for all prints to finish
             println("=========================================================")
             println("                    PROFILING REPORT                     ")
             println("=========================================================")
