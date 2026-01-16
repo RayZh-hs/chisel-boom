@@ -124,7 +124,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     // On RAS predict overwrite, set pc_overwrite for IF and reset ifQueue
     
     // RAS Recovery
-    rasAdaptor.io.recover := bruAdaptor.io.brUpdate.mispredict
+    rasAdaptor.io.recover := bruAdaptor.io.brUpdate.valid && bruAdaptor.io.brUpdate.mispredict
     rasAdaptor.io.recoverSP := bruAdaptor.io.brUpdate.rasSP
 
     val backendMispredict =

@@ -60,46 +60,54 @@ class RASAdaptor extends CycleAwareModule {
     val fire = io.in.fire
 
     // Instruction Decoding using Pre-decoded info
-    val isJ = isJAL || isJALR
+    val isJumpRel = isJAL || isJALR
 
     // Spec: CALL if J instruction and rd is x1 or x5
-    val isCall = isJ && (rd === 1.U || rd === 5.U)
+    val isCall = isJumpRel && (rd === 1.U || rd === 5.U)
 
     // Spec: RET if J instruction (JALR) and rs1 is x1 or x5 and rd is x0
     val isRet = isJALR && (rd === 0.U) && (rs1 === 1.U || rs1 === 5.U)
 
-    // RAS Operations
-    val push = fire && isCall
-    val pop = fire && isRet
+    when(io.recover) {
+      printf(p"RAS: Recovering RAS to SP=${io.recoverSP}\n")
+    }
 
-    ras.io.push := push
-    ras.io.pop := pop
-    ras.io.writeVal := inPacket.pc + 4.U
+    // RAS Operations: These operations should only occur when io.out.ready
+    when(io.out.ready && io.in.valid) {
+        val push = fire && isCall
+        val pop = fire && isRet
 
-    // Target Calculation
-    val targetJAL = inPacket.pc + jImm
-    val targetRET = ras.io.readVal
+        ras.io.push := push
+        ras.io.pop := pop
+        ras.io.writeVal := inPacket.pc + 4.U
 
-    // We can only reliably correct PC for JAL (static) and RET (RAS)
-    val calculatedTarget = Mux(isRet, targetRET, targetJAL)
+        // Target Calculation
+        val targetJAL = inPacket.pc + jImm
+        val targetRET = ras.io.readVal
 
-    val isPredictionWrong = inPacket.predictedTarget =/= calculatedTarget
-    val canCorrect =
-        isJAL || isRet // We don't correct JALR calls (register dependent)
+        // We can only reliably correct PC for JAL (static) and RET (RAS)
 
-    io.out.bits.currentSP := ras.io.currentSP
-    io.out.bits.flush := fire && canCorrect && isPredictionWrong
-    io.out.bits.flushNextPC := calculatedTarget
+        val calculatedTarget = Mux(isRet, targetRET, targetJAL)
+        val isPredictionWrong = (inPacket.predictedTarget =/= calculatedTarget) || (!inPacket.predict)
+        val canCorrect = isJAL || isRet
 
-    // Debugging info
-    when(canCorrect && isPredictionWrong) {
-      printf("RAS: Detected ")
-      when(isCall) {
-        printf("CALL ")
-      } .elsewhen(isRet) {
-        printf("RET ")
-      }
-      printf(p"at PC=${Hexadecimal(inPacket.pc)}\n")
-      printf(p"    Alternating to target: ${Hexadecimal(calculatedTarget)}\n")
+        io.out.bits.currentSP := ras.io.currentSP
+        io.out.bits.flush := fire && canCorrect && isPredictionWrong
+        io.out.bits.flushNextPC := calculatedTarget
+
+        // Debugging info
+        when(canCorrect && isPredictionWrong && io.out.ready) {
+            printf(
+              p"RAS: isRet=${isRet}, isCall=${isCall}, pc=0x${Hexadecimal(inPacket.pc)}\n"
+            )
+            printf(
+              p"RAS: alternating pc target to 0x${Hexadecimal(calculatedTarget)}\n"
+            )
+        }
+    }.otherwise {
+        ras.io.push := false.B
+        ras.io.pop := false.B
+        ras.io.writeVal := 0.U
+        io.out.bits := 0.U.asTypeOf(new RASAdaptorBundle)
     }
 }
