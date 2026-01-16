@@ -12,7 +12,7 @@ import utility.CycleAwareModule.Configurables.{
 object CycleAwareModule {
     object Configurables {
         // Maximum cycle count supported by CycleAwareModule in debugging
-        val MAX_CYCLE_COUNT = 4000000
+        val MAX_CYCLE_COUNT = 400000000
     }
 }
 

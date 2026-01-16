@@ -16,105 +16,90 @@ class MemorySubsystem extends Module {
         )
     })
 
-    val isMMIO = io.upstream.req.bits.addr(31) === 1.U
-
-    // --- Component Instantiation ---
-    // Cache Config: 64 Sets, 16 Byte Lines (128-bit)
+    // --- 1. Component Instantiation ---
     val cacheConf = CacheConfig(nSetsWidth = 6, nCacheLineWidth = 4)
     val cache = Module(new Cache(cacheConf))
-
-    // Connect Cache <-> DRAM
     cache.io.dram <> io.dram
 
-    // --- Routing Logic ---
-
-    // MMIO Path
-    io.mmio.req.valid := io.upstream.req.valid && isMMIO
-    io.mmio.req.bits := io.upstream.req.bits
-
-    // Cache Path (Normal Memory)
-    // We need to adapt the MemoryRequest to CachePort
-
-    // 1. Generate Write Mask for Cache
-    val wmask = Wire(UInt(4.W))
-    wmask := 0.U
-    switch(io.upstream.req.bits.opWidth) {
-        is(MemOpWidth.BYTE) { wmask := 1.U } // 0001
-        is(MemOpWidth.HALFWORD) { wmask := 3.U } // 0011
-        is(MemOpWidth.WORD) { wmask := 15.U } // 1111
-    }
-
-    cache.io.port.valid := io.upstream.req.valid && !isMMIO
-    cache.io.port.addr := io.upstream.req.bits.addr
-    cache.io.port.wdata := io.upstream.req.bits.data
-    cache.io.port.wmask := wmask
-    cache.io.port.isWr := !io.upstream.req.bits.isLoad
-
-    // Ready signal
-    io.upstream.req.ready := Mux(isMMIO, io.mmio.req.ready, cache.io.port.ready)
-
-    // --- Response Handling ---
-
-    val respValid = cache.io.port.respValid || io.mmio.resp.valid
-
-    // Select Data
-    val rawData =
-        Mux(io.mmio.resp.valid, io.mmio.resp.bits, cache.io.port.rdata)
-
-    // Data Processing (Sign Extension / Selection)
-    // We need to store request info for the responding data.
-
+    // We still need to track request metadata (size, signed/unsigned) to format 
+    // the response, as the Cache/DRAM returns raw blocks.
     val reqInfoQueue = Module(new Queue(new LoadStoreAction, entries = 4))
 
-    // [FIX] Enqueue condition logic:
-    // Both Cache and MMIO must now track all requests (Load AND Store) to return responses/acks.
+    // --- 2. Request Routing (The "Demux") ---
+    val isMMIO = io.upstream.req.bits.addr(31) === 1.U
+    val req = io.upstream.req.bits
+
+    // WMask Decoding
+    val wmask = MuxLookup(req.opWidth, 15.U)(Seq(
+        MemOpWidth.BYTE     -> 1.U,
+        MemOpWidth.HALFWORD -> 3.U
+    ))
+
+    // Drive MMIO Request
+    io.mmio.req.valid := io.upstream.req.valid && isMMIO
+    io.mmio.req.bits  := req
+
+    // Drive Cache Request
+    cache.io.port.valid  := io.upstream.req.valid && !isMMIO
+    cache.io.port.addr   := req.addr
+    cache.io.port.wdata  := req.data
+    cache.io.port.wmask  := wmask
+    cache.io.port.isWr   := !req.isLoad
+
+    // Track Metadata (Enqueue if either path fires)
+    // We gate upstream ready based on the selected target AND the info queue
+    val targetReady = Mux(isMMIO, io.mmio.req.ready, cache.io.port.ready)
+    io.upstream.req.ready := targetReady && reqInfoQueue.io.enq.ready
+
     reqInfoQueue.io.enq.valid := io.upstream.req.fire
-    reqInfoQueue.io.enq.bits := io.upstream.req.bits
+    reqInfoQueue.io.enq.bits  := req
 
-    val processingResp = respValid // A response is arriving this cycle
+    // --- 3. Response Routing (The "Merge") ---
+    
+    // We use an Arbiter to merge responses from Cache and MMIO into one stream
+    val respArb = Module(new Arbiter(UInt(32.W), 2))
 
-    // Formatting Logic
+    // Port 0: Cache Response (High Priority / Standard Path)
+    // Note: If Cache response has no backpressure (no 'ready'), we assume it connects valid-to-valid
+    respArb.io.in(0).valid := cache.io.port.respValid
+    respArb.io.in(0).bits  := cache.io.port.rdata
+    
+    // Port 1: MMIO Response
+    respArb.io.in(1) <> io.mmio.resp
+
+    // --- 4. Data Formatting & Output ---
+    
+    // Determine which request info matches the current response
     val info = reqInfoQueue.io.deq.bits
+    val rawData = respArb.io.out.bits
 
+    // Byte/Halfword Alignment & Sign Extension
     val addrOffset = info.addr(1, 0)
-
-    val rbyte = MuxLookup(addrOffset, 0.U)(
-      Seq(
-        0.U -> rawData(7, 0),
-        1.U -> rawData(15, 8),
-        2.U -> rawData(23, 16),
-        3.U -> rawData(31, 24)
-      )
-    )
-    val rhalf = Mux(addrOffset(1) === 0.U, rawData(15, 0), rawData(31, 16))
-    val sextByte = Cat(Fill(24, rbyte(7)), rbyte)
-    val sextHalf = Cat(Fill(16, rhalf(15)), rhalf)
+    val rbyte = rawData >> (addrOffset * 8.U) // Shift to LSB
+    val rhalf = rawData >> ((addrOffset(1) << 4)) // Shift by 0 or 16
 
     val formattedData = Wire(UInt(32.W))
-    formattedData := rawData
-    switch(info.opWidth) {
-        is(MemOpWidth.BYTE) {
-            formattedData := Mux(info.isUnsigned, rbyte, sextByte)
-        }
-        is(MemOpWidth.HALFWORD) {
-            formattedData := Mux(info.isUnsigned, rhalf, sextHalf)
-        }
+    
+    // Default to WORD
+    formattedData := rawData 
+
+    when(info.opWidth === MemOpWidth.BYTE) {
+        formattedData := Mux(info.isUnsigned, rbyte(7,0), Scxb(rbyte(7,0)))
+    } .elsewhen(info.opWidth === MemOpWidth.HALFWORD) {
+        formattedData := Mux(info.isUnsigned, rhalf(15,0), Scxh(rhalf(15,0)))
     }
 
-    // Output Queue
-    val respQueue = Module(new Queue(UInt(32.W), entries = 2))
-
-    // [FIX] Push to RespQueue if valid, regardless of Load or Store.
-    // The upstream LSU waits for a response valid signal for Stores too.
-    respQueue.io.enq.valid := respValid
-    respQueue.io.enq.bits := formattedData
-
-    // Pop info when we process a valid response
-    reqInfoQueue.io.deq.ready := respValid
-
-    // Upstream is just the queue output
-    io.upstream.resp <> respQueue.io.deq
-
-    // MMIO resp ready
-    io.mmio.resp.ready := respQueue.io.enq.ready
+    // Connect Arbiter output to Upstream
+    io.upstream.resp.valid := respArb.io.out.valid
+    io.upstream.resp.bits  := formattedData
+    
+    // Backpressure flow
+    respArb.io.out.ready := io.upstream.resp.ready
+    
+    // Dequeue metadata only when a response is successfully sent upstream
+    reqInfoQueue.io.deq.ready := io.upstream.resp.fire
+    
+    // Helper functions for Sign Extension
+    def Scxb(v: UInt) = Cat(Fill(24, v(7)), v)
+    def Scxh(v: UInt) = Cat(Fill(16, v(15)), v)
 }
