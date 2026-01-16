@@ -144,3 +144,30 @@ class MemoryRequest extends Bundle {
     val req = Decoupled(new LoadStoreAction)
     val resp = Flipped(Decoupled(UInt(32.W)))
 }
+
+class BoomCoreProfileBundle extends Bundle {
+    import common.Configurables.Profiling._
+    def optfield[T <: Data](cond: Boolean, gen: => T): Option[T] = {
+        if (cond) Some(gen) else None
+    }
+
+    val totalBranches = optfield(branchMispredictionRate, UInt(32.W))
+    val totalMispredicts = optfield(branchMispredictionRate, UInt(32.W))
+
+    // IPC
+    val totalInstructions = optfield(IPC, UInt(64.W))
+    val totalCycles = optfield(IPC, UInt(64.W))
+
+    // Utilization
+    val busyFetcher = optfield(Utilization, UInt(32.W))
+    val busyDecoder = optfield(Utilization, UInt(32.W))
+    val busyDispatcher = optfield(Utilization, UInt(32.W))
+    val busyALU = optfield(Utilization, UInt(32.W))
+    val busyBRU = optfield(Utilization, UInt(32.W))
+    val busyLSU = optfield(Utilization, UInt(32.W))
+    val busyROB = optfield(Utilization, UInt(32.W))
+
+    // Rollback
+    val totalRollbackEvents = optfield(RollbackTime, UInt(32.W))
+    val totalRollbackCycles = optfield(RollbackTime, UInt(32.W))
+}

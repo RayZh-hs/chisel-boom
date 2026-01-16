@@ -18,6 +18,7 @@ class LoadStoreAdaptor extends CycleAwareModule {
         val robHead = Input(UInt(ROB_WIDTH.W))
 
         val mem = new MemoryRequest
+        val busy = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
     })
 
     // --- LSQ Instance ---
@@ -53,6 +54,8 @@ class LoadStoreAdaptor extends CycleAwareModule {
     val s1Ready = Wire(Bool())
     val s2Ready = Wire(Bool())
     val s3Ready = Wire(Bool())
+
+    io.busy.foreach(_ := s1Valid || s2Valid || s3Valid)
 
     // --- Broadcast Arbiter ---
     val wbArbiter = Module(new RRArbiter(new BroadcastBundle, 2))

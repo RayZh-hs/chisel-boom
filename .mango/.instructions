@@ -1,3 +1,4 @@
+hex: hex
 test: test
 simulate: simulate sim
 elaborate: elaborate

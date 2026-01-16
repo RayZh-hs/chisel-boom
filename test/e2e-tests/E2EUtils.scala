@@ -213,10 +213,18 @@ object E2EUtils {
         timedOut: Boolean
     )
 
+    def setupSimulation() {
+        val requireReport = System.getProperty("report") == "true"
+        if (!requireReport) {
+            common.Configurables.Profiling.prune()
+        }
+    }
+
     def runTestWithHex(
         hexPath: Path,
         maxCycles: Int = Configurables.MAX_CYCLE_COUNT
     ): SimulationResult = {
+        setupSimulation()
         // Shared path for the hex file to avoid recompilation of BoomCore
         // We place it outside the specific test run directory so it persists/is accessible
         Files.copy(hexPath, sharedHexPath, StandardCopyOption.REPLACE_EXISTING)
@@ -231,7 +239,8 @@ object E2EUtils {
     def runSimulation(
         dut: BoomCore,
         maxCycles: Int = Configurables.MAX_CYCLE_COUNT,
-        debugCallback: (Int) => Unit = _ => ()
+        debugCallback: (Int) => Unit = _ => (),
+        report: Boolean = true
     ): SimulationResult = {
 
         dut.reset.poke(true.B)
@@ -302,6 +311,78 @@ object E2EUtils {
                 drained += 1
                 cycle += 1
             }
+        }
+
+        if (done && report && common.Configurables.Profiling.isAnyEnabled) {
+            Thread.sleep(100) // Wait for all prints to finish
+            println("=========================================================")
+            println("                    PROFILING REPORT                     ")
+            println("=========================================================")
+
+            val p = dut.io.profiler 
+            if (common.Configurables.Profiling.branchMispredictionRate) {
+                val total = p.totalBranches.get.peek().litValue
+                val mispred = p.totalMispredicts.get.peek().litValue
+                val rate =
+                    if (total > 0)
+                        (mispred.toDouble / total.toDouble) * 100.0
+                    else 0.0
+
+                println(f"Branch Misprediction Rate:")
+                println(f"  Total Branches:       $total")
+                println(f"  Total Mispredictions: $mispred")
+                println(f"  Misprediction Rate:   $rate%.2f%%")
+            }
+
+            if (common.Configurables.Profiling.IPC) {
+                val insts = p.totalInstructions.get.peek().litValue
+                val cycles = p.totalCycles.get.peek().litValue
+                // Post cold start cycles (free list initialization)
+                val pcsCycles = cycles - 32 + 4 // 32 init cycles, among which 4 frontend working cycles
+                val ipc = if (pcsCycles > 0) insts.toDouble / pcsCycles.toDouble else 0.0
+                
+                println(f"IPC Performance:")
+                println(f"  Total Instructions:   $insts")
+                println(f"  Total PCS Cycles:     $pcsCycles")
+                println(f"  IPC:                  $ipc%.4f")
+            }
+
+            if (common.Configurables.Profiling.RollbackTime) {
+                val events = p.totalRollbackEvents.get.peek().litValue
+                val cycles = p.totalRollbackCycles.get.peek().litValue
+                val avg = if (events > 0) cycles.toDouble / events.toDouble else 0.0
+                
+                println(f"Rollback Performance:")
+                println(f"  Total Rollback Events: $events")
+                println(f"  Total Rollback Cycles: $cycles")
+                println(f"  Average Rollback Time: $avg%.2f cycles")
+            }
+
+            if (common.Configurables.Profiling.Utilization) {
+                println(f"Stage Utilization:")
+                val fetcher = p.busyFetcher.get.peek().litValue
+                val decoder = p.busyDecoder.get.peek().litValue
+                val dispatcher = p.busyDispatcher.get.peek().litValue
+                val alu = p.busyALU.get.peek().litValue
+                val bru = p.busyBRU.get.peek().litValue
+                val lsu = p.busyLSU.get.peek().litValue
+                val rob = p.busyROB.get.peek().litValue
+
+                def formatUtil(name: String, busy: BigInt): Unit = {
+                    val rate = if (cycle > 0) (busy.toDouble / cycle.toDouble) * 100.0 else 0.0
+                    println(f"  $name%-12s: $busy%8d / $cycle%8d ($rate%.2f%%)")
+                }
+
+                formatUtil("Fetcher", fetcher)
+                formatUtil("Decoder", decoder)
+                formatUtil("Dispatcher", dispatcher)
+                formatUtil("ALU", alu)
+                formatUtil("BRU", bru)
+                formatUtil("LSU", lsu)
+                formatUtil("ROB-Commit", rob)
+            }
+
+            println("=========================================================")
         }
 
         SimulationResult(
