@@ -43,6 +43,9 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
         val out = Decoupled(new IssueBufferEntry(gen))
 
         val flush = Input(new FlushBundle)
+        
+        val stallOperands = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
+        val stallPort = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
     })
 
     val buffer = Reg(Vec(numEntries, new IssueBufferEntry(gen)))
@@ -143,6 +146,9 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
 
     io.out.valid := canIssue && !io.flush.valid
     io.out.bits := buffer(issueIndex)
+    
+    io.stallOperands.foreach(_ := valid.asUInt.orR && !canIssue && !io.flush.valid)
+    io.stallPort.foreach(_ := io.out.valid && !io.out.ready)
 
     when(io.out.fire) {
         valid(issueIndex) := false.B
