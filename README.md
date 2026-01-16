@@ -1,8 +1,8 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="images/chisel-boom-logo-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="images/chisel-boom-logo-light.png">
-    <img alt="Chisel Boom Logo" src="images/chisel-boom-logo-light.png" width="300">
+    <source media="(prefers-color-scheme: dark)" srcset="images/boom-lite-logo-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="images/boom-lite-logo-light.png">
+    <img alt="Boom Lite Logo" src="images/boom-lite-logo-light.png" width="300">
   </picture>
 </p>
 
