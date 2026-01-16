@@ -10,9 +10,9 @@ import common.Configurables._
 class ReOrderBufferTest extends AnyFlatSpec with Matchers {
     "ReOrderBuffer" should "assign robTags and commit instructions in order" in {
         simulate(new ReOrderBuffer) { dut =>
-            dut.reset.poke(true.B)
+            dut.io.flush.poke(true.B)
             dut.clock.step()
-            dut.reset.poke(false.B)
+            dut.io.flush.poke(false.B)
 
             // Dispatch 1
             dut.io.dispatch.valid.poke(true.B)
@@ -62,9 +62,9 @@ class ReOrderBufferTest extends AnyFlatSpec with Matchers {
 
     it should "handle rollback correctly" in {
         simulate(new ReOrderBuffer) { dut =>
-            dut.reset.poke(true.B)
+            dut.io.flush.poke(true.B)
             dut.clock.step()
-            dut.reset.poke(false.B)
+            dut.io.flush.poke(false.B)
 
             // Dispatch 3 instructions
             dut.io.dispatch.valid.poke(true.B)

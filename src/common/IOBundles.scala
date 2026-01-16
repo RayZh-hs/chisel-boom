@@ -140,7 +140,7 @@ class LoadStoreAction extends Bundle {
     val targetReg = UInt(PREG_WIDTH.W)
 }
 
-class MemoryRequest extends Bundle {
-    val req = Decoupled(new LoadStoreAction)
-    val resp = Flipped(Decoupled(UInt(32.W)))
+class MemoryInterface extends Bundle {
+    val req = Flipped(Valid(new LoadStoreAction))
+    val resp = Valid(UInt(32.W))
 }

@@ -6,9 +6,7 @@ import common._
 import common.Configurables._
 
 class LoadStoreUnit extends Module {
-    val io = IO(Flipped(new MemoryRequest))
-
-    io.req.ready := true.B
+    val io = IO(new MemoryInterface)
 
     // 4KB Data Memory
     // We use a Vec of 4 bytes to support byte-level masking easily while maintaining 32-bit alignment

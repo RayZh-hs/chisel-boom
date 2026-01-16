@@ -8,10 +8,6 @@ import org.scalatest.matchers.should.Matchers
 class PhysicalRegisterFileTest extends AnyFlatSpec with Matchers {
     "PhysicalRegisterFile" should "write and read data correctly" in {
         simulate(new PhysicalRegisterFile(64, 4, 2, 32)) { dut =>
-            dut.reset.poke(true.B)
-            dut.clock.step()
-            dut.reset.poke(false.B)
-
             // Initial state: all ready
             dut.io.readyAddrs(0).poke(1.U)
             dut.io.isReady(0).expect(true.B)

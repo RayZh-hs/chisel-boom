@@ -25,7 +25,7 @@ object Configurables {
         var printOnMemAccess: Boolean =
             true // Print memory accesses (loads/stores)
         var printRegFileOnCommit: Boolean =
-            false // Print the register file state on each commit
+            true // Print the register file state on each commit
         var cycleAwareness: Boolean =
             true // Add cycle count to debug prints for easier tracing
 
