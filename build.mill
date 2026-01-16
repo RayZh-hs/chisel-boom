@@ -22,5 +22,9 @@ object `package` extends RootModule with ScalaModule {
           ivy"edu.berkeley.cs::chiseltest:6.0.0"
         )
         def testFramework = "org.scalatest.tools.Framework"
+
+        override def forkArgs: Target[Seq[String]] = T {
+          Seq("-Dreport=" + System.getProperty("report", "false"))
+        }
     }
 }

@@ -37,10 +37,11 @@ class E2ESimTests extends AnyFunSuite with ChiselScalatestTester {
                 val expected = readExpected(cFile)
                 val hex = buildHexFor(cFile)
 
+                setupSimulation()
                 test(new BoomCore(hex.toString))
                     .withAnnotations(testAnnotations) { dut =>
                         // Sim tests might need more cycles
-                        val maxCycles = MAX_CYCLE_COUNT * 10
+                        val maxCycles = MAX_CYCLE_COUNT
                         dut.clock.setTimeout(maxCycles)
 
                         val simRes = E2EUtils.runSimulation(dut, maxCycles)

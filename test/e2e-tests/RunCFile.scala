@@ -49,6 +49,7 @@ object RunCFile extends App {
 
     println(s"Running simulation using hex file: $hex")
 
+    setupSimulation()
     RawTester.test(
       new BoomCore(hex.toString),
       E2EUtils.testAnnotations

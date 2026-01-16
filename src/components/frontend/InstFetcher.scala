@@ -16,6 +16,8 @@ class InstFetcher extends CycleAwareModule {
         val ifOut = Decoupled(
           new FetchToDecodeBundle()
         ) // Output to Decode Stage (wire into queue)
+
+        val busy = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
     })
 
     val pc = RegInit(0.U(32.W))
@@ -23,6 +25,9 @@ class InstFetcher extends CycleAwareModule {
     // Forward declaration: Stage 2 states
     val s2Valid = RegInit(false.B)
     val s2PC = Reg(UInt(32.W))
+
+    io.busy.foreach(_ := s2Valid)
+
 
     // =========================================================
     // Control Signals

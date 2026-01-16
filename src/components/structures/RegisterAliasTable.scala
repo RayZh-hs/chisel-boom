@@ -29,7 +29,7 @@ class RegisterAliasTable(
         )
 
         val debugBroadcastValid =
-            if (Configurables.Elaboration.printOnBroadcast) Some(Input(Bool()))
+            if (Configurables.Elaboration.printRegFileOnCommit) Some(Input(Bool()))
             else None
     })
 
@@ -66,7 +66,7 @@ class RegisterAliasTable(
         }
     }
 
-    if (Configurables.Elaboration.printOnBroadcast) {
+    if (Configurables.Elaboration.printRegFileOnCommit) {
         when(io.debugBroadcastValid.get) {
             printf("RAT Snapshot: Logical -> Physical:\n")
             for (i <- 0 until 32) {

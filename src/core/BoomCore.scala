@@ -2,6 +2,7 @@ package core
 
 import chisel3._
 import chisel3.util._
+import chisel3.util.experimental.BoringUtils
 import utility.CycleAwareModule
 import components.frontend._
 import components.backend._
@@ -21,7 +22,9 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     val io = IO(new Bundle {
         val exit = Output(Valid(new LoadStoreAction))
         val put = Output(Valid(new LoadStoreAction))
+        val profiler = Output(new BoomCoreProfileBundle)
     })
+
 
     // Component Instantiation
     val fetcher = Module(new InstFetcher)
@@ -96,7 +99,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     dispatcher.io.ratAccess.stalePdst := rat.io.readP(2)
     rat.io.update(0) <> dispatcher.io.ratAccess.update
 
-    if (Configurables.Elaboration.printOnBroadcast) {
+    if (Configurables.Elaboration.printRegFileOnCommit) {
         rat.io.debugBroadcastValid.get := bc.io.broadcastOut.valid
     }
 
@@ -298,4 +301,90 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
 
     prf.io.clrBusy.valid := rollback.valid && (rollback.bits.pdst =/= 0.U)
     prf.io.clrBusy.bits := rollback.bits.pdst
+
+    // --- Profiling ---
+    if (Configurables.Profiling.branchMispredictionRate) {
+        val totalBranches = WireInit(0.U(32.W))
+        val totalMispredicts = WireInit(0.U(32.W))
+
+        BoringUtils.addSink(totalBranches, "total_branches")
+        BoringUtils.addSink(totalMispredicts, "branch_mispredictions")
+        io.profiler.totalBranches.get := totalBranches
+        io.profiler.totalMispredicts.get := totalMispredicts
+        
+        dontTouch(totalBranches)
+        dontTouch(totalMispredicts)
+    }
+
+    if (Configurables.Profiling.IPC) {
+        val instructionCount = RegInit(0.U(64.W))
+        val cycleCount = RegInit(0.U(64.W))
+
+        when (rob.io.commit.valid && rob.io.commit.ready) {
+            instructionCount := instructionCount + 1.U
+        }
+        cycleCount := cycleCount + 1.U
+
+        io.profiler.totalInstructions.get := instructionCount
+        io.profiler.totalCycles.get := cycleCount
+
+        dontTouch(instructionCount)
+        dontTouch(cycleCount)
+    }
+
+    if (Configurables.Profiling.Utilization) {
+        val fetcherBusy = fetcher.io.busy.get
+        val decoderBusy = decoder.io.out.valid
+        val dispatcherBusy = dispatcher.io.instOutput.valid
+        val aluBusy = aluAdaptor.io.busy.get
+        val bruBusy = bruAdaptor.io.busy.get
+        val lsuBusy = lsAdaptor.io.busy.get
+        val robBusy = rob.io.commit.valid
+
+        val fetcherBusyCount = RegInit(0.U(32.W))
+        val decoderBusyCount = RegInit(0.U(32.W))
+        val dispatcherBusyCount = RegInit(0.U(32.W))
+        val aluBusyCount = RegInit(0.U(32.W))
+        val bruBusyCount = RegInit(0.U(32.W))
+        val lsuBusyCount = RegInit(0.U(32.W))
+        val robBusyCount = RegInit(0.U(32.W))
+
+        when(fetcherBusy) { fetcherBusyCount := fetcherBusyCount + 1.U }
+        when(decoderBusy) { decoderBusyCount := decoderBusyCount + 1.U }
+        when(dispatcherBusy) { dispatcherBusyCount := dispatcherBusyCount + 1.U }
+        when(aluBusy) { aluBusyCount := aluBusyCount + 1.U }
+        when(bruBusy) { bruBusyCount := bruBusyCount + 1.U }
+        when(lsuBusy) { lsuBusyCount := lsuBusyCount + 1.U }
+        when(robBusy) { robBusyCount := robBusyCount + 1.U }
+
+        io.profiler.busyFetcher.get := fetcherBusyCount
+        io.profiler.busyDecoder.get := decoderBusyCount
+        io.profiler.busyDispatcher.get := dispatcherBusyCount
+        io.profiler.busyALU.get := aluBusyCount
+        io.profiler.busyBRU.get := bruBusyCount
+        io.profiler.busyLSU.get := lsuBusyCount
+        io.profiler.busyROB.get := robBusyCount
+
+        dontTouch(fetcherBusyCount)
+        dontTouch(decoderBusyCount)
+        dontTouch(dispatcherBusyCount)
+        dontTouch(aluBusyCount)
+        dontTouch(bruBusyCount)
+        dontTouch(lsuBusyCount)
+        dontTouch(robBusyCount)
+    }
+
+    if (Configurables.Profiling.RollbackTime) {
+        val rollbackEvents = RegInit(0.U(32.W))
+        val rollbackCycles = RegInit(0.U(32.W))
+
+        when(mispredict) { rollbackEvents := rollbackEvents + 1.U }
+        when(rob.io.isRollingBack.get) { rollbackCycles := rollbackCycles + 1.U }
+
+        io.profiler.totalRollbackEvents.get := rollbackEvents
+        io.profiler.totalRollbackCycles.get := rollbackCycles
+
+        dontTouch(rollbackEvents)
+        dontTouch(rollbackCycles)
+    }
 }
