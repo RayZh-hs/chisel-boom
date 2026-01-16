@@ -18,6 +18,7 @@ class InstFetcher extends CycleAwareModule {
         ) // Output to Decode Stage (wire into queue)
 
         val busy = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
+        val stallBuffer = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
     })
 
     val pc = RegInit(0.U(32.W))
@@ -27,6 +28,7 @@ class InstFetcher extends CycleAwareModule {
     val s2PC = Reg(UInt(32.W))
 
     io.busy.foreach(_ := s2Valid)
+    io.stallBuffer.foreach(_ := s2Valid && !io.ifOut.ready)
 
 
     // =========================================================

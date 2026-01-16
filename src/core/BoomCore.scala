@@ -336,41 +336,100 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         val fetcherBusy = fetcher.io.busy.get
         val decoderBusy = decoder.io.out.valid
         val dispatcherBusy = dispatcher.io.instOutput.valid
+        val issueALUBusy = aluIB.io.out.valid
+        val issueBRUBusy = bruIB.io.out.valid
         val aluBusy = aluAdaptor.io.busy.get
         val bruBusy = bruAdaptor.io.busy.get
         val lsuBusy = lsAdaptor.io.busy.get
+        val writebackBusy = bc.io.broadcastOut.valid
         val robBusy = rob.io.commit.valid
+
+        val fetcherStallBuffer = fetcher.io.stallBuffer.get
+        val decoderStallDispatch = decoder.io.out.valid && !dispatcher.io.instInput.ready
+        val dispatcherStallFreeList = dispatcher.io.stallFreeList.get
+        val dispatcherStallROB = dispatcher.io.stallROB.get
+        val dispatcherStallIssue = dispatcher.io.stallIssue.get
+        val issueALUStallOperands = aluIB.io.stallOperands.get
+        val issueALUStallPort = aluIB.io.stallPort.get
+        val issueBRUStallOperands = bruIB.io.stallOperands.get
+        val issueBRUStallPort = bruIB.io.stallPort.get
+        val lsuStallCommit = lsAdaptor.io.stallCommit.get
 
         val fetcherBusyCount = RegInit(0.U(32.W))
         val decoderBusyCount = RegInit(0.U(32.W))
         val dispatcherBusyCount = RegInit(0.U(32.W))
+        val issueALUBusyCount = RegInit(0.U(32.W))
+        val issueBRUBusyCount = RegInit(0.U(32.W))
         val aluBusyCount = RegInit(0.U(32.W))
         val bruBusyCount = RegInit(0.U(32.W))
         val lsuBusyCount = RegInit(0.U(32.W))
+        val writebackBusyCount = RegInit(0.U(32.W))
         val robBusyCount = RegInit(0.U(32.W))
+
+        val fetcherStallBufferCount = RegInit(0.U(32.W))
+        val decoderStallDispatchCount = RegInit(0.U(32.W))
+        val dispatcherStallFreeListCount = RegInit(0.U(32.W))
+        val dispatcherStallROBCount = RegInit(0.U(32.W))
+        val dispatcherStallIssueCount = RegInit(0.U(32.W))
+        val issueALUStallOperandsCount = RegInit(0.U(32.W))
+        val issueALUStallPortCount = RegInit(0.U(32.W))
+        val issueBRUStallOperandsCount = RegInit(0.U(32.W))
+        val issueBRUStallPortCount = RegInit(0.U(32.W))
+        val lsuStallCommitCount = RegInit(0.U(32.W))
 
         when(fetcherBusy) { fetcherBusyCount := fetcherBusyCount + 1.U }
         when(decoderBusy) { decoderBusyCount := decoderBusyCount + 1.U }
         when(dispatcherBusy) { dispatcherBusyCount := dispatcherBusyCount + 1.U }
+        when(issueALUBusy) { issueALUBusyCount := issueALUBusyCount + 1.U }
+        when(issueBRUBusy) { issueBRUBusyCount := issueBRUBusyCount + 1.U }
         when(aluBusy) { aluBusyCount := aluBusyCount + 1.U }
         when(bruBusy) { bruBusyCount := bruBusyCount + 1.U }
         when(lsuBusy) { lsuBusyCount := lsuBusyCount + 1.U }
+        when(writebackBusy) { writebackBusyCount := writebackBusyCount + 1.U }
         when(robBusy) { robBusyCount := robBusyCount + 1.U }
+
+        when(fetcherStallBuffer) { fetcherStallBufferCount := fetcherStallBufferCount + 1.U }
+        when(decoderStallDispatch) { decoderStallDispatchCount := decoderStallDispatchCount + 1.U }
+        when(dispatcherStallFreeList) { dispatcherStallFreeListCount := dispatcherStallFreeListCount + 1.U }
+        when(dispatcherStallROB) { dispatcherStallROBCount := dispatcherStallROBCount + 1.U }
+        when(dispatcherStallIssue) { dispatcherStallIssueCount := dispatcherStallIssueCount + 1.U }
+        when(issueALUStallOperands) { issueALUStallOperandsCount := issueALUStallOperandsCount + 1.U }
+        when(issueALUStallPort) { issueALUStallPortCount := issueALUStallPortCount + 1.U }
+        when(issueBRUStallOperands) { issueBRUStallOperandsCount := issueBRUStallOperandsCount + 1.U }
+        when(issueBRUStallPort) { issueBRUStallPortCount := issueBRUStallPortCount + 1.U }
+        when(lsuStallCommit) { lsuStallCommitCount := lsuStallCommitCount + 1.U }
 
         io.profiler.busyFetcher.get := fetcherBusyCount
         io.profiler.busyDecoder.get := decoderBusyCount
         io.profiler.busyDispatcher.get := dispatcherBusyCount
+        io.profiler.busyIssueALU.get := issueALUBusyCount
+        io.profiler.busyIssueBRU.get := issueBRUBusyCount
         io.profiler.busyALU.get := aluBusyCount
         io.profiler.busyBRU.get := bruBusyCount
         io.profiler.busyLSU.get := lsuBusyCount
+        io.profiler.busyWriteback.get := writebackBusyCount
         io.profiler.busyROB.get := robBusyCount
 
+        io.profiler.fetcherStallBuffer.get := fetcherStallBufferCount
+        io.profiler.decoderStallDispatch.get := decoderStallDispatchCount
+        io.profiler.dispatcherStallFreeList.get := dispatcherStallFreeListCount
+        io.profiler.dispatcherStallROB.get := dispatcherStallROBCount
+        io.profiler.dispatcherStallIssue.get := dispatcherStallIssueCount
+        io.profiler.issueALUStallOperands.get := issueALUStallOperandsCount
+        io.profiler.issueALUStallPort.get := issueALUStallPortCount
+        io.profiler.issueBRUStallOperands.get := issueBRUStallOperandsCount
+        io.profiler.issueBRUStallPort.get := issueBRUStallPortCount
+        io.profiler.lsuStallCommit.get := lsuStallCommitCount
+        
         dontTouch(fetcherBusyCount)
         dontTouch(decoderBusyCount)
         dontTouch(dispatcherBusyCount)
+        dontTouch(issueALUBusyCount)
+        dontTouch(issueBRUBusyCount)
         dontTouch(aluBusyCount)
         dontTouch(bruBusyCount)
         dontTouch(lsuBusyCount)
+        dontTouch(writebackBusyCount)
         dontTouch(robBusyCount)
     }
 

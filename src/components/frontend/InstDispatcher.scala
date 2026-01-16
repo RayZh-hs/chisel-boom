@@ -36,6 +36,10 @@ class InstDispatcher extends CycleAwareModule {
         val freeListAccess = new Bundle {
             val allocate = Flipped(Decoupled(UInt(PREG_WIDTH.W)))
         }
+
+        val stallFreeList = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
+        val stallROB = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
+        val stallIssue = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
     })
 
     val inst = io.instInput.bits // incoming instruction
@@ -44,6 +48,11 @@ class InstDispatcher extends CycleAwareModule {
         io.instOutput.ready &&
         io.robOutput.ready &&
         (!needAlloc || io.freeListAccess.allocate.valid)
+    
+    // Profiling
+    io.stallFreeList.foreach(_ := io.instInput.valid && needAlloc && !io.freeListAccess.allocate.valid)
+    io.stallROB.foreach(_ := io.instInput.valid && !io.robOutput.ready)
+    io.stallIssue.foreach(_ := io.instInput.valid && !io.instOutput.ready)
 
     // Consume input and allocate from free list
     io.instInput.ready := canDispatch

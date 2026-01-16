@@ -160,11 +160,31 @@ class BoomCoreProfileBundle extends Bundle {
 
     // Utilization
     val busyFetcher = optfield(Utilization, UInt(32.W))
+    val fetcherStallBuffer = optfield(Utilization, UInt(32.W))
+
     val busyDecoder = optfield(Utilization, UInt(32.W))
+    val decoderStallDispatch = optfield(Utilization, UInt(32.W))
+
     val busyDispatcher = optfield(Utilization, UInt(32.W))
+    val dispatcherStallFreeList = optfield(Utilization, UInt(32.W))
+    val dispatcherStallROB = optfield(Utilization, UInt(32.W))
+    val dispatcherStallIssue = optfield(Utilization, UInt(32.W))
+
+    val busyIssueALU = optfield(Utilization, UInt(32.W))
+    val issueALUStallOperands = optfield(Utilization, UInt(32.W))
+    val issueALUStallPort = optfield(Utilization, UInt(32.W))
+
+    val busyIssueBRU = optfield(Utilization, UInt(32.W))
+    val issueBRUStallOperands = optfield(Utilization, UInt(32.W))
+    val issueBRUStallPort = optfield(Utilization, UInt(32.W))
+
     val busyALU = optfield(Utilization, UInt(32.W))
     val busyBRU = optfield(Utilization, UInt(32.W))
+    
     val busyLSU = optfield(Utilization, UInt(32.W))
+    val lsuStallCommit = optfield(Utilization, UInt(32.W))
+
+    val busyWriteback = optfield(Utilization, UInt(32.W))
     val busyROB = optfield(Utilization, UInt(32.W))
 
     // Rollback
