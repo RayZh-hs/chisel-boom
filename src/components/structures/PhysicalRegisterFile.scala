@@ -85,7 +85,7 @@ class PhysicalRegisterFile(
     busyTable(0) := false.B
     regFile(0) := 0.U
 
-    if (Elaboration.printRegFileOnCommit) {
+    if (Elaboration.printOnBroadcast) {
         when(io.setReady.valid) {
             printf("PRF Snapshot: Physical -> Value: \n")
             for (i <- 0 until numRegs) {

@@ -6,14 +6,21 @@ import utility.CycleAwareModule
 import components.frontend._
 import components.backend._
 import components.structures._
-import components.memory._
 import common._
 import common.Configurables._
+import components.structures.{
+    ALUInfo,
+    BRUInfo,
+    IssueBuffer,
+    LoadStoreInfo,
+    SequentialIssueBuffer,
+    SequentialBufferEntry
+}
 
 class BoomCore(val hexFile: String) extends CycleAwareModule {
     val io = IO(new Bundle {
-        val exit = Output(Valid(UInt(32.W)))
-        val put = Decoupled(UInt(32.W))
+        val exit = Output(Valid(new LoadStoreAction))
+        val put = Output(Valid(new LoadStoreAction))
     })
 
     // Component Instantiation
@@ -25,9 +32,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     val dispatcher = Module(new InstDispatcher)
     val rat = Module(new RegisterAliasTable(3, 1, 1))
     val freeList = Module(new FreeList(Derived.PREG_COUNT, 32))
-    val icache = Module(
-        new ICache(CacheConfig(nSetsWidth = 6, nCacheLineWidth = 4, idOffset = 2))
-    )
+    val imem = Module(new InstructionMemory(hexFile))
     val btb = Module(new BranchTargetBuffer)
 
     val rob = Module(new ReOrderBuffer)
@@ -37,54 +42,27 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     val bruAdaptor = Module(new BRUAdaptor)
 
     // Memory Subsystem and MMIO Devices
-    // val lsu = Module(new LoadStoreUnit) // Removed: Replaced by Cache+DRAM inside MemorySubsystem
+    val lsu = Module(new LoadStoreUnit)
     val printDevice = Module(new PrintDevice)
     val exitDevice = Module(new ExitDevice)
     val mmio = Module(new MMIORouter(Seq("h80000000".U, "hFFFFFFFF".U)))
     val memory = Module(new MemorySubsystem)
     val lsAdaptor = Module(new LoadStoreAdaptor)
 
-    // --- Unified Memory System Integration ---
-    val memConf = MemConfig(idWidth = 4, addrWidth = 32, dataWidth = 128)
-    
-    // Switch to DPI-based DRAM
-    val dram = Module(new DPIDRAM(memConf, hexFile))
-    dram.io.clock := clock
-    dram.io.reset := reset.asBool
-
-    // Arbiter for DRAM Requests (2 Masters: D-Cache (0), I-Cache (1))
-    val dramArb = Module(new RRArbiter(new MemRequest(memConf), 2))
-    
-    // Connect D-Cache (memory) to Arbiter Port 0
-    dramArb.io.in(0) <> memory.io.dram.req
-    
-    // Connect I-Cache (imem) to Arbiter Port 1
-    dramArb.io.in(1) <> icache.io.dram.req
-
-    // Connect Arbiter to DRAM
-    dram.io.req <> dramArb.io.out
-
-    // Broadcast DRAM Response to both
-    // They will filter based on ID (D-Cache: 0,1; I-Cache: 2,3)
-    memory.io.dram.resp.valid := dram.io.resp.valid
-    memory.io.dram.resp.bits := dram.io.resp.bits
-    icache.io.dram.resp.valid := dram.io.resp.valid
-    icache.io.dram.resp.bits := dram.io.resp.bits
-
-    // Backpressure: DRAM ready if both listeners are ready
-    dram.io.resp.ready := memory.io.dram.resp.ready && icache.io.dram.resp.ready
-
     // Generic memory routing: Adaptor -> MemorySubsystem -> (LSU | MMIO)
     memory.io.upstream <> lsAdaptor.io.mem
-    // lsu.io <> memory.io.lsu // Removed
+    lsu.io <> memory.io.lsu
     mmio.io.upstream <> memory.io.mmio
 
     printDevice.io <> mmio.io.devices(0)
     exitDevice.io <> mmio.io.devices(1)
 
     // Expose exit device to top level
-    io.exit <> exitDevice.exitOut
-    io.put <> printDevice.debugOut
+    io.exit.valid := exitDevice.io.req.valid && !exitDevice.io.req.bits.isLoad
+    io.exit.bits := exitDevice.io.req.bits
+
+    io.put.valid := printDevice.io.req.valid && !printDevice.io.req.bits.isLoad
+    io.put.bits := printDevice.io.req.bits
 
     val prf = Module(new PhysicalRegisterFile(Derived.PREG_COUNT, 6, 1, 32))
     val bc = Module(new BroadcastChannel)
@@ -96,8 +74,8 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     fetcher.io.btbResult := btb.io.target
 
     // Memory interface for fetcher
-    icache.io.req <> fetcher.io.icache.req
-    fetcher.io.icache.resp <> icache.io.resp
+    imem.io.addr := fetcher.io.instAddr
+    fetcher.io.instData := imem.io.inst
 
     // Frontend queue (in-stage buffer between fetcher and decoder)
     ifQueue.io.enq <> fetcher.io.ifOut
@@ -294,6 +272,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     bruAdaptor.io.flush := flushCtrl
     lsAdaptor.io.flush := flushCtrl
 
+    rob.io.flush := false.B
 
     // Unused PRF readyAddrs
     prf.io.readyAddrs(2) := 0.U

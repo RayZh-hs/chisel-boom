@@ -9,7 +9,6 @@
 target
 out
 build
-build
 verification
 notes
 
@@ -20,8 +19,5 @@ filelist.f
 
 .env
 
-.env
-
 test_run_dir
 *.log
-synthesis/

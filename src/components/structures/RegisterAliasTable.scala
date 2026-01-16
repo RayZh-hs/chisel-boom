@@ -66,7 +66,7 @@ class RegisterAliasTable(
         }
     }
 
-    if (Configurables.Elaboration.printRegFileOnCommit) {
+    if (Configurables.Elaboration.printOnBroadcast) {
         when(io.debugBroadcastValid.get) {
             printf("RAT Snapshot: Logical -> Physical:\n")
             for (i <- 0 until 32) {
