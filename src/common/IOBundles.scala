@@ -170,4 +170,11 @@ class BoomCoreProfileBundle extends Bundle {
     // Rollback
     val totalRollbackEvents = optfield(RollbackTime, UInt(32.W))
     val totalRollbackCycles = optfield(RollbackTime, UInt(32.W))
+
+    // Cache Stats
+    val dcacheHits = optfield(CacheStats, UInt(64.W))
+    val dcacheMisses = optfield(CacheStats, UInt(64.W))
+    val icacheHits = optfield(CacheStats, UInt(64.W))
+    val icacheMisses = optfield(CacheStats, UInt(64.W))
+    val dramAccesses = optfield(CacheStats, UInt(64.W))
 }

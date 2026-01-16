@@ -408,4 +408,30 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         dontTouch(rollbackEvents)
         dontTouch(rollbackCycles)
     }
+
+    if (Configurables.Profiling.CacheStats) {
+        val dcacheHits = RegInit(0.U(64.W))
+        val dcacheMisses = RegInit(0.U(64.W))
+        val icacheHits = RegInit(0.U(64.W))
+        val icacheMisses = RegInit(0.U(64.W))
+        val dramAccesses = RegInit(0.U(64.W))
+
+        when(memory.io.cacheEvents.hit) { dcacheHits := dcacheHits + 1.U }
+        when(memory.io.cacheEvents.miss) { dcacheMisses := dcacheMisses + 1.U }
+        when(icache.io.events.hit) { icacheHits := icacheHits + 1.U }
+        when(icache.io.events.miss) { icacheMisses := icacheMisses + 1.U }
+        when(dramArb.io.out.valid && dramArb.io.out.ready) { dramAccesses := dramAccesses + 1.U }
+
+        io.profiler.dcacheHits.get := dcacheHits
+        io.profiler.dcacheMisses.get := dcacheMisses
+        io.profiler.icacheHits.get := icacheHits
+        io.profiler.icacheMisses.get := icacheMisses
+        io.profiler.dramAccesses.get := dramAccesses
+
+        dontTouch(dcacheHits)
+        dontTouch(dcacheMisses)
+        dontTouch(icacheHits)
+        dontTouch(icacheMisses)
+        dontTouch(dramAccesses)
+    }
 }

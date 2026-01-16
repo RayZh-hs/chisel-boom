@@ -21,10 +21,11 @@ object Configurables {
         var Utilization:             Boolean = true    // Track utilization of various structures
         var IPC:                     Boolean = true    // Track IPC (Instructions Per Cycle)
         var RollbackTime:            Boolean = true    // Track average rollback time
+        var CacheStats:              Boolean = true    // Track L1 D-Cache/I-Cache stats
 
         // Shorthand for any profiling option being enabled
         def isAnyEnabled: Boolean = {
-            branchMispredictionRate || Utilization || IPC || RollbackTime
+            branchMispredictionRate || Utilization || IPC || RollbackTime || CacheStats
         }
 
         // Utility for automatic pruning in synthesis.
@@ -34,6 +35,7 @@ object Configurables {
             Utilization = false
             IPC = false
             RollbackTime = false
+            CacheStats = false
         }
     }
 

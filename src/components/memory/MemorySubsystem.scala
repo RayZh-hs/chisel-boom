@@ -14,12 +14,14 @@ class MemorySubsystem extends Module {
         val dram = new SimpleMemIO(
           MemConfig(idWidth = 4, addrWidth = 32, dataWidth = 128)
         )
+        val cacheEvents = new CacheEvents
     })
 
     // --- 1. Component Instantiation ---
     val cacheConf = CacheConfig(nSetsWidth = 6, nCacheLineWidth = 4)
     val cache = Module(new Cache(cacheConf))
     cache.io.dram <> io.dram
+    io.cacheEvents := cache.io.events
 
     // We still need to track request metadata (size, signed/unsigned) to format 
     // the response, as the Cache/DRAM returns raw blocks.
