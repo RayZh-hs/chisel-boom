@@ -29,7 +29,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     // Component Instantiation
     val fetcher = Module(new InstFetcher)
     val ifQueue = Module(
-      new Queue(new FetchToDecodeBundle, entries = 2, pipe = false, flow = true)
+      new Queue(new FetchToDecodeBundle, entries = 2, pipe = false, flow = false)
     )
     val decoder = Module(new InstDecoder)
     val rasAdaptor = Module(new RASAdaptor)
@@ -84,7 +84,6 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
 
     // Frontend queue (in-stage buffer between fetcher and decoder)
     ifQueue.io.enq <> fetcher.io.ifOut
-    ifQueue.reset := reset.asBool || fetcher.io.pcOverwrite.valid
 
     // Decoder and connections
     // Wire up Decoder & RASAdaptor to output of ifQueue
@@ -110,11 +109,15 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     decoderDispatcherQueue.io.enq <> decodeRASPlexer.io.plexToDispatcher
     dispatcher.io.instInput <> decoderDispatcherQueue.io.deq
 
+    // On RAS predict overwrite, set pc_overwrite for IF and reset ifQueue
+    val rasPredictedSignal = RegNext(rasAdaptor.io.out.bits)
+
     // RAS Recovery
     rasAdaptor.io.recover := bruAdaptor.io.brUpdate.mispredict
     rasAdaptor.io.recoverSP := bruAdaptor.io.brUpdate.rasSP
 
     decoderDispatcherQueue.reset := reset.asBool || fetcher.io.pcOverwrite.valid
+    ifQueue.reset := reset.asBool || fetcher.io.pcOverwrite.valid || rasPredictedSignal.flush
 
     // RAT and FreeList connections
     rat.io.readL(0) := dispatcher.io.ratAccess.lrs1
@@ -299,13 +302,21 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     rob.io.brUpdate.bits.robTag := brUpdate.robTag
     rob.io.brUpdate.bits.mispredict := mispredict
 
-    // Fetcher PC Overwrite (Misprediction)
-    fetcher.io.pcOverwrite.valid := mispredict
-    fetcher.io.pcOverwrite.bits := Mux(
-      brUpdate.taken,
-      brUpdate.target,
-      brUpdate.pc + 4.U
-    )
+    // Fetcher PC Overwrite (Misprediction or RAS Re-predict)
+    when (mispredict) {
+      fetcher.io.pcOverwrite.valid := true.B
+      fetcher.io.pcOverwrite.bits := Mux(
+        brUpdate.taken,
+        brUpdate.target,
+        brUpdate.pc + 4.U
+      )
+    }.elsewhen(rasPredictedSignal.flush) {
+      fetcher.io.pcOverwrite.valid := true.B
+      fetcher.io.pcOverwrite.bits := rasPredictedSignal.flushNextPC
+    }.otherwise {
+      fetcher.io.pcOverwrite.valid := false.B
+      fetcher.io.pcOverwrite.bits := 0.U
+    }
 
     // Flush logic
     val flushCtrl = Wire(new FlushBundle)

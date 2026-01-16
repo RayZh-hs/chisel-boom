@@ -5,15 +5,14 @@ import chisel3.util._
 import common._
 import common.Configurables._
 import components.structures.ReturnAddressStack
+import utility.CycleAwareModule
 
-/**
-  * RAS Adaptor
+/** RAS Adaptor
   *
   * This module interfaces with the Return Address Stack (RAS) to provide
   * accurate target predictions for CALL and RET instructions.
-  * 
   */
-class RASAdaptor extends Module {
+class RASAdaptor extends CycleAwareModule {
     val io = IO(new Bundle {
         // Inputs from Fetch/Decode pipeline
         val in = Flipped(Decoupled(new FetchToDecodeBundle))
@@ -27,7 +26,7 @@ class RASAdaptor extends Module {
     })
 
     val ras = Module(new ReturnAddressStack)
-    
+
     ras.io.recover := io.recover
     ras.io.recoverSP := io.recoverSP
 
@@ -48,13 +47,16 @@ class RASAdaptor extends Module {
     // J-Immediate Extraction
     // imm[20|10:1|11|19:12]
     val jImm = Wire(UInt(32.W))
-    val jImmRaw = instRaw(31) ## instRaw(19, 12) ## instRaw(20) ## instRaw(30, 21) ## 0.U(1.W)
+    val jImmRaw =
+        instRaw(31) ## instRaw(19, 12) ## instRaw(20) ## instRaw(30, 21) ## 0.U(
+          1.W
+        )
     jImm := Cat(Fill(32 - 21, instRaw(31)), jImmRaw)
 
     // Flow Control
     io.in.ready := io.out.ready
     io.out.valid := io.in.valid
-    
+
     val fire = io.in.fire
 
     // Instruction Decoding using Pre-decoded info
@@ -62,7 +64,7 @@ class RASAdaptor extends Module {
 
     // Spec: CALL if J instruction and rd is x1 or x5
     val isCall = isJ && (rd === 1.U || rd === 5.U)
-    
+
     // Spec: RET if J instruction (JALR) and rs1 is x1 or x5 and rd is x0
     val isRet = isJALR && (rd === 0.U) && (rs1 === 1.U || rs1 === 5.U)
 
@@ -77,14 +79,27 @@ class RASAdaptor extends Module {
     // Target Calculation
     val targetJAL = inPacket.pc + jImm
     val targetRET = ras.io.readVal
-    
+
     // We can only reliably correct PC for JAL (static) and RET (RAS)
     val calculatedTarget = Mux(isRet, targetRET, targetJAL)
-    
+
     val isPredictionWrong = inPacket.predictedTarget =/= calculatedTarget
-    val canCorrect = isJAL || isRet // We don't correct JALR calls (register dependent)
+    val canCorrect =
+        isJAL || isRet // We don't correct JALR calls (register dependent)
 
     io.out.bits.currentSP := ras.io.currentSP
     io.out.bits.flush := io.in.valid && canCorrect && isPredictionWrong
     io.out.bits.flushNextPC := calculatedTarget
+
+    // Debugging info
+    when(canCorrect && isPredictionWrong) {
+      printf("RAS: Detected ")
+      when(isCall) {
+        printf("CALL ")
+      } .elsewhen(isRet) {
+        printf("RET ")
+      }
+      printf(p"at PC=${Hexadecimal(inPacket.pc)}\n")
+      printf(p"    Alternating to target: ${Hexadecimal(calculatedTarget)}\n")
+    }
 }
