@@ -92,7 +92,7 @@ class LoadStoreAdaptor extends CycleAwareModule {
     // A store is committed if we already latched it, OR if it's currently at ROB head.
     val storeMatchesHead = s2Valid && isStoreS2 && (io.robHead === s2Bits.robTag)
     
-    when(storeMatchesHead) {
+    when(storeMatchesHead && s2StoreReadySent) {
         s2IsCommitted := true.B
     }
 
@@ -108,7 +108,7 @@ class LoadStoreAdaptor extends CycleAwareModule {
     // --- Store Broadcast Logic ---
     // Notify ROB that Store is Ready (Addr/Data calculated). 
     // We do this before commit. Must check flush normally here (if killed, don't broadcast).
-    val s2BroadcastingReady = s2Valid && isStoreS2 && !s2StoreReadySent && !s2IsCommitted && !s2Killed
+    val s2BroadcastingReady = s2Valid && isStoreS2 && !s2StoreReadySent && !s2Killed
 
     wbArbiter.io.in(0).valid        := s2BroadcastingReady
     wbArbiter.io.in(0).bits.pdst    := s2Bits.pdst
