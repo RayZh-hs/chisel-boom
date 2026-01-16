@@ -31,11 +31,13 @@ class DispatchRASPlexer extends Module {
     val instBundle = io.instFromDecoder.bits
     val rasBundle = io.rasBundleFromAdaptor.bits
 
-    // Swap PC if RAS indicates a flush
+    // Swap PC if RAS indicates a flush (i.e., RAS made a prediction)
     val modifiedPC =
         Mux(rasBundle.flush, rasBundle.flushNextPC, instBundle.predictedTarget)
     io.plexToDispatcher.bits.inst := instBundle
     io.plexToDispatcher.bits.inst.predictedTarget := modifiedPC
+    // When RAS makes a prediction (flush=true), mark this instruction as predicted
+    io.plexToDispatcher.bits.inst.predict := instBundle.predict || rasBundle.flush
 
     // Pass on the RAS SP to Dispatcher
     io.plexToDispatcher.bits.rasSP := rasBundle.currentSP

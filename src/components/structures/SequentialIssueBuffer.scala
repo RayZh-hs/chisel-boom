@@ -35,6 +35,7 @@ class SequentialIssueBuffer[T <: Data](gen: T, entries: Int, name: String)
         val out = Decoupled(new SequentialBufferEntry(gen))
 
         val flush = Input(new FlushBundle)
+        val count = if (common.Configurables.Profiling.Utilization) Some(Output(UInt(log2Ceil(entries + 1).W))) else None
     })
 
     val buffer = Reg(Vec(entries, new SequentialBufferEntry(gen)))
@@ -45,6 +46,10 @@ class SequentialIssueBuffer[T <: Data](gen: T, entries: Int, name: String)
     val ptrMatch = head === tail
     val isEmpty = ptrMatch && !maybeFull
     val isFull = ptrMatch && maybeFull
+
+    io.count.foreach { c =>
+        c := Mux(isFull, entries.U, Mux(tail >= head, tail - head, entries.U + tail - head))
+    }
 
     // --- Broadcast Logic ---
     // Note: Only need to update entries between head and tail

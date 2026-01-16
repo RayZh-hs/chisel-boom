@@ -46,7 +46,7 @@ object Configurables {
         var pcInIssueBuffer:      Boolean = true    // this option adds a PC field to each Issue Buffer entry for easier debugging
         var printOnBroadcast:     Boolean = true    // Print CDB broadcasts
         var printOnMemAccess:     Boolean = true    // Print memory accesses (loads/stores)
-        var printRegFileOnCommit: Boolean = true    // Print the register file state on each commit
+        var printRegFileOnCommit: Boolean = false   // Print the register file state on each commit
         var cycleAwareness:       Boolean = true    // Add cycle count to debug prints for easier tracing
 
         // Utility for automatic pruning in synthesis.
