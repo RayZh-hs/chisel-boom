@@ -221,9 +221,11 @@ object E2EUtils {
         // We place it outside the specific test run directory so it persists/is accessible
         Files.copy(hexPath, sharedHexPath, StandardCopyOption.REPLACE_EXISTING)
 
+        var res: SimulationResult = null
         simulate(new BoomCore(sharedHexPath.toAbsolutePath.toString)) { dut =>
-            runSimulation(dut, maxCycles)
+            res = runSimulation(dut, maxCycles)
         }
+        res
     }
 
     def runSimulation(
