@@ -46,6 +46,8 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
         
         val stallOperands = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
         val stallPort = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
+
+        val count = if (common.Configurables.Profiling.Utilization) Some(Output(UInt(log2Ceil(numEntries + 1).W))) else None
     })
 
     val buffer = Reg(Vec(numEntries, new IssueBufferEntry(gen)))
@@ -54,6 +56,7 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
     // --- Round Robin State ---
     // Tracks the index of the last instruction issued to ensure fairness
     val lastIssuedIndex = RegInit(0.U(log2Ceil(numEntries).W))
+    io.count.foreach(_ := PopCount(valid))
 
     when(io.flush.valid) {
         for (i <- 0 until numEntries) {

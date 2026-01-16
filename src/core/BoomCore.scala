@@ -433,6 +433,12 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         val issueBRUStallPort = bruIB.io.stallPort.get
         val lsuStallCommit = lsAdaptor.io.stallCommit.get
 
+        val fetchQueueDepth = ifQueue.io.count
+        val issueALUDepth = aluIB.io.count.get
+        val issueBRUDepth = bruIB.io.count.get
+        val lsuQueueDepth = lsAdaptor.io.lsqCount.get
+        val robDepth = rob.io.count.get
+
         val fetcherBusyCount = RegInit(0.U(32.W))
         val decoderBusyCount = RegInit(0.U(32.W))
         val dispatcherBusyCount = RegInit(0.U(32.W))
@@ -454,6 +460,12 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         val issueBRUStallOperandsCount = RegInit(0.U(32.W))
         val issueBRUStallPortCount = RegInit(0.U(32.W))
         val lsuStallCommitCount = RegInit(0.U(32.W))
+
+        val fetchQueueDepthSum = RegInit(0.U(64.W))
+        val issueALUDepthSum = RegInit(0.U(64.W))
+        val issueBRUDepthSum = RegInit(0.U(64.W))
+        val lsuQueueDepthSum = RegInit(0.U(64.W))
+        val robDepthSum = RegInit(0.U(64.W))
 
         when(fetcherBusy) { fetcherBusyCount := fetcherBusyCount + 1.U }
         when(decoderBusy) { decoderBusyCount := decoderBusyCount + 1.U }
@@ -477,6 +489,12 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         when(issueBRUStallPort) { issueBRUStallPortCount := issueBRUStallPortCount + 1.U }
         when(lsuStallCommit) { lsuStallCommitCount := lsuStallCommitCount + 1.U }
 
+        fetchQueueDepthSum := fetchQueueDepthSum + fetchQueueDepth
+        issueALUDepthSum := issueALUDepthSum + issueALUDepth
+        issueBRUDepthSum := issueBRUDepthSum + issueBRUDepth
+        lsuQueueDepthSum := lsuQueueDepthSum + lsuQueueDepth
+        robDepthSum := robDepthSum + robDepth
+
         io.profiler.busyFetcher.get := fetcherBusyCount
         io.profiler.busyDecoder.get := decoderBusyCount
         io.profiler.busyDispatcher.get := dispatcherBusyCount
@@ -498,6 +516,12 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         io.profiler.issueBRUStallOperands.get := issueBRUStallOperandsCount
         io.profiler.issueBRUStallPort.get := issueBRUStallPortCount
         io.profiler.lsuStallCommit.get := lsuStallCommitCount
+        
+        io.profiler.fetchQueueDepth.get := fetchQueueDepthSum
+        io.profiler.issueALUDepth.get := issueALUDepthSum
+        io.profiler.issueBRUDepth.get := issueBRUDepthSum
+        io.profiler.lsuQueueDepth.get := lsuQueueDepthSum
+        io.profiler.robDepth.get := robDepthSum
         
         dontTouch(fetcherBusyCount)
         dontTouch(decoderBusyCount)

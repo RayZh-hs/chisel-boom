@@ -200,6 +200,13 @@ class BoomCoreProfileBundle extends Bundle {
     val busyWriteback = optfield(Utilization, UInt(32.W))
     val busyROB = optfield(Utilization, UInt(32.W))
 
+    // Queue Depths (Accumulated)
+    val fetchQueueDepth = optfield(Utilization, UInt(64.W))
+    val issueALUDepth = optfield(Utilization, UInt(64.W))
+    val issueBRUDepth = optfield(Utilization, UInt(64.W))
+    val lsuQueueDepth = optfield(Utilization, UInt(64.W))
+    val robDepth = optfield(Utilization, UInt(64.W))
+
     // Rollback
     val totalRollbackEvents = optfield(RollbackTime, UInt(32.W))
     val totalRollbackCycles = optfield(RollbackTime, UInt(32.W))
