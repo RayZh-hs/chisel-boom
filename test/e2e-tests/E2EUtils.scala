@@ -215,6 +215,7 @@ object E2EUtils {
 
     def setupSimulation() {
         val requireReport = System.getProperty("report") == "true"
+        // println(s"requireReport=$requireReport, isAnyEnabled=${common.Configurables.Profiling.isAnyEnabled}")
         if (!requireReport) {
             common.Configurables.Profiling.prune()
         }

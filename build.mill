@@ -24,9 +24,18 @@ object `package` extends RootModule with ScalaModule {
             ivy"org.scalatest::scalatest:3.2.19"
         )
         def testFramework = "org.scalatest.tools.Framework"
+        def reportProp = T.input { System.getProperty("report", "false") }
 
         override def forkArgs: Target[Seq[String]] = T {
-          Seq("-Dreport=" + System.getProperty("report", "false"))
+          Seq("-Dreport=" + reportProp())
+        }
+
+        override def forkShellArgs: Target[Seq[String]] = T {
+          Seq("-Dreport=" + reportProp())
+        }
+
+        override def forkCmdArgs: Target[Seq[String]] = T {
+          Seq("-Dreport=" + reportProp())
         }
     }
 }
