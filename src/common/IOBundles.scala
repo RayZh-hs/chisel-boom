@@ -140,6 +140,12 @@ class LoadStoreAction extends Bundle {
     val targetReg = UInt(PREG_WIDTH.W)
 }
 
+class RASAdaptorBundle extends Bundle {
+    val flush = Bool()
+    val flushNextPC = UInt(32.W)
+    val currentSP = UInt(RAS_WIDTH.W)
+}
+
 class MemoryInterface extends Bundle {
     val req = Flipped(Valid(new LoadStoreAction))
     val resp = Valid(UInt(32.W))

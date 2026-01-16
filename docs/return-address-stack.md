@@ -16,11 +16,12 @@ The RAS predictor receives prediction requests from the ID stage and re-orientat
 
 An instruction is speculated as a CALL if:
 1. It is a J instruction;
-2. `rd` is not `x0`.
+2. `rd` is `x1` or `x5`.
 
 An instruction is speculated as a RET if:
-1. It is a J instruction;
-2. `rd` is `x1` to `x5`.
+1. It is JALR;
+2. `rs1` is `x1` or `x5`.
+3. `rd` is `x0`.
 
 When the frontend receives a CALL instruction, it pushes the return address (PC + 4) onto the RAS. When it receives a RET instruction, it pops the top address from the RAS and uses it as the target address for the RET.
 
@@ -37,6 +38,8 @@ The PC override is speculated as:
 2. If the instruction is a RET, the target is the top address popped from the RAS.
 
 Alongside the pc, every command (though only B&J would need them) will carry a `rasSP` (RAS Stack Pointer) to indicate the stack pointer of RAS (before the active inst is dispatched). This information will be passed on to BRU and used during rollback to restore the RAS state.
+
+The RAS Adaptor as well as the Decoder is wired directly into a DispatchRASPlexer, which selects the correct PC and forwards it to Dispatcher. The Plexer is stateless, and does not consume a cycle.
 
 ## Rollback Handling
 
