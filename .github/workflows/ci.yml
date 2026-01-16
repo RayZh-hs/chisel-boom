@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main", "feature/ci-cd" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  OBJCACHE: "env" 
+  CCACHE_DISABLE: 1
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up JDK
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Install Mill
+      uses: zhutmost/setup-mill@main
+      with:
+        mill-version: 0.12.7
+    
+    - name: Install Verilator
+      uses: veryl-lang/setup-verilator@v1
+      with:
+        version: 5.024
+
+    - name: Setup RISCV Toolchain
+      uses: gregdavill/setup-riscv-gnu-toolchain@v2.0
+
+    - name: Run tests
+      run: mill test

@@ -5,12 +5,12 @@ object `package` extends RootModule with ScalaModule {
     def scalaVersion = "2.13.12"
 
     def ivyDeps = Agg(
-      ivy"org.chipsalliance::chisel:6.0.0",
+      ivy"org.chipsalliance::chisel:6.5.0",
       ivy"org.scalatest::scalatest:3.2.19"
     )
 
     def scalacPluginIvyDeps = Agg(
-      ivy"org.chipsalliance:chisel-plugin_2.13.12:6.0.0"
+      ivy"org.chipsalliance:chisel-plugin_2.13.12:6.5.0"
     )
 
     def sources = T.sources(millSourcePath / "src", millSourcePath / "synthesis")

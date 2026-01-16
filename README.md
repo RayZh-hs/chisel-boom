@@ -1,10 +1,18 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="images/chisel-boom-logo-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="images/chisel-boom-logo-light.png">
-    <img alt="Chisel Boom Logo" src="images/chisel-boom-logo-light.png" width="300">
+    <source media="(prefers-color-scheme: dark)" srcset="images/boom-lite-logo-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="images/boom-lite-logo-light.png">
+    <img alt="Boom Lite Logo" src="images/boom-lite-logo-light.png" width="300">
   </picture>
 </p>
+
+<div align="center">
+
+[![Scala](https://img.shields.io/badge/Scala-2.13.12-red)](https://www.scala-lang.org/)
+[![Chisel](https://img.shields.io/badge/Chisel-6.5.0-blue)](https://www.chisel-lang.org/)
+[![CI](https://github.com/RayZh-hs/chisel-boom/actions/workflows/ci.yml/badge.svg)](https://github.com/RayZh-hs/chisel-boom/actions/workflows/ci.yml)
+
+</div>
 
 This repository contains a simplified chisel implementation of an Out-of-Order processor, inspired by the **Berkeley Out-of-Order Machine (BOOM)**.
 

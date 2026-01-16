@@ -4,9 +4,21 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 import scala.sys.process.Process
 import chiseltest._
+import chiseltest.simulator.VerilatorCFlags
+import firrtl2.annotations.Annotation
 import core.BoomCore
 
 object E2EUtils {
+    // Flag to detect if running in CI environment
+    val isCI: Boolean =
+        sys.env.get("CI").contains("true") || sys.env.contains("GITHUB_ACTIONS")
+
+    // Common test annotations for all simulations
+    val testAnnotations: Seq[Annotation] = Seq(
+      VerilatorBackendAnnotation,
+      VerilatorCFlags(Seq("-Wno-type-limits"))
+    ) ++ (if (Configurables.ENABLE_VCD && !isCI) Seq(WriteVcdAnnotation)
+          else Seq.empty)
     def findRepoRoot(start: Path): Path = {
         var cur = start
         while (cur != null && !Files.exists(cur.resolve("build.mill"))) {
@@ -54,6 +66,7 @@ object E2EUtils {
     lazy val toolchain: Option[(String, String)] = {
         val binDir = sys.env.get("RISCV_BIN").map(_ + "/").getOrElse("")
         val prefixes = Seq(
+          "riscv-none-elf-",
           "riscv32-unknown-elf-",
           "riscv64-unknown-elf-",
           "riscv64-linux-gnu-",

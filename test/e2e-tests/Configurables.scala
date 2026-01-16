@@ -4,6 +4,7 @@ import utility.CycleAwareModule
 
 object Configurables {
     val MAX_CYCLE_COUNT = 4_000_000
+    val ENABLE_VCD: Boolean = true
 
     assert(
       MAX_CYCLE_COUNT <= CycleAwareModule.Configurables.MAX_CYCLE_COUNT,
