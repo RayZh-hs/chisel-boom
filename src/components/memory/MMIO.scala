@@ -1,4 +1,4 @@
-package components.structures
+package components.memory
 import chisel3._
 import chisel3.util._
 import common._
@@ -23,15 +23,16 @@ class MMIORouter(val mappings: Seq[UInt]) extends Module {
         io.devices(i).req.valid := io.upstream.req.valid && sel(i)
         io.devices(i).req.bits := io.upstream.req.bits
         when(sel(i)) {
-             io.upstream.req.ready := io.devices(i).req.ready
+            io.upstream.req.ready := io.devices(i).req.ready
         }
     }
 
     // Response Logic (1 cycle latency)
+    // [FIX] Generate response valid for both Load AND Store requests.
     io.upstream.resp.valid := RegNext(
-      io.upstream.req.valid && anySel && io.upstream.req.bits.isLoad
+      io.upstream.req.valid && anySel
     )
-    
+
     // Broadcast ready to devices (simplification)
     for (i <- 0 until mappings.length) {
         io.devices(i).resp.ready := io.upstream.resp.ready

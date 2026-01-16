@@ -49,9 +49,12 @@ object RunCFile extends App {
         }
 
     println(s"Running simulation using hex file: $hex")
-
-    simulate(new BoomCore(hex.toString)) { dut =>
-
+    // In RunCFile.scala
+    val fixedHexPath = Paths.get("current_run.hex").toAbsolutePath
+    Files.copy(hex, fixedHexPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+    
+    // Now the Verilog generated for this module is identical across all tests
+    simulate(new BoomCore(fixedHexPath.toString)) { dut =>
         dut.reset.poke(true.B)
         dut.clock.step()
         dut.reset.poke(false.B)

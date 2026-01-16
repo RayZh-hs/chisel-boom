@@ -9,14 +9,6 @@ import components.structures._
 import components.memory._
 import common._
 import common.Configurables._
-import components.structures.{
-    ALUInfo,
-    BRUInfo,
-    IssueBuffer,
-    LoadStoreInfo,
-    SequentialIssueBuffer,
-    SequentialBufferEntry
-}
 
 class BoomCore(val hexFile: String) extends CycleAwareModule {
     val io = IO(new Bundle {
