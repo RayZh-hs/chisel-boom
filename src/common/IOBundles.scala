@@ -194,6 +194,19 @@ class BoomCoreProfileBundle extends Bundle {
     val lsuQueueDepth = optfield(Utilization, UInt(64.W))
     val robDepth = optfield(Utilization, UInt(64.W))
 
+    // Throughput Counts (Fired Events)
+    val countFetcher = optfield(Utilization, UInt(64.W))
+    val countDecoder = optfield(Utilization, UInt(64.W))
+    val countDispatcher = optfield(Utilization, UInt(64.W))
+    val countIssueALU = optfield(Utilization, UInt(64.W))
+    val countIssueBRU = optfield(Utilization, UInt(64.W))
+    val countLSU = optfield(Utilization, UInt(64.W))
+    val countWriteback = optfield(Utilization, UInt(64.W))
+
+    // Dependency Resolution (Accumulated Wait Cycles)
+    val waitDepALU = optfield(Utilization, UInt(64.W))
+    val waitDepBRU = optfield(Utilization, UInt(64.W))
+
     // Rollback
     val totalRollbackEvents = optfield(RollbackTime, UInt(32.W))
     val totalRollbackCycles = optfield(RollbackTime, UInt(32.W))

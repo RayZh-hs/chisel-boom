@@ -285,22 +285,115 @@ object E2EUtils {
                 val fetcher = p.busyFetcher.get.peek().litValue
                 val decoder = p.busyDecoder.get.peek().litValue
                 val dispatcher = p.busyDispatcher.get.peek().litValue
+                val issueALU = p.busyIssueALU.get.peek().litValue
+                val issueBRU = p.busyIssueBRU.get.peek().litValue
                 val alu = p.busyALU.get.peek().litValue
                 val bru = p.busyBRU.get.peek().litValue
                 val lsu = p.busyLSU.get.peek().litValue
+                val writeback = p.busyWriteback.get.peek().litValue
                 val rob = p.busyROB.get.peek().litValue
+
+                // Fetch throughput counts
+                val countFetcher = p.countFetcher.get.peek().litValue
+                val countDecoder = p.countDecoder.get.peek().litValue
+                val countDispatcher = p.countDispatcher.get.peek().litValue
+                val countIssueALU = p.countIssueALU.get.peek().litValue
+                val countIssueBRU = p.countIssueBRU.get.peek().litValue
+                val countLSU = p.countLSU.get.peek().litValue
+                val countWriteback = p.countWriteback.get.peek().litValue
+                
+                // Dependency Waits
+                val waitDepALU = p.waitDepALU.get.peek().litValue
+                val waitDepBRU = p.waitDepBRU.get.peek().litValue
+
+                // Fetch new stall signals
+                val fetcherStallBuffer = p.fetcherStallBuffer.get.peek().litValue
+                val decoderStallDispatch = p.decoderStallDispatch.get.peek().litValue
+                val dispatcherStallFreeList = p.dispatcherStallFreeList.get.peek().litValue
+                val dispatcherStallROB = p.dispatcherStallROB.get.peek().litValue
+                val dispatcherStallIssue = p.dispatcherStallIssue.get.peek().litValue
+                val issueALUStallOperands = p.issueALUStallOperands.get.peek().litValue
+                val issueALUStallPort = p.issueALUStallPort.get.peek().litValue
+                val issueBRUStallOperands = p.issueBRUStallOperands.get.peek().litValue
+                val issueBRUStallPort = p.issueBRUStallPort.get.peek().litValue
+                val lsuStallCommit = p.lsuStallCommit.get.peek().litValue
 
                 def formatUtil(name: String, busy: BigInt): Unit = {
                     val rate = if (cycle > 0) (busy.toDouble / cycle.toDouble) * 100.0 else 0.0
                     println(f"  $name%-12s: $busy%8d / $cycle%8d ($rate%.2f%%)")
                 }
+                
+                def formatUtilWithThroughput(name: String, busy: BigInt, processed: BigInt): Unit = {
+                    val rate = if (cycle > 0) (busy.toDouble / cycle.toDouble) * 100.0 else 0.0
+                    val throughput = if (busy > 0) processed.toDouble / busy.toDouble else 0.0
+                    println(f"  $name%-12s: $busy%8d / $cycle%8d ($rate%.2f%%) [TP: $throughput%.2f instr/busy-cycle]")
+                }
 
-                formatUtil("Fetcher", fetcher)
-                formatUtil("Decoder", decoder)
-                formatUtil("Dispatcher", dispatcher)
+                def formatSubUtil(name: String, busy: BigInt): Unit = {
+                    val rate = if (cycle > 0) (busy.toDouble / cycle.toDouble) * 100.0 else 0.0
+                    println(f"    $name%-18s: $busy%8d / $cycle%8d ($rate%.2f%%)")
+                }
+
+                formatUtilWithThroughput("Fetcher", fetcher, countFetcher)
+                formatSubUtil("Stall-Buffer", fetcherStallBuffer)
+                
+                formatUtilWithThroughput("Decoder", decoder, countDecoder)
+                formatSubUtil("Stall-Dispatch", decoderStallDispatch)
+
+                formatUtilWithThroughput("Dispatcher", dispatcher, countDispatcher)
+                formatSubUtil("Stall-FreeList", dispatcherStallFreeList)
+                formatSubUtil("Stall-ROB", dispatcherStallROB)
+                formatSubUtil("Stall-Issue", dispatcherStallIssue)
+
+                formatUtil("Issue-ALU", issueALU)
+                formatSubUtil("Stall-Operands", issueALUStallOperands)
+                formatSubUtil("Stall-Port", issueALUStallPort)
+                val avgWaitALU = if(countIssueALU > 0) waitDepALU.toDouble / countIssueALU.toDouble else 0.0
+                println(f"    Avg Dep Latency   : $avgWaitALU%.2f cycles/instr")
+
+                formatUtil("Issue-BRU", issueBRU)
+                formatSubUtil("Stall-Operands", issueBRUStallOperands)
+                formatSubUtil("Stall-Port", issueBRUStallPort)
+                val avgWaitBRU = if(countIssueBRU > 0) waitDepBRU.toDouble / countIssueBRU.toDouble else 0.0
+                println(f"    Avg Dep Latency   : $avgWaitBRU%.2f cycles/instr")
+
                 formatUtil("ALU", alu)
                 formatUtil("BRU", bru)
-                formatUtil("LSU", lsu)
+                formatUtilWithThroughput("LSU", lsu, countLSU)
+                formatSubUtil("Stall-Commit", lsuStallCommit)
+
+                formatUtilWithThroughput("Writeback", writeback, countWriteback)
+                formatUtil("ROB-Commit", rob)
+
+                println(f"Average Queue/Buffer Depth:")
+                // Fetch Depth
+                val fetchD = if(cycle > 0) p.fetchQueueDepth.get.peek().litValue.toDouble / cycle.toDouble else 0.0
+                println(f"  Fetch Queue : $fetchD%.2f")
+
+                // Issue ALU Depth
+                val issueALUD = if(cycle > 0) p.issueALUDepth.get.peek().litValue.toDouble / cycle.toDouble else 0.0
+                val issueBRUD = if(cycle > 0) p.issueBRUDepth.get.peek().litValue.toDouble / cycle.toDouble else 0.0
+                println(f"  Issue ALU   : $issueALUD%.2f")
+                println(f"  Issue BRU   : $issueBRUD%.2f")
+
+                // LSU Depth
+                val lsuD = if(cycle > 0) p.lsuQueueDepth.get.peek().litValue.toDouble / cycle.toDouble else 0.0
+                println(f"  LSU Buffer  : $lsuD%.2f")
+
+                // ROB Depth
+                val robD = if(cycle > 0) p.robDepth.get.peek().litValue.toDouble / cycle.toDouble else 0.0
+                println(f"  ROB         : $robD%.2f")
+                
+                println(f"Speculation Stats:")
+                val retired = p.totalInstructions.get.peek().litValue
+                val dispatched = countDispatcher // Use Dispatch count as proxy for total speculative dispatched
+                val squashed = if(dispatched > retired) dispatched - retired else 0
+                println(f"  Total Dispatched    : $dispatched")
+                println(f"  Total Retired       : $retired")
+                println(f"  Squashed Instructions: $squashed")
+
+
+                formatUtil("Writeback", writeback)
                 formatUtil("ROB-Commit", rob)
             }
 

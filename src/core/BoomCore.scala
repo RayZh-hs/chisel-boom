@@ -39,8 +39,8 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     val btb = Module(new BranchTargetBuffer)
 
     val rob = Module(new ReOrderBuffer)
-    val aluIB = Module(new IssueBuffer(new ALUInfo, 8, "ALU_IB"))
-    val bruIB = Module(new IssueBuffer(new BRUInfo, 4, "BRU_IB"))
+    val aluIB = Module(new IssueBuffer(new ALUInfo, 16, "ALU_IB"))
+    val bruIB = Module(new IssueBuffer(new BRUInfo, 16, "BRU_IB"))
     val aluAdaptor = Module(new ALUAdaptor)
     val bruAdaptor = Module(new BRUAdaptor)
 
@@ -389,6 +389,31 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         val lsuQueueDepthSum = RegInit(0.U(64.W))
         val robDepthSum = RegInit(0.U(64.W))
 
+        // Throughput & Waits
+        val countFetcherSum = RegInit(0.U(64.W))
+        val countDecoderSum = RegInit(0.U(64.W))
+        val countDispatcherSum = RegInit(0.U(64.W))
+        val countIssueALUSum = RegInit(0.U(64.W))
+        val countIssueBRUSum = RegInit(0.U(64.W))
+        val countLSUSum = RegInit(0.U(64.W))
+        val countWritebackSum = RegInit(0.U(64.W))
+        
+        val waitDepALUSum = RegInit(0.U(64.W))
+        val waitDepBRUSum = RegInit(0.U(64.W))
+        
+        // Counter Updates
+        when(fetcher.io.ifOut.fire) { countFetcherSum := countFetcherSum + 1.U }
+        when(decoder.io.out.fire) { countDecoderSum := countDecoderSum + 1.U }
+        when(dispatcher.io.instOutput.fire) { countDispatcherSum := countDispatcherSum + 1.U }
+        when(aluIB.io.out.fire) { countIssueALUSum := countIssueALUSum + 1.U }
+        when(bruIB.io.out.fire) { countIssueBRUSum := countIssueBRUSum + 1.U }
+        // LSU entry: dispatch fires to LSQ
+        when(lsAdaptor.io.issueIn.fire) { countLSUSum := countLSUSum + 1.U }
+        when(bc.io.broadcastOut.valid) { countWritebackSum := countWritebackSum + 1.U }
+
+        waitDepALUSum := waitDepALUSum + aluIB.io.waitDepCount.get
+        waitDepBRUSum := waitDepBRUSum + bruIB.io.waitDepCount.get
+
         when(fetcherBusy) { fetcherBusyCount := fetcherBusyCount + 1.U }
         when(decoderBusy) { decoderBusyCount := decoderBusyCount + 1.U }
         when(dispatcherBusy) { dispatcherBusyCount := dispatcherBusyCount + 1.U }
@@ -444,6 +469,17 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         io.profiler.issueBRUDepth.get := issueBRUDepthSum
         io.profiler.lsuQueueDepth.get := lsuQueueDepthSum
         io.profiler.robDepth.get := robDepthSum
+
+        io.profiler.countFetcher.get := countFetcherSum
+        io.profiler.countDecoder.get := countDecoderSum
+        io.profiler.countDispatcher.get := countDispatcherSum
+        io.profiler.countIssueALU.get := countIssueALUSum
+        io.profiler.countIssueBRU.get := countIssueBRUSum
+        io.profiler.countLSU.get := countLSUSum
+        io.profiler.countWriteback.get := countWritebackSum
+        
+        io.profiler.waitDepALU.get := waitDepALUSum
+        io.profiler.waitDepBRU.get := waitDepBRUSum
         
         dontTouch(fetcherBusyCount)
         dontTouch(decoderBusyCount)

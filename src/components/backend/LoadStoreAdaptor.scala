@@ -32,7 +32,7 @@ class LoadStoreAdaptor extends CycleAwareModule {
         val lsqCount = if (common.Configurables.Profiling.Utilization) Some(Output(UInt(log2Ceil(9).W))) else None // 8 entries
     })
 
-    val lsq = Module(new SequentialIssueBuffer(new LoadStoreInfo, 8, "LSQ"))
+    val lsq = Module(new SequentialIssueBuffer(new LoadStoreInfo, 16, "LSQ"))
     io.lsqCount.foreach(_ := lsq.io.count.get)
 
     // Connect LSQ
