@@ -29,7 +29,7 @@ class RegisterAliasTable(
         )
 
         val debugBroadcastValid =
-            if (Configurables.Elaboration.printOnBroadcast) Some(Input(Bool()))
+            if (Configurables.Elaboration.printRegFileOnCommit) Some(Input(Bool()))
             else None
     })
 

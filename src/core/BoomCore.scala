@@ -99,7 +99,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     dispatcher.io.ratAccess.stalePdst := rat.io.readP(2)
     rat.io.update(0) <> dispatcher.io.ratAccess.update
 
-    if (Configurables.Elaboration.printOnBroadcast) {
+    if (Configurables.Elaboration.printRegFileOnCommit) {
         rat.io.debugBroadcastValid.get := bc.io.broadcastOut.valid
     }
 
