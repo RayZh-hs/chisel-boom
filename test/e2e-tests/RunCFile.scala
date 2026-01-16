@@ -1,7 +1,5 @@
 package e2e
 
-import chiseltest._
-import core.BoomCore
 import java.nio.file.{Path, Paths, Files}
 import common.Configurables._
 import e2e.Configurables._
@@ -48,24 +46,17 @@ object RunCFile extends App {
         }
 
     println(s"Running simulation using hex file: $hex")
+    println("Simulation started.")
 
-    RawTester.test(
-      new BoomCore(hex.toString),
-      E2EUtils.testAnnotations
-    ) { dut =>
-        dut.clock.setTimeout(MAX_CYCLE_COUNT)
-        println("Simulation started.")
+    val simRes = runTestWithHex(hex)
 
-        val simRes = E2EUtils.runSimulation(dut, MAX_CYCLE_COUNT)
-
-        Thread.sleep(500) // Wait for final prints to flush
-        if (!simRes.timedOut) {
-            println(s"Simulation finished in ${simRes.cycles} cycles.")
-            println(s"Return Code: ${simRes.result}")
-            println(s"Output: ${simRes.output.mkString(" ")}")
-        } else {
-            println(s"Simulation timed out after ${simRes.cycles} cycles.")
-            println(s"Output so far: ${simRes.output.mkString(" ")}")
-        }
+    Thread.sleep(500) // Wait for final prints to flush
+    if (!simRes.timedOut) {
+        println(s"Simulation finished in ${simRes.cycles} cycles.")
+        println(s"Return Code: ${simRes.result}")
+        println(s"Output: ${simRes.output.mkString(" ")}")
+    } else {
+        println(s"Simulation timed out after ${simRes.cycles} cycles.")
+        println(s"Output so far: ${simRes.output.mkString(" ")}")
     }
 }

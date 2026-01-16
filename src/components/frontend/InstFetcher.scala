@@ -9,13 +9,16 @@ class InstFetcher extends CycleAwareModule {
     val io = IO(new Bundle {
         val pcOverwrite =
             Input(Valid(UInt(32.W))) // Overwrite PC when misprediction occurs
-        val instAddr =
-            Output(UInt(32.W)) // Inst Addr to be routed to BTB and ICache
-        val instData = Input(UInt(32.W)) // Inst Data from ICache
+        val instAddr = Output(UInt(32.W)) // Debug/Trace output
         val btbResult = Input(Valid(UInt(32.W))) // Branch Target from BTB
-        val ifOut = Decoupled(
-          new FetchToDecodeBundle()
-        ) // Output to Decode Stage (wire into queue)
+
+        val icache = new Bundle {
+            val req = Decoupled(UInt(32.W)) // We send Address
+            val resp =
+                Flipped(Decoupled(UInt(32.W))) // We receive Data + Valid (Hit)
+        }
+
+        val ifOut = Decoupled(new FetchToDecodeBundle())
     })
 
     val pc = RegInit(0.U(32.W))
@@ -23,18 +26,10 @@ class InstFetcher extends CycleAwareModule {
     // Forward declaration: Stage 2 states
     val s2Valid = RegInit(false.B)
     val s2PC = Reg(UInt(32.W))
+    val s2Predict = Reg(Bool())
+    val s2Target = Reg(UInt(32.W))
 
-    // =========================================================
-    // Control Signals
-    // =========================================================
-
-    // In S2 we can send data to decode when the data is valid and Decode is ready.
-    val s2Fire = s2Valid && io.ifOut.ready
-
-    // In S1 we can fetch a new instruction if any of the following is true:
-    // 1. S2 is empty (!s2_valid)
-    // 2. S2 is moving to Decode (s2_fire)
-    // 3. We are flushing (io.pcOverwrite) -> everything is cleared and we restart
+    val s2Fire = s2Valid && io.ifOut.ready && io.icache.resp.valid
     val s1Ready = !s2Valid || s2Fire || io.pcOverwrite.valid
 
     // =========================================================
@@ -46,7 +41,7 @@ class InstFetcher extends CycleAwareModule {
     when(io.pcOverwrite.valid) {
         fetchAddr := io.pcOverwrite.bits
     }.elsewhen(s2Valid && !s2Fire) {
-        fetchAddr := s2PC // Hold the target pc if S2 is not moving
+        fetchAddr := s2PC // Hold the target pc if ifOut stall or cache miss
     }.elsewhen(io.btbResult.valid) {
         fetchAddr := io.btbResult.bits
     }.otherwise {
@@ -54,16 +49,20 @@ class InstFetcher extends CycleAwareModule {
     }
     io.instAddr := fetchAddr
 
+    io.icache.req.valid := !reset.asBool
+    io.icache.req.bits := fetchAddr
+
+    // (Note: We ignore icache.req.ready here. If cache is not ready (refilling),
+    // it won't return valid data, s2Fire will be false, and we naturally retry
+    // this fetchAddr next cycle).
+
     // Update PC for next cycle
     val nextPC = Wire(UInt(32.W))
     when(io.pcOverwrite.valid) {
-        // Priority 1: External Flush / Exception (Overrides everything)
         nextPC := io.pcOverwrite.bits + 4.U
     }.elsewhen(io.btbResult.valid) {
-        // Priority 2: Branch Prediction Redirect
         nextPC := io.btbResult.bits + 4.U
     }.elsewhen(s1Ready) {
-        // Priority 3: S1 is working, so push the pc (PC + 4)
         nextPC := pc + 4.U
     }.otherwise {
         nextPC := pc
@@ -71,13 +70,9 @@ class InstFetcher extends CycleAwareModule {
     pc := nextPC
 
     // =========================================================
-    // Stage 2 (S2): State Update
+    // Stage 2: Output Logic
     // =========================================================
 
-    // Does S1 issue a request that will result in valid data for S2 next cycle?
-    // 1. Flush: ALWAYS issues a valid new request.
-    // 2. Predict Taken: it was sent, but we later know it is wrong.
-    // 3. Normal: If S1 is ready, we issue a valid request.
     val s1Fire = s1Ready
 
     when(s1Fire) {
@@ -87,13 +82,15 @@ class InstFetcher extends CycleAwareModule {
         s2Valid := false.B
     }
 
-    // Mask valid if flushing current cycle
-    io.ifOut.valid := s2Valid && !io.pcOverwrite.valid
+    // Output valid only on Cache Hit
+    io.ifOut.valid := s2Valid && !io.pcOverwrite.valid && io.icache.resp.valid
 
     io.ifOut.bits.pc := s2PC
-    io.ifOut.bits.inst := io.instData
-    io.ifOut.bits.predict := io.btbResult.valid
+    io.ifOut.bits.inst := io.icache.resp.bits
+    io.ifOut.bits.predict := io.btbResult.valid && !io.pcOverwrite.valid
     io.ifOut.bits.predictedTarget := io.btbResult.bits
+
+    io.icache.resp.ready := s2Fire
 
     // Debugging
     when(io.ifOut.fire) {

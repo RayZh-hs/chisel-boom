@@ -1,11 +1,11 @@
 package e2e
 
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, Path, Paths, StandardCopyOption}
+import scala.jdk.CollectionConverters._
 import scala.sys.process.Process
-import chiseltest._
-import chiseltest.simulator.VerilatorCFlags
-import firrtl2.annotations.Annotation
+import chisel3._
+import chisel3.simulator.EphemeralSimulator._
 import core.BoomCore
 
 object E2EUtils {
@@ -13,12 +13,6 @@ object E2EUtils {
     val isCI: Boolean =
         sys.env.get("CI").contains("true") || sys.env.contains("GITHUB_ACTIONS")
 
-    // Common test annotations for all simulations
-    val testAnnotations: Seq[Annotation] = Seq(
-      VerilatorBackendAnnotation,
-      VerilatorCFlags(Seq("-Wno-type-limits"))
-    ) ++ (if (Configurables.ENABLE_VCD && !isCI) Seq(WriteVcdAnnotation)
-          else Seq.empty)
     def findRepoRoot(start: Path): Path = {
         var cur = start
         while (cur != null && !Files.exists(cur.resolve("build.mill"))) {
@@ -35,6 +29,7 @@ object E2EUtils {
         repoRoot.resolve("test/e2e-tests/resources/expected")
     val linkageDir: Path = repoRoot.resolve("test/e2e-tests/resources/linkage")
     val genDir: Path = repoRoot.resolve("test/e2e-tests/generated")
+    val sharedHexPath: Path = genDir.resolve("shared_program.hex")
     val simtestsDir: Path = cDir.resolve("simtests")
     val skipJson: Path = repoRoot.resolve("test/e2e-tests/resources/skip.jsonc")
 
@@ -138,6 +133,26 @@ object E2EUtils {
         val crt0 = linkageDir.resolve("crt0.S")
         val mathC = linkageDir.resolve("math.c")
 
+        // Check dependencies (source, linker script, startup code, headers)
+        val includeDir = cDir.resolve("include")
+        val headerFiles = if (Files.isDirectory(includeDir)) {
+            Files.list(includeDir).iterator().asScala.toList
+        } else {
+            Nil
+        }
+        val dependencies = Seq(cFile, linkLd, crt0) ++ headerFiles
+
+        // If hex exists and is newer than all dependencies, skip rebuild
+        if (Files.exists(hex)) {
+            val hexTime = Files.getLastModifiedTime(hex).toMillis
+            val upToDate = !dependencies.exists(d =>
+                Files.exists(d) && Files
+                    .getLastModifiedTime(d)
+                    .toMillis > hexTime
+            )
+            if (upToDate) return hex
+        }
+
         val compileCmd = Seq(
           gcc,
           "-march=rv32i",
@@ -198,35 +213,102 @@ object E2EUtils {
         timedOut: Boolean
     )
 
+    def runTestWithHex(
+        hexPath: Path,
+        maxCycles: Int = Configurables.MAX_CYCLE_COUNT
+    ): SimulationResult = {
+        // Shared path for the hex file to avoid recompilation of BoomCore
+        // We place it outside the specific test run directory so it persists/is accessible
+        Files.copy(hexPath, sharedHexPath, StandardCopyOption.REPLACE_EXISTING)
+
+        var res: SimulationResult = null
+        simulate(new BoomCore(sharedHexPath.toAbsolutePath.toString)) { dut =>
+            res = runSimulation(dut, maxCycles)
+        }
+        res
+    }
+
     def runSimulation(
         dut: BoomCore,
         maxCycles: Int = Configurables.MAX_CYCLE_COUNT,
         debugCallback: (Int) => Unit = _ => ()
     ): SimulationResult = {
+
+        dut.reset.poke(true.B)
+        dut.clock.step()
+        dut.reset.poke(false.B)
+
         var cycle = 0
         var result: BigInt = 0
         var outputBuffer = scala.collection.mutable.ArrayBuffer[BigInt]()
         var done = false
 
+        val batchSize = 4096
+
         while (!done && cycle < maxCycles) {
             debugCallback(cycle)
 
-            if (dut.io.put.valid.peek().litToBoolean) {
-                outputBuffer += dut.io.put.bits.data
-                    .peek()
-                    .litValue
-                    .toInt
+            // Run in batches
+            try {
+                // Step for a batch (or remainder)
+                val steps = Math.min(batchSize, maxCycles - cycle)
+                dut.clock.step(steps)
+                cycle += steps
+            } catch {
+                case e: Exception
+                    if e.getMessage != null && (e.getMessage.contains(
+                      "stop"
+                    ) || e.getMessage.contains("Stop") || e.getMessage.contains(
+                      "simulation has already finished"
+                    )) =>
+                    done = true
+                case e: Throwable =>
+                    val str = e.toString
+                    val msg = if (e.getMessage != null) e.getMessage else ""
+                    if (
+                      str.contains("StopException") || str.contains(
+                        "stop"
+                      ) || msg.contains("simulation has already finished")
+                    ) {
+                        done = true
+                    } else {
+                        throw e
+                    }
             }
 
+            // Check for exit condition (latched)
+            // Even if simulation stopped, peekable state should remain
             if (dut.io.exit.valid.peek().litToBoolean) {
-                result = dut.io.exit.bits.data.peek().litValue.toInt
+                result = dut.io.exit.bits.peek().litValue
                 done = true
-            } else {
+            }
+
+            // Drain debug output queue
+            // We use a small loop to drain up to 'batchSize' elements or until empty
+            var drained = 0
+            while (drained < 64 && dut.io.put.valid.peek().litToBoolean) {
+                val outVal = dut.io.put.bits.peek().litValue
+                // Convert unsigned 32-bit to signed 32-bit BigInt
+                val outSigned =
+                    if (outVal >= BigInt("80000000", 16))
+                        outVal - BigInt("100000000", 16)
+                    else outVal
+                outputBuffer += outSigned
+
+                // Handshake
+                dut.io.put.ready.poke(true.B)
                 dut.clock.step(1)
+                dut.io.put.ready.poke(false.B)
+                drained += 1
                 cycle += 1
             }
         }
 
-        SimulationResult(result, outputBuffer.toSeq, cycle, !done)
+        SimulationResult(
+          result,
+          outputBuffer.toSeq,
+          cycle,
+          !done && cycle >= maxCycles
+        )
     }
 }

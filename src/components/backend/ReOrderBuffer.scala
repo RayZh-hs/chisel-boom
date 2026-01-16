@@ -23,7 +23,6 @@ class ReOrderBuffer extends CycleAwareModule {
         val broadcastInput = Flipped(Decoupled(new BroadcastBundle))
         val commit = Decoupled(new ROBEntry)
         val robTag = Output(UInt(ROB_WIDTH.W))
-        val flush = Input(Bool())
         val brUpdate = Flipped(Valid(new Bundle {
             val robTag = UInt(ROB_WIDTH.W)
             val mispredict = Bool()
