@@ -48,6 +48,10 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
     val buffer = Reg(Vec(numEntries, new IssueBufferEntry(gen)))
     val valid = RegInit(VecInit(Seq.fill(numEntries)(false.B)))
 
+    // --- Round Robin State ---
+    // Tracks the index of the last instruction issued to ensure fairness
+    val lastIssuedIndex = RegInit(0.U(log2Ceil(numEntries).W))
+
     when(io.flush.valid) {
         for (i <- 0 until numEntries) {
             when(valid(i) && io.flush.checkKilled(buffer(i).robTag)) {
@@ -57,16 +61,21 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
     }
 
     // 4. Update Readiness (Snoop/Broadcast)
-    // Only update valid entries when broadcast is active
     when(io.broadcast.valid) {
         val resPdst = io.broadcast.bits.pdst
         for (i <- 0 until numEntries) {
             when(valid(i)) {
                 when(buffer(i).src1 === resPdst) {
                     buffer(i).src1Ready := true.B
+                    printf(
+                      p"${name}: Broadcast wake up robTag=${buffer(i).robTag} src1=${buffer(i).src1}\n"
+                    )
                 }
                 when(buffer(i).src2 === resPdst) {
                     buffer(i).src2Ready := true.B
+                    printf(
+                      p"${name}: Broadcast wake up robTag=${buffer(i).robTag} src2=${buffer(i).src2}\n"
+                    )
                 }
             }
         }
@@ -76,6 +85,8 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
     val canEnqueue = !valid.asUInt.andR
     io.in.ready := canEnqueue && !io.flush.valid
 
+    // Note: We still fill the lowest empty slot.
+    // Starvation is prevented by the Issue Logic (Dequeue), not the Enqueue Logic.
     val emptyIndex = PriorityEncoder(valid.map(!_))
 
     when(io.in.fire) {
@@ -92,9 +103,19 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
 
         buffer(emptyIndex) := updatedEntry
         valid(emptyIndex) := true.B
+
+        if (Configurables.Elaboration.pcInIssueBuffer) {
+            printf(
+              p"${name}: Enq robTag=${updatedEntry.robTag} pdst=${updatedEntry.pdst} src1=${updatedEntry.src1} src1Ready=${updatedEntry.src1Ready} src2=${updatedEntry.src2} src2Ready=${updatedEntry.src2Ready} pc=0x${Hexadecimal(updatedEntry.pc.get)}\n"
+            )
+        } else {
+            printf(
+              p"${name}: Enq robTag=${updatedEntry.robTag} pdst=${updatedEntry.pdst} src1=${updatedEntry.src1} src1Ready=${updatedEntry.src1Ready} src2=${updatedEntry.src2} src2Ready=${updatedEntry.src2Ready}\n"
+            )
+        }
     }
 
-    // 5. Issue Logic (Out-of-Order selection)
+    // 5. Issue Logic (Round-Robin Selection)
     val readyEntries = Wire(Vec(numEntries, Bool()))
     for (i <- 0 until numEntries) {
         readyEntries(i) := valid(i) && buffer(i).src1Ready && buffer(
@@ -102,7 +123,22 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
         ).src2Ready
     }
 
-    val issueIndex = PriorityEncoder(readyEntries)
+    // Create a masked version of ready signals.
+    // We only look at entries with an index GREATER than the last one issued.
+    val maskedReadyEntries = Wire(Vec(numEntries, Bool()))
+    for (i <- 0 until numEntries) {
+        maskedReadyEntries(i) := readyEntries(i) && (i.U > lastIssuedIndex)
+    }
+
+    // Check if there are any ready entries in the masked region (wrap-around logic)
+    val hasReadyInMask = maskedReadyEntries.asUInt.orR
+
+    // If we have a ready entry after the pointer, pick that.
+    // Otherwise, wrap around and pick the first available from the start.
+    val nextIndex = PriorityEncoder(maskedReadyEntries)
+    val wrapIndex = PriorityEncoder(readyEntries)
+
+    val issueIndex = Mux(hasReadyInMask, nextIndex, wrapIndex)
     val canIssue = readyEntries.asUInt.orR
 
     io.out.valid := canIssue && !io.flush.valid
@@ -110,19 +146,10 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
 
     when(io.out.fire) {
         valid(issueIndex) := false.B
+        // Update the round-robin pointer
+        lastIssuedIndex := issueIndex
     }
 
-    when(io.in.fire) {
-        if (Configurables.Elaboration.pcInIssueBuffer) {
-            printf(
-              p"${name}: Enq robTag=${io.in.bits.robTag} pdst=${io.in.bits.pdst} pc=0x${Hexadecimal(io.in.bits.pc.get)}\n"
-            )
-        } else {
-            printf(
-              p"${name}: Enq robTag=${io.in.bits.robTag} pdst=${io.in.bits.pdst}\n"
-            )
-        }
-    }
     when(io.out.fire) {
         if (Configurables.Elaboration.pcInIssueBuffer) {
             printf(
