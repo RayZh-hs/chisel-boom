@@ -14,8 +14,8 @@ import components.backend.ROBEntry
   */
 class InstDispatcher extends CycleAwareModule {
     val io = IO(new Bundle {
-        val instInput = Flipped(Decoupled(new DecodedInstBundle))
-        val instOutput = Decoupled(new DecodedInstBundle)
+        val instInput = Flipped(Decoupled(new DecodedInstWithRAS))
+        val instOutput = Decoupled(new DecodedInstWithRAS)
 
         val robOutput = Decoupled(new DispatchToROBBundle)
 
@@ -38,7 +38,7 @@ class InstDispatcher extends CycleAwareModule {
         }
     })
 
-    val inst = io.instInput.bits // incoming instruction
+    val inst = io.instInput.bits.inst // incoming instruction
     val needAlloc = inst.ldst =/= 0.U
     val canDispatch = io.instInput.valid &&
         io.instOutput.ready &&
@@ -72,13 +72,15 @@ class InstDispatcher extends CycleAwareModule {
     val stalePdst = io.ratAccess.stalePdst
 
     // Fill Output Bundles
-    io.instOutput.bits := inst
-    io.instOutput.bits.prs1 := prs1
-    io.instOutput.bits.prs2 := prs2
-    io.instOutput.bits.pdst := currentPdst
-    io.instOutput.bits.stalePdst := stalePdst
-    io.instOutput.bits.predict := inst.predict
-    io.instOutput.bits.predictedTarget := inst.predictedTarget
+    io.instOutput.bits.inst := inst
+    io.instOutput.bits.rasSP := io.instInput.bits.rasSP
+
+    io.instOutput.bits.inst.prs1 := prs1
+    io.instOutput.bits.inst.prs2 := prs2
+    io.instOutput.bits.inst.pdst := currentPdst
+    io.instOutput.bits.inst.stalePdst := stalePdst
+    io.instOutput.bits.inst.predict := inst.predict
+    io.instOutput.bits.inst.predictedTarget := inst.predictedTarget
 
     io.robOutput.bits.ldst := inst.ldst
     io.robOutput.bits.pdst := currentPdst

@@ -16,6 +16,7 @@ class BRUInfo extends Bundle {
     val pc = UInt(32.W)
     val predict = Bool()
     val predictedTarget = UInt(32.W)
+    val rasSP = UInt(RAS_WIDTH.W)
 }
 
 class IssueBufferEntry[T <: Data](gen: T) extends Bundle {

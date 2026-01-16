@@ -49,6 +49,11 @@ class DecodedInstBundle extends Bundle {
     // pdst is assumed to be pdst
 }
 
+class DecodedInstWithRAS extends Bundle {
+    val inst = new DecodedInstBundle
+    val rasSP = UInt(RAS_WIDTH.W)
+}
+
 class DispatchToROBBundle extends Bundle {
     val ldst = UInt(5.W)
     val pdst = UInt(PREG_WIDTH.W)
@@ -72,6 +77,7 @@ class DispatchToBRQBundle extends Bundle {
     val prs1, prs2 = UInt(PREG_WIDTH.W)
     val (useImm, imm) = (Bool(), UInt(32.W))
     val pc = UInt(32.W)
+    val rasSP = UInt(RAS_WIDTH.W)
 }
 
 class DispatchToLSQBundle extends Bundle {
@@ -105,6 +111,7 @@ class BranchUpdateBundle extends Bundle {
     val robTag = UInt(ROB_WIDTH.W)
     val predict = Bool()
     val predictedTarget = UInt(32.W)
+    val rasSP = UInt(RAS_WIDTH.W)
 }
 
 class FlushBundle extends Bundle {

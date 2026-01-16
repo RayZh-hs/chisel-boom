@@ -16,7 +16,7 @@ import components.structures.ReturnAddressStack
 class RASAdaptor extends Module {
     val io = IO(new Bundle {
         // Inputs from Fetch/Decode pipeline
-        val in = Flipped(Decoupled(new DecodedInstBundle))
+        val in = Flipped(Decoupled(new FetchToDecodeBundle))
 
         // Updates/Recovery
         val recover = Input(Bool())
@@ -32,7 +32,24 @@ class RASAdaptor extends Module {
     ras.io.recoverSP := io.recoverSP
 
     // Internal Signals
-    val inst = io.in.bits
+    val inPacket = io.in.bits
+    val instRaw = io.in.bits.inst
+
+    // Decoding
+    val opcode = instRaw(6, 0)
+    val rd = instRaw(11, 7)
+    val rs1 = instRaw(19, 15)
+
+    // JAL: 1101111 (0x6F)
+    val isJAL = opcode === "b1101111".U
+    // JALR: 1100111 (0x67)
+    val isJALR = opcode === "b1100111".U
+
+    // J-Immediate Extraction
+    // imm[20|10:1|11|19:12]
+    val jImm = Wire(UInt(32.W))
+    val jImmRaw = instRaw(31) ## instRaw(19, 12) ## instRaw(20) ## instRaw(30, 21) ## 0.U(1.W)
+    jImm := Cat(Fill(32 - 21, instRaw(31)), jImmRaw)
 
     // Flow Control
     io.in.ready := io.out.ready
@@ -41,15 +58,13 @@ class RASAdaptor extends Module {
     val fire = io.in.fire
 
     // Instruction Decoding using Pre-decoded info
-    val isJAL = inst.bruOpType === BRUOpType.JAL
-    val isJALR = inst.bruOpType === BRUOpType.JALR
     val isJ = isJAL || isJALR
 
     // Spec: CALL if J instruction and rd is x1 or x5
-    val isCall = isJ && (inst.ldst === 1.U || inst.ldst === 5.U)
+    val isCall = isJ && (rd === 1.U || rd === 5.U)
     
     // Spec: RET if J instruction (JALR) and rs1 is x1 or x5 and rd is x0
-    val isRet = isJALR && (inst.ldst === 0.U) && (inst.lrs1 === 1.U || inst.lrs1 === 5.U)
+    val isRet = isJALR && (rd === 0.U) && (rs1 === 1.U || rs1 === 5.U)
 
     // RAS Operations
     val push = fire && isCall
@@ -57,16 +72,16 @@ class RASAdaptor extends Module {
 
     ras.io.push := push
     ras.io.pop := pop
-    ras.io.writeVal := inst.pc + 4.U
+    ras.io.writeVal := inPacket.pc + 4.U
 
     // Target Calculation
-    val targetJAL = inst.pc + inst.imm
+    val targetJAL = inPacket.pc + jImm
     val targetRET = ras.io.readVal
     
     // We can only reliably correct PC for JAL (static) and RET (RAS)
     val calculatedTarget = Mux(isRet, targetRET, targetJAL)
     
-    val isPredictionWrong = inst.predictedTarget =/= calculatedTarget
+    val isPredictionWrong = inPacket.predictedTarget =/= calculatedTarget
     val canCorrect = isJAL || isRet // We don't correct JALR calls (register dependent)
 
     io.out.bits.currentSP := ras.io.currentSP

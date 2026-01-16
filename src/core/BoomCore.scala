@@ -32,6 +32,8 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
       new Queue(new FetchToDecodeBundle, entries = 2, pipe = false, flow = true)
     )
     val decoder = Module(new InstDecoder)
+    val rasAdaptor = Module(new RASAdaptor)
+    val decodeRASPlexer = Module(new DispatchRASPlexer)
     val dispatcher = Module(new InstDispatcher)
     val rat = Module(new RegisterAliasTable(3, 1, 1))
     val freeList = Module(new FreeList(Derived.PREG_COUNT, 32))
@@ -84,15 +86,33 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     ifQueue.io.enq <> fetcher.io.ifOut
     ifQueue.reset := reset.asBool || fetcher.io.pcOverwrite.valid
 
-    // Decoder connections
-    decoder.io.in <> ifQueue.io.deq
+    // Decoder and connections
+    // Wire up Decoder & RASAdaptor to output of ifQueue
+    // -- decoder.io.in <> ifQueue.io.deq
+    // -- rasAdaptor.io.in <> ifQueue.io.deq
+    ifQueue.io.deq.ready := decoder.io.in.ready && rasAdaptor.io.in.ready
+    decoder.io.in.valid := ifQueue.io.deq.valid
+    decoder.io.in.bits := ifQueue.io.deq.bits
+    rasAdaptor.io.in.valid := ifQueue.io.deq.valid
+    rasAdaptor.io.in.bits := ifQueue.io.deq.bits
+
+    // Wire output of Decoder & RASAdaptor to Plexer
+    decodeRASPlexer.io.instFromDecoder <> decoder.io.out
+    decodeRASPlexer.io.rasBundleFromAdaptor <> rasAdaptor.io.out
 
     val decoderDispatcherQueue = Module(
-      new Queue(new DecodedInstBundle, entries = 2, pipe = false, flow = false)
+      new Queue(new DecodedInstWithRAS, entries = 2, pipe = false, flow = false)
     )
+
     // Dispatcher connections
-    decoderDispatcherQueue.io.enq <> decoder.io.out
+    // Combine Inst and RasSP into the queue
+    // Wire the Plexer output to Dispatcher
+    decoderDispatcherQueue.io.enq <> decodeRASPlexer.io.plexToDispatcher
     dispatcher.io.instInput <> decoderDispatcherQueue.io.deq
+
+    // RAS Recovery
+    rasAdaptor.io.recover := bruAdaptor.io.brUpdate.mispredict
+    rasAdaptor.io.recoverSP := bruAdaptor.io.brUpdate.rasSP
 
     decoderDispatcherQueue.reset := reset.asBool || fetcher.io.pcOverwrite.valid
 
@@ -120,6 +140,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
 
     class DispatcherQueueEntry extends Bundle {
         val inst = new DecodedInstBundle
+        val rasSP = UInt(RAS_WIDTH.W)
         val robTag = UInt(ROB_WIDTH.W)
     }
 
@@ -127,7 +148,8 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
       new Queue(new DispatcherQueueEntry, entries = 2, pipe = false, flow = false)
     )
     dispatcherInstQueue.io.enq.valid := dispatcher.io.instOutput.valid
-    dispatcherInstQueue.io.enq.bits.inst := dispatcher.io.instOutput.bits
+    dispatcherInstQueue.io.enq.bits.inst := dispatcher.io.instOutput.bits.inst
+    dispatcherInstQueue.io.enq.bits.rasSP := dispatcher.io.instOutput.bits.rasSP
     dispatcherInstQueue.io.enq.bits.robTag := rob.io.robTag
     dispatcher.io.instOutput.ready := dispatcherInstQueue.io.enq.ready
 
@@ -174,6 +196,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     bruIB.io.in.bits.info.pc := instOutput.bits.inst.pc
     bruIB.io.in.bits.info.predict := instOutput.bits.inst.predict
     bruIB.io.in.bits.info.predictedTarget := instOutput.bits.inst.predictedTarget
+    bruIB.io.in.bits.info.rasSP := instOutput.bits.rasSP
     if (Configurables.Elaboration.pcInIssueBuffer) {
         bruIB.io.in.bits.pc.get := instOutput.bits.inst.pc
     }
