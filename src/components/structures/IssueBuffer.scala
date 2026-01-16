@@ -48,6 +48,8 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
         val stallPort = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
 
         val count = if (common.Configurables.Profiling.Utilization) Some(Output(UInt(log2Ceil(numEntries + 1).W))) else None
+        
+        val waitDepCount = if (common.Configurables.Profiling.Utilization) Some(Output(UInt(log2Ceil(numEntries + 1).W))) else None
     })
 
     val buffer = Reg(Vec(numEntries, new IssueBufferEntry(gen)))
@@ -57,6 +59,9 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
     // Tracks the index of the last instruction issued to ensure fairness
     val lastIssuedIndex = RegInit(0.U(log2Ceil(numEntries).W))
     io.count.foreach(_ := PopCount(valid))
+    io.waitDepCount.foreach { c =>
+        c := PopCount(valid.zip(buffer).map { case (v, b) => v && (!b.src1Ready || !b.src2Ready) })
+    }
 
     when(io.flush.valid) {
         for (i <- 0 until numEntries) {
