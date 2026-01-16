@@ -1,10 +1,8 @@
 package e2e
 
-import chisel3.simulator.EphemeralSimulator._
-import core.BoomCore
 import java.nio.file.{Path, Paths, Files}
 import common.Configurables._
-import e2e.Configurables._
+import e2e.Configurables._ // Corrected indentation
 
 object RunHexDump extends App {
     val argList = args.toList
@@ -29,19 +27,17 @@ object RunHexDump extends App {
     }
 
     println(s"Running simulation using hex file: $hexFile")
+    println("Simulation started.")
 
-    simulate(new BoomCore(hexFile.toString)) { dut =>
-        println("Simulation started.")
-        val simRes = E2EUtils.runSimulation(dut, MAX_CYCLE_COUNT)
+    val simRes = E2EUtils.runTestWithHex(hexFile)
 
-        Thread.sleep(500) // Wait for final prints to flush
-        if (!simRes.timedOut) {
-            println(s"Simulation finished in ${simRes.cycles} cycles.")
-            println(s"Return Code: ${simRes.result}")
-            println(s"Output: ${simRes.output.mkString(" ")}")
-        } else {
-            println(s"Simulation timed out after ${simRes.cycles} cycles.")
-            println(s"Output so far: ${simRes.output.mkString(" ")}")
-        }
+    Thread.sleep(500) // Wait for final prints to flush
+    if (!simRes.timedOut) {
+        println(s"Simulation finished in ${simRes.cycles} cycles.")
+        println(s"Return Code: ${simRes.result}")
+        println(s"Output: ${simRes.output.mkString(" ")}")
+    } else {
+        println(s"Simulation timed out after ${simRes.cycles} cycles.")
+        println(s"Output so far: ${simRes.output.mkString(" ")}")
     }
 }
