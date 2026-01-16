@@ -36,9 +36,7 @@ class E2ETests extends AnyFunSuite with ChiselScalatestTester {
 
                 setupSimulation()
                 test(new BoomCore(hex.toString))
-                    .withAnnotations(
-                      Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
-                    ) { dut =>
+                    .withAnnotations(testAnnotations) { dut =>
                         dut.clock.setTimeout(MAX_CYCLE_COUNT)
 
                         val simRes =

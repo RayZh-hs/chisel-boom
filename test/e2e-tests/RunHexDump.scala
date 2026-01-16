@@ -42,7 +42,7 @@ object RunHexDump extends App {
     setupSimulation()
     RawTester.test(
       new BoomCore(normalizedPath.toString),
-      Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
+      E2EUtils.testAnnotations
     ) { dut =>
         dut.clock.setTimeout(MAX_CYCLE_COUNT)
         println("Simulation started.")

@@ -52,7 +52,7 @@ object RunCFile extends App {
     setupSimulation()
     RawTester.test(
       new BoomCore(hex.toString),
-      Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)
+      E2EUtils.testAnnotations
     ) { dut =>
         dut.clock.setTimeout(MAX_CYCLE_COUNT)
         println("Simulation started.")
