@@ -246,11 +246,13 @@ object E2EUtils {
             if (common.Configurables.Profiling.IPC) {
                 val insts = p.totalInstructions.get.peek().litValue
                 val cycles = p.totalCycles.get.peek().litValue
-                val ipc = if (cycles > 0) insts.toDouble / cycles.toDouble else 0.0
+                // Post cold start cycles (free list initialization)
+                val pcsCycles = cycles - 32 + 4 // 32 init cycles, among which 4 frontend working cycles
+                val ipc = if (pcsCycles > 0) insts.toDouble / pcsCycles.toDouble else 0.0
                 
                 println(f"IPC Performance:")
                 println(f"  Total Instructions:   $insts")
-                println(f"  Total Cycles:         $cycles")
+                println(f"  Total PCS Cycles:     $pcsCycles")
                 println(f"  IPC:                  $ipc%.4f")
             }
 
