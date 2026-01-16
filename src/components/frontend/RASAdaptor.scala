@@ -88,7 +88,7 @@ class RASAdaptor extends CycleAwareModule {
         isJAL || isRet // We don't correct JALR calls (register dependent)
 
     io.out.bits.currentSP := ras.io.currentSP
-    io.out.bits.flush := io.in.valid && canCorrect && isPredictionWrong
+    io.out.bits.flush := fire && canCorrect && isPredictionWrong
     io.out.bits.flushNextPC := calculatedTarget
 
     // Debugging info

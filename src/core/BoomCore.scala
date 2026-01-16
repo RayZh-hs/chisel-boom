@@ -25,11 +25,15 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         val profiler = Output(new BoomCoreProfileBundle)
     })
 
-
     // Component Instantiation
     val fetcher = Module(new InstFetcher)
     val ifQueue = Module(
-      new Queue(new FetchToDecodeBundle, entries = 2, pipe = false, flow = false)
+      new Queue(
+        new FetchToDecodeBundle,
+        entries = 2,
+        pipe = false,
+        flow = false
+      )
     )
     val decoder = Module(new InstDecoder)
     val rasAdaptor = Module(new RASAdaptor)
@@ -85,14 +89,22 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     // Frontend queue (in-stage buffer between fetcher and decoder)
     ifQueue.io.enq <> fetcher.io.ifOut
 
+    val rasPredictedValid = RegNext(rasAdaptor.io.out.fire, init = false.B)
+    val rasPredictedSignal =
+        RegEnable(rasAdaptor.io.out.bits, rasAdaptor.io.out.fire)
+    
+    val rasFlush = rasPredictedValid && rasPredictedSignal.flush
+    val rasFlushTargetPC = rasPredictedSignal.flushNextPC
+
+
     // Decoder and connections
     // Wire up Decoder & RASAdaptor to output of ifQueue
     // -- decoder.io.in <> ifQueue.io.deq
     // -- rasAdaptor.io.in <> ifQueue.io.deq
     ifQueue.io.deq.ready := decoder.io.in.ready && rasAdaptor.io.in.ready
-    decoder.io.in.valid := ifQueue.io.deq.valid
+    decoder.io.in.valid := ifQueue.io.deq.valid && !rasFlush
     decoder.io.in.bits := ifQueue.io.deq.bits
-    rasAdaptor.io.in.valid := ifQueue.io.deq.valid
+    rasAdaptor.io.in.valid := ifQueue.io.deq.valid && !rasFlush
     rasAdaptor.io.in.bits := ifQueue.io.deq.bits
 
     // Wire output of Decoder & RASAdaptor to Plexer
@@ -110,14 +122,18 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     dispatcher.io.instInput <> decoderDispatcherQueue.io.deq
 
     // On RAS predict overwrite, set pc_overwrite for IF and reset ifQueue
-    val rasPredictedSignal = RegNext(rasAdaptor.io.out.bits)
-
+    
     // RAS Recovery
     rasAdaptor.io.recover := bruAdaptor.io.brUpdate.mispredict
     rasAdaptor.io.recoverSP := bruAdaptor.io.brUpdate.rasSP
 
-    decoderDispatcherQueue.reset := reset.asBool || fetcher.io.pcOverwrite.valid
-    ifQueue.reset := reset.asBool || fetcher.io.pcOverwrite.valid || rasPredictedSignal.flush
+    val backendMispredict =
+        bruAdaptor.io.brUpdate.valid && bruAdaptor.io.brUpdate.mispredict
+    decoderDispatcherQueue.reset := reset.asBool || backendMispredict
+    ifQueue.reset := reset.asBool || fetcher.io.pcOverwrite.valid
+    when(ifQueue.reset.asBool) {
+      printf(p"IF Queue Reset\n")
+    }
 
     // RAT and FreeList connections
     rat.io.readL(0) := dispatcher.io.ratAccess.lrs1
@@ -148,7 +164,12 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     }
 
     val dispatcherInstQueue = Module(
-      new Queue(new DispatcherQueueEntry, entries = 2, pipe = false, flow = false)
+      new Queue(
+        new DispatcherQueueEntry,
+        entries = 2,
+        pipe = false,
+        flow = false
+      )
     )
     dispatcherInstQueue.io.enq.valid := dispatcher.io.instOutput.valid
     dispatcherInstQueue.io.enq.bits.inst := dispatcher.io.instOutput.bits.inst
@@ -156,7 +177,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     dispatcherInstQueue.io.enq.bits.robTag := rob.io.robTag
     dispatcher.io.instOutput.ready := dispatcherInstQueue.io.enq.ready
 
-    dispatcherInstQueue.reset := reset.asBool || fetcher.io.pcOverwrite.valid
+    dispatcherInstQueue.reset := reset.asBool || backendMispredict
 
     val instOutput = dispatcherInstQueue.io.deq
     val isALU = instOutput.bits.inst.fUnitType === FunUnitType.ALU
@@ -176,7 +197,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     aluIB.io.in.bits.src1 := instOutput.bits.inst.prs1
     aluIB.io.in.bits.src2 := instOutput.bits.inst.prs2
     aluIB.io.in.bits.src1Ready := src1Ready
-    aluIB.io.in.bits.src2Ready := src2Ready
+    aluIB.io.in.bits.src2Ready := Mux(instOutput.bits.inst.useImm, true.B, src2Ready)
     aluIB.io.in.bits.imm := instOutput.bits.inst.imm
     aluIB.io.in.bits.useImm := instOutput.bits.inst.useImm
     aluIB.io.in.bits.info.aluOp := instOutput.bits.inst.aluOpType
@@ -303,19 +324,20 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     rob.io.brUpdate.bits.mispredict := mispredict
 
     // Fetcher PC Overwrite (Misprediction or RAS Re-predict)
-    when (mispredict) {
-      fetcher.io.pcOverwrite.valid := true.B
-      fetcher.io.pcOverwrite.bits := Mux(
-        brUpdate.taken,
-        brUpdate.target,
-        brUpdate.pc + 4.U
-      )
-    }.elsewhen(rasPredictedSignal.flush) {
-      fetcher.io.pcOverwrite.valid := true.B
-      fetcher.io.pcOverwrite.bits := rasPredictedSignal.flushNextPC
+    when(mispredict) {
+        fetcher.io.pcOverwrite.valid := true.B
+        fetcher.io.pcOverwrite.bits := Mux(
+          brUpdate.taken,
+          brUpdate.target,
+          brUpdate.pc + 4.U
+        )
+        rasPredictedValid := false.B // Suppress RAS to prevent double flush
+    }.elsewhen(rasPredictedValid && rasPredictedSignal.flush) {
+        fetcher.io.pcOverwrite.valid := true.B
+        fetcher.io.pcOverwrite.bits := rasPredictedSignal.flushNextPC
     }.otherwise {
-      fetcher.io.pcOverwrite.valid := false.B
-      fetcher.io.pcOverwrite.bits := 0.U
+        fetcher.io.pcOverwrite.valid := false.B
+        fetcher.io.pcOverwrite.bits := 0.U
     }
 
     // Flush logic
@@ -367,7 +389,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         BoringUtils.addSink(totalMispredicts, "branch_mispredictions")
         io.profiler.totalBranches.get := totalBranches
         io.profiler.totalMispredicts.get := totalMispredicts
-        
+
         dontTouch(totalBranches)
         dontTouch(totalMispredicts)
     }
@@ -376,7 +398,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         val instructionCount = RegInit(0.U(64.W))
         val cycleCount = RegInit(0.U(64.W))
 
-        when (rob.io.commit.valid && rob.io.commit.ready) {
+        when(rob.io.commit.valid && rob.io.commit.ready) {
             instructionCount := instructionCount + 1.U
         }
         cycleCount := cycleCount + 1.U
@@ -407,7 +429,9 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
 
         when(fetcherBusy) { fetcherBusyCount := fetcherBusyCount + 1.U }
         when(decoderBusy) { decoderBusyCount := decoderBusyCount + 1.U }
-        when(dispatcherBusy) { dispatcherBusyCount := dispatcherBusyCount + 1.U }
+        when(dispatcherBusy) {
+            dispatcherBusyCount := dispatcherBusyCount + 1.U
+        }
         when(aluBusy) { aluBusyCount := aluBusyCount + 1.U }
         when(bruBusy) { bruBusyCount := bruBusyCount + 1.U }
         when(lsuBusy) { lsuBusyCount := lsuBusyCount + 1.U }
@@ -435,7 +459,9 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         val rollbackCycles = RegInit(0.U(32.W))
 
         when(mispredict) { rollbackEvents := rollbackEvents + 1.U }
-        when(rob.io.isRollingBack.get) { rollbackCycles := rollbackCycles + 1.U }
+        when(rob.io.isRollingBack.get) {
+            rollbackCycles := rollbackCycles + 1.U
+        }
 
         io.profiler.totalRollbackEvents.get := rollbackEvents
         io.profiler.totalRollbackCycles.get := rollbackCycles

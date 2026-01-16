@@ -4,12 +4,19 @@ import chisel3._
 import chisel3.util._
 import common._
 import common.Configurables._
+import utility.CycleAwareModule
 
-class InstDecoder extends Module {
+class InstDecoder extends CycleAwareModule {
     val io = IO(new Bundle {
         val in = Flipped(Decoupled(new FetchToDecodeBundle))
         val out = Decoupled(new DecodedInstBundle)
     })
+
+    when(io.in.valid && io.out.ready) {
+        printf(
+          p"Decoding Inst: 0x${Hexadecimal(io.in.bits.inst)} at PC: 0x${Hexadecimal(io.in.bits.pc)}\n"
+        )
+    }
 
     val inst = io.in.bits.inst
     val pc = io.in.bits.pc

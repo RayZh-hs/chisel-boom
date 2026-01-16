@@ -24,7 +24,15 @@ class ReturnAddressStack extends Module {
     val spNext = (sp + 1.U)(RAS_WIDTH - 1, 0)
     val spPrev = (sp - 1.U)(RAS_WIDTH - 1, 0)
 
-    io.currentSP := sp
+    val spNextSpeculative = MuxCase(
+      sp,
+      Seq(
+        (io.push && !io.pop) -> spNext,
+        (io.pop && !io.push) -> spPrev,
+        (io.push && io.pop) -> sp // Replace top, SP unchanged
+      )
+    )
+    io.currentSP := Mux(io.recover, io.recoverSP, spNextSpeculative)
     io.readVal := stack(spPrev)
 
     when(io.recover) {
