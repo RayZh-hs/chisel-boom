@@ -21,7 +21,7 @@ class FreeList(numRegs: Int, numArchRegs: Int) extends CycleAwareModule {
     val head = RegInit(0.U((ptrWidth + 1).W))
     val tail = RegInit(0.U((ptrWidth + 1).W))
 
-    // Initialization Logic, takes 32 cycles to finish
+    // Initialization Logic
     val isInit = RegInit(true.B)
     val initPtr = RegInit(0.U(ptrWidth.W))
 
@@ -34,20 +34,51 @@ class FreeList(numRegs: Int, numArchRegs: Int) extends CycleAwareModule {
         }
     }
 
-    // Free List Logic
+    // --- Optimized Prefetch Logic ---
+    val prefetchValid = RegInit(false.B)
+    val prefetchData = Reg(UInt(width.W))
+
+    // Helper signals
     val empty = head === tail
-    io.allocate.valid := !empty && !isInit
-    io.allocate.bits := ram.read(head(ptrWidth - 1, 0))
+    val ramHasData = !empty
+
+    // We consume the prefetch register if the output fires
+    val consuming = io.allocate.fire
+
+    // We need to refill if:
+    // 1. We are currently invalid (startup or ran dry)
+    // 2. OR we are currently valid, but consuming the data (pipeline refill)
+    val needsRefill = !prefetchValid || consuming
+
+    // Define deq (read from RAM) logic
+    val deq = WireDefault(false.B)
+
+    when(!isInit) {
+        when(ramHasData && needsRefill) {
+            // Case 1: Refill (either from empty, or back-to-back)
+            prefetchData := ram.read(head(ptrWidth - 1, 0))
+            prefetchValid := true.B
+            deq := true.B // Increment head
+        }.elsewhen(consuming) {
+            // Case 2: We consumed data, but RAM was empty.
+            // We run dry.
+            prefetchValid := false.B
+        }
+    }
+
+    // Output assignments
+    io.allocate.valid := prefetchValid
+    io.allocate.bits := prefetchData
+
+    // --- Free Logic ---
 
     io.free.ready := !isInit
     io.rollbackFree.ready := !isInit
 
-    val doAlloc = io.allocate.fire
     val doFree = io.free.fire
     val doRollback = io.rollbackFree.fire
     val numEnq = doFree.asUInt +& doRollback.asUInt
 
-    // Sequential Write Logic (Dual Port Write)
     when(doFree) {
         ram.write(tail(ptrWidth - 1, 0), io.free.bits)
     }
@@ -58,21 +89,15 @@ class FreeList(numRegs: Int, numArchRegs: Int) extends CycleAwareModule {
     }
 
     when(!isInit) {
-        // This assertion will trigger in simulation if the Renamer/ROB logic
-        // attempts to return more registers than exist in the system.
-        val nextFreeCount = tail - head +& numEnq - doAlloc.asUInt
+        // Assert logic
+        // We calculate next state to ensure no overflow
         assert(
-          nextFreeCount <= numFreeRegisters.U,
-          "FreeList Overflow: Architectural limit of %d regs exceeded! head=%d tail=%d numEnq=%d doAlloc=%d nextCount=%d",
-          numFreeRegisters.U,
-          head,
-          tail,
-          numEnq,
-          doAlloc.asUInt,
-          nextFreeCount
+          (tail - head +& numEnq - deq.asUInt) <= numFreeRegisters.U,
+          "FreeList Overflow: Architectural limit of %d regs exceeded!",
+          numFreeRegisters.U
         )
 
-        head := head + doAlloc.asUInt
+        head := head + deq.asUInt
         tail := tail + numEnq
     }
 }

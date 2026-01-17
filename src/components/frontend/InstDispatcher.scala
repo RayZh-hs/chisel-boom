@@ -14,8 +14,8 @@ import components.backend.ROBEntry
   */
 class InstDispatcher extends CycleAwareModule {
     val io = IO(new Bundle {
-        val instInput = Flipped(Decoupled(new DecodeToDispatchBundle))
-        val instOutput = Decoupled(new DecodeToDispatchBundle)
+        val instInput = Flipped(Decoupled(new DecodedInstWithRAS))
+        val instOutput = Decoupled(new DecodedInstWithRAS)
 
         val robOutput = Decoupled(new DispatchToROBBundle)
 
@@ -36,14 +36,23 @@ class InstDispatcher extends CycleAwareModule {
         val freeListAccess = new Bundle {
             val allocate = Flipped(Decoupled(UInt(PREG_WIDTH.W)))
         }
+
+        val stallFreeList = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
+        val stallROB = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
+        val stallIssue = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
     })
 
-    val inst = io.instInput.bits // incoming instruction
+    val inst = io.instInput.bits.inst // incoming instruction
     val needAlloc = inst.ldst =/= 0.U
     val canDispatch = io.instInput.valid &&
         io.instOutput.ready &&
         io.robOutput.ready &&
         (!needAlloc || io.freeListAccess.allocate.valid)
+    
+    // Profiling
+    io.stallFreeList.foreach(_ := io.instInput.valid && needAlloc && !io.freeListAccess.allocate.valid)
+    io.stallROB.foreach(_ := io.instInput.valid && !io.robOutput.ready)
+    io.stallIssue.foreach(_ := io.instInput.valid && !io.instOutput.ready)
 
     // Consume input and allocate from free list
     io.instInput.ready := canDispatch
@@ -72,13 +81,15 @@ class InstDispatcher extends CycleAwareModule {
     val stalePdst = io.ratAccess.stalePdst
 
     // Fill Output Bundles
-    io.instOutput.bits := inst
-    io.instOutput.bits.prs1 := prs1
-    io.instOutput.bits.prs2 := prs2
-    io.instOutput.bits.pdst := currentPdst
-    io.instOutput.bits.stalePdst := stalePdst
-    io.instOutput.bits.predict := inst.predict
-    io.instOutput.bits.predictedTarget := inst.predictedTarget
+    io.instOutput.bits.inst := inst
+    io.instOutput.bits.rasSP := io.instInput.bits.rasSP
+
+    io.instOutput.bits.inst.prs1 := prs1
+    io.instOutput.bits.inst.prs2 := prs2
+    io.instOutput.bits.inst.pdst := currentPdst
+    io.instOutput.bits.inst.stalePdst := stalePdst
+    io.instOutput.bits.inst.predict := inst.predict
+    io.instOutput.bits.inst.predictedTarget := inst.predictedTarget
 
     io.robOutput.bits.ldst := inst.ldst
     io.robOutput.bits.pdst := currentPdst

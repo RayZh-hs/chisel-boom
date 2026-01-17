@@ -21,6 +21,7 @@ class InstFetcher extends CycleAwareModule {
         val ifOut = Decoupled(new FetchToDecodeBundle())
 
         val busy = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
+        val stallBuffer = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
     })
 
     val pc = RegInit(0.U(32.W))
@@ -32,6 +33,7 @@ class InstFetcher extends CycleAwareModule {
     val s2Target = Reg(UInt(32.W))
 
     io.busy.foreach(_ := s2Valid)
+    io.stallBuffer.foreach(_ := s2Valid && !io.ifOut.ready)
 
     val s2Fire = s2Valid && io.ifOut.ready && io.icache.resp.valid
     val s1Ready = !s2Valid || s2Fire || io.pcOverwrite.valid

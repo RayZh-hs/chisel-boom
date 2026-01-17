@@ -112,6 +112,7 @@ class BRUAdaptor extends CycleAwareModule {
     io.brUpdate.robTag := s3Bits.robTag
     io.brUpdate.predict := s3Bits.info.predict
     io.brUpdate.predictedTarget := s3Bits.info.predictedTarget
+    io.brUpdate.rasSP := s3Bits.info.rasSP
 
     val s3Mispredict = RegEnable(
       (bru.io.taken =/= s2Bits.info.predict) ||

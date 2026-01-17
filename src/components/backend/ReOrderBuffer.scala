@@ -30,6 +30,7 @@ class ReOrderBuffer extends CycleAwareModule {
         val rollback = Output(Valid(new RollbackBundle))
         val isRollingBack = if (Configurables.Profiling.RollbackTime) Some(Output(Bool())) else None
         val head = Output(UInt(ROB_WIDTH.W))
+        val count = if (common.Configurables.Profiling.Utilization) Some(Output(UInt((ROB_WIDTH + 1).W))) else None
     })
 
     private val entries = Derived.ROB_COUNT
@@ -62,6 +63,10 @@ class ReOrderBuffer extends CycleAwareModule {
     val ptrMatch = head === tail
     val isFull = ptrMatch && maybeFull
     val isEmpty = ptrMatch && !maybeFull
+
+    io.count.foreach { c =>
+        c := Mux(isFull, entries.U, Mux(tail >= head, tail - head, entries.U + tail - head))
+    }
 
     val doEnq = io.dispatch.fire && !isRollingBack
     val doDeq = io.commit.fire

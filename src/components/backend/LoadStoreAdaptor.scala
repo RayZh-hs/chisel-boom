@@ -19,10 +19,15 @@ class LoadStoreAdaptor extends CycleAwareModule {
 
         val mem = new MemoryRequest
         val busy = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
+        val stallCommit = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
+        val lsqCount = if (common.Configurables.Profiling.Utilization) Some(Output(UInt(log2Ceil(9).W))) else None // 8 entries
     })
 
     // --- LSQ Instance ---
-    val lsq = Module(new SequentialIssueBuffer(new LoadStoreInfo, 8, "LSQ"))
+    val lsq = Module(new SequentialIssueBuffer(new LoadStoreInfo, 16, "LSQ"))
+    io.lsqCount.foreach(_ := lsq.io.count.get)
+
+    // Connect LSQ
     lsq.io.in <> io.issueIn
     lsq.io.broadcast := io.broadcastIn
     lsq.io.flush := io.flush
@@ -97,6 +102,7 @@ class LoadStoreAdaptor extends CycleAwareModule {
 
     // Effective State: It is committed if we remembered it, or if it's happening now.
     val s2CommitComplete = s2RegCommitted || s2IsHeadMatch
+    io.stallCommit.foreach(_ := s2Valid && isStoreS2 && !s2CommitComplete)
 
     // Latch Update
     when(s2IsHeadMatch) {

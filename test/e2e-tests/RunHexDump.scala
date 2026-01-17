@@ -34,7 +34,6 @@ object RunHexDump extends App {
         println(s"Hex file $hexFile is not byte-aligned. Converting to word-aligned format.")
         println(s"Converted hex file saved to: $normalizedPath")
     }
-
     println(s"Running simulation using hex file: $normalizedPath")
     println("Simulation started.")
 
