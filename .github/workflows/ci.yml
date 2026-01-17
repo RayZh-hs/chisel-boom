@@ -23,10 +23,10 @@ jobs:
         uses: actions/cache@v3
         with:
           path: verilator-build
-          key: verilator-build-${{ vars. VERILATOR_VERSION }}-v1
+          key: verilator-build-${{ vars.VERILATOR_VERSION }}-v1
 
       - name: Build Verilator
-        if: steps.cache-verilator. outputs.cache-hit != 'true'
+        if: steps.cache-verilator.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -71,7 +71,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: verilator-build
-          key: verilator-build-${{ vars. VERILATOR_VERSION }}-v1
+          key: verilator-build-${{ vars.VERILATOR_VERSION }}-v1
           fail-on-cache-miss: true
 
       - name: Install Verilator
