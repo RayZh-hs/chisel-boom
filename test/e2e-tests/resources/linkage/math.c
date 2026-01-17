@@ -2,6 +2,7 @@
 typedef int SItype __attribute__ ((mode (SI)));
 typedef unsigned int USItype __attribute__ ((mode (SI)));
 
+/*
 SItype __mulsi3 (SItype a, SItype b) {
     USItype ua = (USItype)a;
     USItype ub = (USItype)b;
@@ -13,6 +14,7 @@ SItype __mulsi3 (SItype a, SItype b) {
     }
     return (SItype)res;
 }
+*/
 
 USItype __udivsi3 (USItype n, USItype d) {
     USItype q = 0;

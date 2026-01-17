@@ -140,7 +140,7 @@ object E2EUtils {
         } else {
             Nil
         }
-        val dependencies = Seq(cFile, linkLd, crt0) ++ headerFiles
+        val dependencies = Seq(cFile, linkLd, crt0, mathC) ++ headerFiles
 
         // If hex exists and is newer than all dependencies, skip rebuild
         if (Files.exists(hex)) {
