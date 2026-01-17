@@ -57,7 +57,7 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
 
     // --- Round Robin State ---
     // Tracks the index of the last instruction issued to ensure fairness
-    val lastIssuedIndex = RegInit(0.U(log2Ceil(numEntries).W))
+    val lastIssuedIndex = RegInit((numEntries - 1).U(log2Ceil(numEntries).W))
     io.count.foreach(_ := PopCount(valid))
     io.waitDepCount.foreach { c =>
         c := PopCount(valid.zip(buffer).map { case (v, b) => v && (!b.src1Ready || !b.src2Ready) })
