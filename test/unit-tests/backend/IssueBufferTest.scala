@@ -21,6 +21,10 @@ class IssueBufferTest extends AnyFlatSpec with Matchers {
             resetDut(dut)
 
             // Enqueue an instruction with ready operands
+            dut.reset.poke(true.B)
+            dut.clock.step()
+            dut.reset.poke(false.B)
+
             dut.io.in.valid.poke(true.B)
             dut.io.in.bits.robTag.poke(1.U)
             dut.io.in.bits.pdst.poke(10.U)
@@ -47,6 +51,11 @@ class IssueBufferTest extends AnyFlatSpec with Matchers {
             resetDut(dut)
             
             // Enqueue an instruction with non-ready src1
+            dut.reset.poke(true.B)
+            dut.clock.step()
+            dut.reset.poke(false.B)
+            
+            dut.io.broadcast.valid.poke(false.B)
             dut.io.in.valid.poke(true.B)
             dut.io.in.bits.src1.poke(5.U)
             dut.io.in.bits.src1Ready.poke(false.B)
@@ -130,6 +139,9 @@ class IssueBufferTest extends AnyFlatSpec with Matchers {
             // 61 -> Safe
             // 2  -> Safe
             // 3  -> Kill
+            dut.reset.poke(true.B)
+            dut.clock.step()
+            dut.reset.poke(false.B)
 
             dut.io.in.valid.poke(true.B)
             dut.io.in.bits.robTag.poke(61.U)

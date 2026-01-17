@@ -2,8 +2,6 @@ package e2e
 
 import java.nio.file.{Path, Paths, Files}
 import scala.jdk.CollectionConverters._
-import chiseltest._
-import core.BoomCore
 import common.Configurables._
 import e2e.Configurables._
 import E2EUtils._
@@ -30,34 +28,28 @@ object RunHexDump extends App {
         sys.exit(1)
     }
 
-    // If the hex file uses byte-alignment, convert to word-alignment
-    val normalizedPath = convertByteToWordAligned(hexFile)
-    if (!isByteAligned(hexFile)) {
-        println(s"Hex file $hexFile is not byte-aligned. Converting to word-aligned format.")
-        println(s"Converted hex file saved to: $normalizedPath")
+    val normalizedPath = if (try { isByteAligned(hexFile) } catch { case _: Throwable => false }) {
+        println(s"Hex file $hexFile is byte-aligned. Converting to word-aligned format.")
+        val p = convertByteToWordAligned(hexFile)
+        println(s"Converted hex file saved to: $p")
+        p
+    } else {
+        hexFile
     }
 
     println(s"Running simulation using hex file: $normalizedPath")
+    println("Simulation started.")
 
-    setupSimulation()
-    RawTester.test(
-      new BoomCore(normalizedPath.toString),
-      E2EUtils.testAnnotations
-    ) { dut =>
-        dut.clock.setTimeout(MAX_CYCLE_COUNT)
-        println("Simulation started.")
+    val simRes = E2EUtils.runTestWithHex(normalizedPath)
 
-        val simRes = E2EUtils.runSimulation(dut, MAX_CYCLE_COUNT)
-
-        Thread.sleep(500) // Wait for final prints to flush
-        if (!simRes.timedOut) {
-            println(s"Simulation finished in ${simRes.cycles} cycles.")
-            println(s"Return Code: ${simRes.result}")
-            println(s"Output: ${simRes.output.mkString(" ")}")
-        } else {
-            println(s"Simulation timed out after ${simRes.cycles} cycles.")
-            println(s"Output so far: ${simRes.output.mkString(" ")}")
-        }
+    Thread.sleep(500) // Wait for final prints to flush
+    if (!simRes.timedOut) {
+        println(s"Simulation finished in ${simRes.cycles} cycles.")
+        println(s"Return Code: ${simRes.result}")
+        println(s"Output: ${simRes.output.mkString(" ")}")
+    } else {
+        println(s"Simulation timed out after ${simRes.cycles} cycles.")
+        println(s"Output so far: ${simRes.output.mkString(" ")}")
     }
 
     def isByteAligned(path: Path): Boolean = {
