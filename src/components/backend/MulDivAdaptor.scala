@@ -6,11 +6,11 @@ import common._
 import common.Configurables._
 import components.structures.{MulDivUnit, MultInfo, IssueBufferEntry}
 
-/** Mult Adaptor
+/** Mul-Div Adaptor
   *
   * Bridges an Issue Buffer to the Mult/Div execution unit.
   */
-class MultAdaptor extends Module {
+class MulDivAdaptor extends Module {
     // IO Definition
     val io = IO(new Bundle {
         val issueIn = Flipped(Decoupled(new IssueBufferEntry(new MultInfo)))

@@ -17,11 +17,13 @@ object MduFunc {
     val REMU = 7.U(3.W)
 }
 
-/** RiscV MDU (Multiply Divide Unit)
+/** Multiply Divide Unit
   *
-  * Latency:
-  *   - MUL: 2 Cycles (Pipelined for better timing)
-  *   - DIV: 34 Cycles (Iterative Shift-Subtract)
+  * Performs 32-bit integer multiplication and division.
+  * 
+  * @note
+  *   - MUL Latency: 2 Cycles (Pipelined for better timing)
+  *   - DIV Latency: 34 Cycles (Iterative Shift-Subtract)
   */
 class MulDivUnit extends Module {
     val io = IO(new Bundle {

@@ -46,7 +46,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     val multIB = Module(new IssueBuffer(new MultInfo, 8, "MULT_IB"))
     val bruIB = Module(new IssueBuffer(new BRUInfo, 16, "BRU_IB"))
     val aluAdaptor = Module(new ALUAdaptor)
-    val multAdaptor = Module(new MultAdaptor)
+    val multAdaptor = Module(new MulDivAdaptor)
     val bruAdaptor = Module(new BRUAdaptor)
     val prf = Module(new PhysicalRegisterFile(Derived.PREG_COUNT, 8, 1, 32))
     val bc = Module(new BroadcastChannel)
