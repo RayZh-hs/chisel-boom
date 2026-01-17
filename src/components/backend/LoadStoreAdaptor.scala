@@ -18,16 +18,22 @@ class LoadStoreAdaptor extends CycleAwareModule {
         val robHead = Input(UInt(ROB_WIDTH.W))
 
         val mem = new MemoryRequest
-        val busy = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
-        val stallCommit = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
-        val lsqCount = if (common.Configurables.Profiling.Utilization) Some(Output(UInt(log2Ceil(9).W))) else None // 8 entries
+        val busy =
+            if (common.Configurables.Profiling.Utilization) Some(Output(Bool()))
+            else None
+        val stallCommit =
+            if (common.Configurables.Profiling.Utilization) Some(Output(Bool()))
+            else None
+        val lsqCount =
+            if (common.Configurables.Profiling.Utilization)
+                Some(Output(UInt(log2Ceil(9).W)))
+            else None
     })
 
     // --- LSQ Instance ---
     val lsq = Module(new SequentialIssueBuffer(new LoadStoreInfo, 16, "LSQ"))
     io.lsqCount.foreach(_ := lsq.io.count.get)
 
-    // Connect LSQ
     lsq.io.in <> io.issueIn
     lsq.io.broadcast := io.broadcastIn
     lsq.io.flush := io.flush
@@ -44,7 +50,7 @@ class LoadStoreAdaptor extends CycleAwareModule {
     val s2Data1 = Reg(UInt(32.W))
     val s2Data2 = Reg(UInt(32.W))
 
-    // S2 Control State Registers (Latched State)
+    // S2 Control State Registers
     val s2RegBroadcastDone = RegInit(false.B)
     val s2RegCommitted = RegInit(false.B)
 
@@ -54,6 +60,9 @@ class LoadStoreAdaptor extends CycleAwareModule {
     val s3Data = Reg(UInt(32.W))
     val s3AddrDebug = Reg(UInt(32.W))
     val s3WaitingResp = RegInit(false.B)
+
+    // --- NEW: Track if S3 is "dead" (flushed) but waiting for Ghost Response ---
+    val s3IsDead = RegInit(false.B)
 
     // --- Internal Wires ---
     val s1Ready = Wire(Bool())
@@ -94,61 +103,27 @@ class LoadStoreAdaptor extends CycleAwareModule {
     val isLoadS2 = !isStoreS2
     val effAddr = (s2Data1.asSInt + s2Bits.info.imm.asSInt).asUInt
 
-    // -------------------------------------------------------------------------
-    // 1. Commit Logic (Store Specific)
-    // -------------------------------------------------------------------------
-    // Current Event: Is it matching right now?
     val s2IsHeadMatch = s2Valid && isStoreS2 && (io.robHead === s2Bits.robTag)
-
-    // Effective State: It is committed if we remembered it, or if it's happening now.
     val s2CommitComplete = s2RegCommitted || s2IsHeadMatch
     io.stallCommit.foreach(_ := s2Valid && isStoreS2 && !s2CommitComplete)
 
-    // Latch Update
-    when(s2IsHeadMatch) {
-        s2RegCommitted := true.B
-    }
+    when(s2IsHeadMatch) { s2RegCommitted := true.B }
 
-    // -------------------------------------------------------------------------
-    // 2. Flush Logic
-    // -------------------------------------------------------------------------
-    // Loads: Speculative, always killable.
-    // Stores: Speculative until committed. Once committed, they are immune.
-    val s2Killed =
-        io.flush.checkKilled(s2Bits.robTag) && !s2CommitComplete
-
-    // -------------------------------------------------------------------------
-    // 3. Broadcast Logic (Store Specific)
-    // -------------------------------------------------------------------------
-    // Current Condition: We need to broadcast if it's a valid store, not done, and not killed.
+    val s2Killed = io.flush.checkKilled(s2Bits.robTag) && !s2CommitComplete
     val s2NeedBroadcast =
         s2Valid && isStoreS2 && !s2RegBroadcastDone && !s2Killed
 
-    // Wire up Arbiter
     wbArbiter.io.in(0).valid := s2NeedBroadcast
     wbArbiter.io.in(0).bits.pdst := s2Bits.pdst
     wbArbiter.io.in(0).bits.robTag := s2Bits.robTag
     wbArbiter.io.in(0).bits.data := 0.U
     wbArbiter.io.in(0).bits.writeEn := false.B
 
-    // Current Event: Did the Arbiter accept our request this cycle?
     val s2IsBroadcastFiring = wbArbiter.io.in(0).fire
-
-    // Effective State: Broadcast is "Complete" if done previously OR doing it right now.
     val s2BroadcastComplete = s2RegBroadcastDone || s2IsBroadcastFiring
 
-    // Latch Update
-    when(s2IsBroadcastFiring) {
-        s2RegBroadcastDone := true.B
-    }
+    when(s2IsBroadcastFiring) { s2RegBroadcastDone := true.B }
 
-    // -------------------------------------------------------------------------
-    // 4. Memory Request Logic (Point of No Return)
-    // -------------------------------------------------------------------------
-
-    // Condition to attempt Memory Request:
-    // 1. Loads:  Valid & Not Killed.
-    // 2. Stores: Valid & Not Killed & Committed & Broadcast Complete.
     val s2CanIssueStore = s2CommitComplete && s2BroadcastComplete
     val s2MemReqValid = s2Valid && !s2Killed && (isLoadS2 || s2CanIssueStore)
 
@@ -160,23 +135,15 @@ class LoadStoreAdaptor extends CycleAwareModule {
     io.mem.req.bits.isUnsigned := s2Bits.info.isUnsigned
     io.mem.req.bits.targetReg := s2Bits.pdst
 
-    // -------------------------------------------------------------------------
-    // 5. Transition Logic
-    // -------------------------------------------------------------------------
-
     val s2Fire = io.mem.req.fire
-
     s2Ready := !s2Valid || s2Fire || s2Killed
 
     when(s2Ready) {
         val validNext = s1Fire && !io.flush.checkKilled(s1Bits.robTag)
-
         s2Valid := validNext
         s2Bits := s1Bits
         s2Data1 := io.prfRead.data1
         s2Data2 := io.prfRead.data2
-
-        // Reset Latched State for new instruction
         s2RegCommitted := false.B
         s2RegBroadcastDone := false.B
     }.elsewhen(s2Killed) {
@@ -184,55 +151,75 @@ class LoadStoreAdaptor extends CycleAwareModule {
     }
 
     // =================================================================================
-    // Stage 3: Variable Latency Response & Writeback
+    // Stage 3: Variable Latency Response & Writeback (FIXED)
     // =================================================================================
 
     val isStoreS3 = s3Bits.info.isStore
     val isLoadS3 = !isStoreS3
 
-    // S3 Flush: Stores here are already committed (passed S2 check), only loads are killable.
-    val s3Killed = io.flush.checkKilled(s3Bits.robTag) && isLoadS3
+    // 1. Detect Flush
+    // If flushed, we do NOT clear s3Valid immediately if we are waiting for a response.
+    // Instead, we mark it as "Dead".
+    val s3FlushHit = io.flush.checkKilled(s3Bits.robTag) && isLoadS3
+    when(s3FlushHit) {
+        s3IsDead := true.B
+    }
 
-    // Handle Response
-    // We expect a response for every request sent (Data for Load, Ack for Store).
+    // 2. Handle Response
     when(io.mem.resp.valid) {
         s3Data := io.mem.resp.bits
         s3WaitingResp := false.B
     }
     io.mem.resp.ready := true.B
 
-    // Completion Logic
-    val s3IsDone = s3Valid && !s3WaitingResp && !s3Killed
+    // 3. Completion Logic
+    // We are "processing" if we are still waiting for memory.
+    val s3IsPending = s3WaitingResp
+    // We are "done" with the memory part if not pending.
+    val s3MemDone = s3Valid && !s3IsPending
 
-    // Writeback Arbiter (Priority 1: Loads)
-    wbArbiter.io.in(1).valid := s3IsDone && isLoadS3
+    // 4. Writeback Arbiter (Priority 1: Loads)
+    // ONLY request writeback if Done, is Load, NOT marked dead, and NOT currently being flushed.
+    wbArbiter.io
+        .in(1)
+        .valid := s3MemDone && isLoadS3 && !s3IsDead && !s3FlushHit
     wbArbiter.io.in(1).bits.pdst := s3Bits.pdst
     wbArbiter.io.in(1).bits.robTag := s3Bits.robTag
     wbArbiter.io.in(1).bits.data := s3Data
     wbArbiter.io.in(1).bits.writeEn := true.B
 
-    // S3 Fire conditions:
-    // 1. Killed (Loads only)
-    // 2. Load Finished (Arbiter fired)
-    // 3. Store Finished (Response received, just drain)
-    val s3Fire = s3Killed ||
-        (s3IsDone && isLoadS3 && wbArbiter.io.in(1).ready) ||
-        (s3IsDone && isStoreS3)
+    // 5. Fire/Drain Logic
+    // We can empty S3 (Fire) if:
+    // A. We are NOT waiting for a response (s3IsPending is false).
+    // B. AND one of the following:
+    //    1. It's a Load that finished Writeback.
+    //    2. It's a Store that finished (ACK received).
+    //    3. It's a Load that was Killed/Dead (we just drop it).
+
+    val s3IsDeadOrFlushed = s3IsDead || s3FlushHit
+
+    val s3Fire = !s3IsPending && (
+      (s3MemDone && isLoadS3 && wbArbiter.io.in(1).ready) || // Normal Load
+          (s3MemDone && isStoreS3) || // Normal Store
+          (s3Valid && isLoadS3 && s3IsDeadOrFlushed) // Killed Load (Drain)
+    )
 
     s3Ready := !s3Valid || s3Fire
 
     when(s3Ready) {
-        // Logic for incoming S2
         val incomingValid = s2Fire
 
         s3Valid := incomingValid
         s3Bits := s2Bits
         s3AddrDebug := effAddr
         s3WaitingResp := incomingValid
-    }.elsewhen(s3Killed) {
-        s3Valid := false.B
-        s3WaitingResp := false.B
+
+        // Reset Dead status for the new instruction
+        s3IsDead := false.B
     }
+    // Note: We removed the .elsewhen(s3Killed) block.
+    // If s3Killed is true but we are waiting, s3Valid stays true (via latching)
+    // until the response returns, at which point s3Fire triggers via the "Dead" path.
 
     // =================================================================================
     // Debug
@@ -248,7 +235,7 @@ class LoadStoreAdaptor extends CycleAwareModule {
               p"LOAD_WB: Addr=0x${Hexadecimal(s3AddrDebug)} Data=0x${Hexadecimal(wbArbiter.io.in(1).bits.data)}\n"
             )
         }
-        when(s3IsDone && isStoreS3 && s3Ready) {
+        when(s3MemDone && isStoreS3 && s3Ready) {
             printf(p"STORE_ACK: Addr=0x${Hexadecimal(s3AddrDebug)}\n")
         }
     }
