@@ -32,7 +32,7 @@ class IssueBufferEntry[T <: Data](gen: T) extends Bundle {
     val src2 = UInt(PREG_WIDTH.W)
     val imm = UInt(32.W)
     val useImm = Bool()
-    val info = gen
+    val info = gen.cloneType
 
     val pc =
         if (Configurables.Elaboration.pcInIssueBuffer) Some(UInt(32.W))

@@ -26,16 +26,9 @@ class BRUAdaptor extends CycleAwareModule {
     })
 
     val bru = Module(new BranchUnit)
+    val fetch = Module(new OperandFetchStage(new BRUInfo))
 
     // Pipeline Registers
-    val s1Valid = RegInit(false.B)
-    val s1Bits = Reg(new IssueBufferEntry(new BRUInfo))
-
-    val s2Valid = RegInit(false.B)
-    val s2Bits = Reg(new IssueBufferEntry(new BRUInfo))
-    val s2Data1 = Reg(UInt(32.W))
-    val s2Data2 = Reg(UInt(32.W))
-
     val s3Valid = RegInit(false.B)
     val s3Bits = Reg(new IssueBufferEntry(new BRUInfo))
     val s3Result = Reg(UInt(32.W))
@@ -45,38 +38,24 @@ class BRUAdaptor extends CycleAwareModule {
       false.B
     ) // Record the update already sent even if CDB not accepted
 
-    io.busy.foreach(_ := s1Valid || s2Valid || s3Valid)
+    io.busy.foreach(_ := fetch.io.busy || s3Valid)
 
     val s3Ready = io.broadcastOut.ready || !s3Valid
-    val s2Ready = s3Ready || !s2Valid
-    val s1Ready = s2Ready || !s1Valid
 
-    io.issueIn.ready := s1Ready
+    // Connect Fetch Stage
+    fetch.io.issueIn <> io.issueIn
+    io.prfRead <> fetch.io.prfRead
+    fetch.io.flush := io.flush
+    fetch.io.out.ready := s3Ready
 
-    // Stage 1 Transition
-    when(s1Ready) {
-        s1Valid := io.issueIn.fire && !io.flush.checkKilled(
-          io.issueIn.bits.robTag
-        )
-        s1Bits := io.issueIn.bits
-    }.elsewhen(io.flush.checkKilled(s1Bits.robTag)) {
-        s1Valid := false.B
-    }
-
-    // Stage 2 Transition
-    when(s2Ready) {
-        s2Valid := s1Valid && !io.flush.checkKilled(s1Bits.robTag)
-        s2Bits := s1Bits
-        s2Data1 := io.prfRead.data1
-        s2Data2 := io.prfRead.data2
-    }.elsewhen(io.flush.checkKilled(s2Bits.robTag)) {
-        s2Valid := false.B
-    }
+    val s2Info = fetch.io.out.bits.info
+    val s2op1 = fetch.io.out.bits.op1
+    val s2op2 = fetch.io.out.bits.op2
 
     // Stage 3 Transition
     when(s3Ready) {
-        s3Valid := s2Valid && !io.flush.checkKilled(s2Bits.robTag)
-        s3Bits := s2Bits
+        s3Valid := fetch.io.out.valid && !io.flush.checkKilled(s2Info.robTag)
+        s3Bits := s2Info
         s3Result := bru.io.result
         s3Taken := bru.io.taken
         s3Target := bru.io.target
@@ -88,15 +67,12 @@ class BRUAdaptor extends CycleAwareModule {
     }
 
     // Data Path Connections
-    io.prfRead.addr1 := s1Bits.src1
-    io.prfRead.addr2 := s1Bits.src2
-
-    bru.io.inA := s2Data1
-    bru.io.inB := s2Data2
-    bru.io.pc := s2Bits.info.pc
-    bru.io.imm := s2Bits.imm
-    bru.io.bruOp := s2Bits.info.bruOp
-    bru.io.cmpOp := s2Bits.info.cmpOp
+    bru.io.inA := s2op1
+    bru.io.inB := s2op2
+    bru.io.pc := s2Info.info.pc
+    bru.io.imm := s2Info.imm
+    bru.io.bruOp := s2Info.info.bruOp
+    bru.io.cmpOp := s2Info.info.cmpOp
 
     // Outputs
     val isWritebackInstS3 = s3Bits.info.bruOp.isOneOf(
@@ -121,8 +97,8 @@ class BRUAdaptor extends CycleAwareModule {
     io.brUpdate.rasSP := s3Bits.info.rasSP
 
     val s3Mispredict = RegEnable(
-      (bru.io.taken =/= s2Bits.info.predict) ||
-          (bru.io.taken && bru.io.target =/= s2Bits.info.predictedTarget),
+      (bru.io.taken =/= s2Info.info.predict) ||
+          (bru.io.taken && bru.io.target =/= s2Info.info.predictedTarget),
       s3Ready
     )
     val mispredict = s3Mispredict

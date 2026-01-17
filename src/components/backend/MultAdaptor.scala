@@ -26,11 +26,7 @@ class MultAdaptor extends Module {
     })
 
     val mult = Module(new MulDivUnit)
-
-    val s1_valid = RegInit(false.B)
-    val s1_info = Reg(new IssueBufferEntry(new MultInfo))
-    val s1_op1 = Reg(UInt(32.W))
-    val s1_op2 = Reg(UInt(32.W))
+    val fetch = Module(new OperandFetchStage(new MultInfo))
 
     val s2_valid = RegInit(false.B)
     val s2_pdst = Reg(UInt(PREG_WIDTH.W))
@@ -42,40 +38,29 @@ class MultAdaptor extends Module {
     val s3_rob = Reg(UInt(ROB_WIDTH.W))
     val s3_result = Reg(UInt(32.W))
 
-    // Stage 1: Issue Logic
-    io.prfRead.addr1 := io.issueIn.bits.src1
-    io.prfRead.addr2 := io.issueIn.bits.src2
+    // Stage 1: Issue Logic & Operand Fetch
+    fetch.io.issueIn <> io.issueIn
+    io.prfRead       <> fetch.io.prfRead
+    fetch.io.flush   := io.flush
 
-    io.issueIn.ready := !s1_valid
+    val s1Valid = fetch.io.out.valid
+    val s1Info  = fetch.io.out.bits.info
+    val s1Op1   = fetch.io.out.bits.op1
+    val s1Op2   = fetch.io.out.bits.op2
 
-    when(io.issueIn.fire) {
-        s1_valid := true.B
-        s1_info := io.issueIn.bits
-        s1_op1 := io.prfRead.data1
-        s1_op2 := io.prfRead.data2
-    }
+    // Stage 2: Mul / Div Execution
+    mult.io.req.valid   := s1Valid
+    mult.io.req.bits.fn := s1Info.info.multOp.asUInt
+    mult.io.req.bits.a  := s1Op1
+    mult.io.req.bits.b  := s1Op2
 
-    val flushHitS1 = io.flush.checkKilled(s1_info.robTag)
-    when(s1_valid && flushHitS1) {
-        s1_valid := false.B
-    }
-    when(io.issueIn.fire && io.flush.checkKilled(io.issueIn.bits.robTag)) {
-        s1_valid := false.B
-    }
-
-    // Stage 2: Mul Execution
-    mult.io.req.valid := s1_valid
-    mult.io.req.bits.fn := s1_info.info.multOp.asUInt
-    mult.io.req.bits.a := s1_op1
-    mult.io.req.bits.b := s1_op2
-
-    val dispatchFire = s1_valid && mult.io.req.ready && !s2_valid
+    val dispatchFire = s1Valid && mult.io.req.ready && !s2_valid
+    fetch.io.out.ready := mult.io.req.ready && !s2_valid
 
     when(dispatchFire) {
-        s1_valid := false.B
-        s2_valid := true.B
-        s2_pdst := s1_info.pdst
-        s2_rob := s1_info.robTag
+        s2_valid  := true.B 
+        s2_pdst   := s1Info.pdst
+        s2_rob    := s1Info.robTag
         s2_killed := false.B
     }
 
@@ -117,6 +102,6 @@ class MultAdaptor extends Module {
         s3_valid := false.B
     }
 
-    // Profiling Info
-    io.busy.foreach(_ := s1_valid || s2_valid || s3_valid)
+    // Profiling Data
+    io.busy.foreach(_ := fetch.io.busy || s2_valid || s3_valid)
 }

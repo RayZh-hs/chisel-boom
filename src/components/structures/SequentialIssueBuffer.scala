@@ -20,7 +20,7 @@ class SequentialBufferEntry[T <: Data](gen: T) extends Bundle {
     val src2Ready = Bool()
     val src1 = UInt(PREG_WIDTH.W)
     val src2 = UInt(PREG_WIDTH.W)
-    val info = gen
+    val info = gen.cloneType
 
     val pc =
         if (Configurables.Elaboration.pcInIssueBuffer) Some(UInt(32.W))
