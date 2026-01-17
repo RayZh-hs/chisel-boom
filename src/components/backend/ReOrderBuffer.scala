@@ -28,7 +28,7 @@ class ReOrderBuffer extends CycleAwareModule {
             val robTag = UInt(ROB_WIDTH.W)
             val mispredict = Bool()
         }))
-        val rollback = Output(Valid(new RollbackBundle))
+        val rollback = Vec(2, Output(Valid(new RollbackBundle)))
         val isRollingBack = if (Configurables.Profiling.RollbackTime) Some(Output(Bool())) else None
         val head = Output(UInt(ROB_WIDTH.W))
         val count = if (common.Configurables.Profiling.Utilization) Some(Output(UInt((ROB_WIDTH + 1).W))) else None
@@ -43,15 +43,20 @@ class ReOrderBuffer extends CycleAwareModule {
     // entries is a power of 2, so we can use bitmask for efficient wrapping
     private def nextPtr(p: UInt): UInt = (p + 1.U)(ROB_WIDTH - 1, 0)
     private def prevPtr(p: UInt): UInt = (p - 1.U)(ROB_WIDTH - 1, 0)
+    private def prevPtr2(p: UInt): UInt = (p - 2.U)(ROB_WIDTH - 1, 0)
 
     val tailPrev = prevPtr(tail)
+    val tailPrev2 = prevPtr2(tail)
     val tailNext = nextPtr(tail)
 
     val isRollingBack = RegInit(false.B)
     val targetTail = Reg(UInt(ROB_WIDTH.W))
 
     val rollbackDone = tail === targetTail
-    val doPopTail = isRollingBack && !rollbackDone
+    
+    val canPop2 = isRollingBack && (tail =/= targetTail) && (tailPrev =/= targetTail)
+    val canPop1 = isRollingBack && !rollbackDone && !canPop2
+    val doPopTail = canPop1 || canPop2
 
     when(isRollingBack && rollbackDone) {
         isRollingBack := false.B
@@ -74,7 +79,8 @@ class ReOrderBuffer extends CycleAwareModule {
 
     when(doEnq) { tail := tailNext }
     when(doDeq) { head := nextPtr(head) }
-    when(doPopTail) { tail := tailPrev }
+    when(canPop2) { tail := tailPrev2 }
+    .elsewhen(canPop1) { tail := tailPrev }
 
     when(doEnq && !doDeq) {
         maybeFull := tailNext === head
@@ -104,11 +110,19 @@ class ReOrderBuffer extends CycleAwareModule {
         robRam(io.broadcastInput.bits.robTag).ready := true.B
     }
     // Rollback Output
-    val entryToRollback = robRam(tailPrev)
-    io.rollback.valid := doPopTail
-    io.rollback.bits.ldst := entryToRollback.ldst
-    io.rollback.bits.pdst := entryToRollback.pdst
-    io.rollback.bits.stalePdst := entryToRollback.stalePdst
+    val entryToRollback1 = robRam(tailPrev)
+    val entryToRollback2 = robRam(tailPrev2)
+
+    io.rollback(0).valid := doPopTail
+    io.rollback(0).bits.ldst := entryToRollback1.ldst
+    io.rollback(0).bits.pdst := entryToRollback1.pdst
+    io.rollback(0).bits.stalePdst := entryToRollback1.stalePdst
+
+    io.rollback(1).valid := canPop2
+    io.rollback(1).bits.ldst := entryToRollback2.ldst
+    io.rollback(1).bits.pdst := entryToRollback2.pdst
+    io.rollback(1).bits.stalePdst := entryToRollback2.stalePdst
+
     io.isRollingBack.foreach(_ := isRollingBack)
 
     // Commit

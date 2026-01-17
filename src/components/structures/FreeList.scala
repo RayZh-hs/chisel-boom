@@ -12,7 +12,7 @@ class FreeList(numRegs: Int, numArchRegs: Int) extends Module {
     val io = IO(new Bundle {
         val allocate = Decoupled(UInt(width.W))
         val free = Flipped(Decoupled(UInt(width.W)))
-        val rollbackFree = Flipped(Decoupled(UInt(width.W)))
+        val rollbackFree = Vec(2, Flipped(Decoupled(UInt(width.W))))
     })
 
     val ram = Mem(capacity, UInt(width.W))
@@ -72,19 +72,26 @@ class FreeList(numRegs: Int, numArchRegs: Int) extends Module {
     // --- Free Logic ---
 
     io.free.ready := !isInit
-    io.rollbackFree.ready := !isInit
+    io.rollbackFree(0).ready := !isInit
+    io.rollbackFree(1).ready := !isInit
 
     val doFree = io.free.fire
-    val doRollback = io.rollbackFree.fire
-    val numEnq = doFree.asUInt +& doRollback.asUInt
+    val doRollback0 = io.rollbackFree(0).fire
+    val doRollback1 = io.rollbackFree(1).fire
+    val numEnq = doFree.asUInt +& doRollback0.asUInt +& doRollback1.asUInt
 
     when(doFree) {
         ram.write(tail(ptrWidth - 1, 0), io.free.bits)
     }
 
-    val rollbackIdx = tail + doFree.asUInt
-    when(doRollback) {
-        ram.write(rollbackIdx(ptrWidth - 1, 0), io.rollbackFree.bits)
+    val rollbackIdx0 = tail + doFree.asUInt
+    when(doRollback0) {
+        ram.write(rollbackIdx0(ptrWidth - 1, 0), io.rollbackFree(0).bits)
+    }
+
+    val rollbackIdx1 = rollbackIdx0 + doRollback0.asUInt
+    when(doRollback1) {
+        ram.write(rollbackIdx1(ptrWidth - 1, 0), io.rollbackFree(1).bits)
     }
 
     when(!isInit) {

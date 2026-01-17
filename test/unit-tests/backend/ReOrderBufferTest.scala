@@ -83,16 +83,14 @@ class ReOrderBufferTest extends AnyFlatSpec with Matchers {
             dut.io.brUpdate.valid.poke(false.B)
 
             // Should see rollback for instruction 2, then 1
-            dut.io.rollback.valid.expect(true.B)
-            dut.io.rollback.bits.ldst.expect(3.U)
-            dut.clock.step()
-
-            dut.io.rollback.valid.expect(true.B)
-            dut.io.rollback.bits.ldst.expect(2.U)
+            dut.io.rollback(0).valid.expect(true.B)
+            dut.io.rollback(0).bits.ldst.expect(3.U)
+            dut.io.rollback(1).valid.expect(true.B)
+            dut.io.rollback(1).bits.ldst.expect(2.U)
             dut.clock.step()
 
             // Rollback finished
-            dut.io.rollback.valid.expect(false.B)
+            dut.io.rollback(0).valid.expect(false.B)
         }
     }
 }
