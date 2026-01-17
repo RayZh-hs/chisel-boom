@@ -9,10 +9,13 @@ on:
 env:
   OBJCACHE: "env" 
   CCACHE_DISABLE: 1
+  VERILATOR_ROOT: ${{ github.workspace }}/verilator-install
 
 jobs:
   test:
+    environment: ci
     runs-on: ubuntu-22.04
+    
     steps:
     - uses: actions/checkout@v4
     
@@ -27,14 +30,14 @@ jobs:
       with:
         mill-version: 0.12.7
     
-    - name: Cache Verilator 4.228
+    - name: Cache Verilator
       id: cache-verilator
       uses: actions/cache@v3
       with:
-        path: /usr/local/share/verilator
-        key: verilator-4.228-v1
+        path: ${{ env.VERILATOR_ROOT }}
+        key: verilator-${{ vars.VERILATOR_VERSION }}-v1
 
-    - name: Install Verilator 4.228
+    - name: Install Verilator
       if: steps.cache-verilator.outputs.cache-hit != 'true'
       run: |
         sudo apt-get update
@@ -44,12 +47,19 @@ jobs:
         
         git clone https://github.com/verilator/verilator
         cd verilator
-        git checkout v4.228
+        # 3. Reference the variable here as well
+        git checkout v${{ vars.VERILATOR_VERSION }}
         
         autoconf
-        ./configure
+        ./configure --prefix=${{ env.VERILATOR_ROOT }}
         make -j$(nproc)
-        sudo make install
+        make install
+
+    - name: Add Verilator to PATH
+      run: |
+        echo "${{ env.VERILATOR_ROOT }}/bin" >> $GITHUB_PATH
+        echo "VERILATOR_ROOT=${{ env.VERILATOR_ROOT }}" >> $GITHUB_ENV
+        verilator --version
 
     - name: Setup RISCV Toolchain
       uses: gregdavill/setup-riscv-gnu-toolchain@v2.0
