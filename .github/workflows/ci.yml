@@ -9,7 +9,6 @@ on:
 env:
   OBJCACHE: "env" 
   CCACHE_DISABLE: 1
-  VERILATOR_ROOT: ${{ github.workspace }}/verilator-install
 
 jobs:
   # JOB 1: Prepare Verilator
@@ -23,7 +22,9 @@ jobs:
         id: cache-verilator
         uses: actions/cache@v3
         with:
-          path: ${{ env.VERILATOR_ROOT }}
+          path: |
+            /usr/local/bin/verilator*
+            /usr/local/share/verilator
           key: verilator-${{ vars.VERILATOR_VERSION }}-v1
 
       - name: Install Verilator
@@ -39,13 +40,13 @@ jobs:
           git checkout v${{ vars.VERILATOR_VERSION }}
           
           autoconf
-          ./configure --prefix=${{ env.VERILATOR_ROOT }}
+          ./configure
           make -j$(nproc)
-          make install
+          sudo make install
 
   # JOB 2: Run the actual tests
   test:
-    needs: setup-verilator # Ensure setup-verilator is run first
+    needs: setup-verilator
     environment: ci
     runs-on: ubuntu-22.04
     
@@ -67,23 +68,16 @@ jobs:
         id: cache-verilator
         uses: actions/cache@v3
         with:
-          path: ${{ env.VERILATOR_ROOT }}
+          path: |
+            /usr/local/bin/verilator*
+            /usr/local/share/verilator
           key: verilator-${{ vars.VERILATOR_VERSION }}-v1
-          fail-on-cache-miss: true  # Fail fast if setup-verilator didn't work
+          fail-on-cache-miss: true
 
-      - name: Add Verilator to PATH
-        run: |
-          # The binaries stay in /bin
-          echo "${{ github.workspace }}/verilator-install/bin" >> $GITHUB_PATH
-
-          # Unset VERILATOR_ROOT
-          echo "VERILATOR_ROOT=" >> $GITHUB_ENV
-
-      - name: Verify Verilator
+      - name:  Verify Verilator
         run: |
           verilator --version
-          INSTALL_PATH="${{ github.workspace }}/verilator-install"
-          ls -l $INSTALL_PATH/share/verilator/include/verilated.mk
+          ls -l /usr/local/share/verilator/include/verilated.mk
 
       - name: Setup RISCV Toolchain
         uses: gregdavill/setup-riscv-gnu-toolchain@v2.0
