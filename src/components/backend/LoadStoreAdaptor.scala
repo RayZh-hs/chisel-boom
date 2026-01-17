@@ -7,11 +7,10 @@ import common.Configurables._
 import components.structures._
 import utility.CycleAwareModule
 
-/**
-  * Load Store Adaptor
+/** Load Store Adaptor
   *
   * Bridges an Issue Buffer to the Load/Store execution unit.
-  * 
+  *
   * Handles all load/store logic sequentially.
   */
 class LoadStoreAdaptor extends CycleAwareModule {
@@ -67,7 +66,8 @@ class LoadStoreAdaptor extends CycleAwareModule {
     val s3WaitingResp = RegInit(false.B)
 
     /** Fix: Track if S3 is "dead" (flushed) but waiting for Ghost Response
-      * @author rogerflowey
+      * @author
+      *   rogerflowey
       */
     val s3IsDead = RegInit(false.B)
     val s1Ready = Wire(Bool())
@@ -80,10 +80,11 @@ class LoadStoreAdaptor extends CycleAwareModule {
 
     // Profiling
     io.busy.foreach(_ := s1Valid || s2Valid || s3Valid)
-    
+
     // Replicate commit stall logic for profiling
     val isStoreS2_prof = s2Bits.info.isStore
-    val isCommitted_prof = s2RegCommitted || (isStoreS2_prof && io.robHead === s2Bits.robTag)
+    val isCommitted_prof =
+        s2RegCommitted || (isStoreS2_prof && io.robHead === s2Bits.robTag)
     io.stallCommit.foreach(_ := s2Valid && isStoreS2_prof && !isCommitted_prof)
 
     // Stage 1: Issue & PRF Read

@@ -16,7 +16,6 @@ class E2ETests extends AnyFunSuite {
         common.Configurables.verbose = true
     }
 
-
     if (toolchain.nonEmpty) {
         val cFiles =
             if (Files.isDirectory(cDir))

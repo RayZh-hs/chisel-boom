@@ -7,8 +7,7 @@ import common.Configurables._
 import components.structures.ArithmeticLogicUnit
 import components.structures.{ALUInfo, IssueBufferEntry}
 
-/**
-  * ALU Adaptor
+/** ALU Adaptor
   *
   * Bridges the Issue Buffer to the ALU execution unit.
   */
@@ -21,7 +20,9 @@ class ALUAdaptor extends Module {
         val prfRead = new PRFReadBundle
 
         val flush = Input(new FlushBundle)
-        val busy = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
+        val busy =
+            if (common.Configurables.Profiling.Utilization) Some(Output(Bool()))
+            else None
     })
 
     val alu = Module(new ArithmeticLogicUnit)

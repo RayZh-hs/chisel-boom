@@ -66,7 +66,7 @@ class MemorySubsystem extends Module {
     val respArb = Module(new Arbiter(UInt(32.W), 2))
 
     // Port 0: Cache Response (High Priority)
-    /* 
+    /*
      * @note
      *   If Cache response has no backpressure (no 'ready'), we assume it connects valid-to-valid
      */
@@ -89,9 +89,17 @@ class MemorySubsystem extends Module {
     formattedData := rawData
 
     when(info.opWidth === MemOpWidth.BYTE) {
-        formattedData := Mux(info.isUnsigned, rbyte(7, 0), signExtByte(rbyte(7, 0)))
+        formattedData := Mux(
+          info.isUnsigned,
+          rbyte(7, 0),
+          signExtByte(rbyte(7, 0))
+        )
     }.elsewhen(info.opWidth === MemOpWidth.HALFWORD) {
-        formattedData := Mux(info.isUnsigned, rhalf(15, 0), signExtendHalfWord(rhalf(15, 0)))
+        formattedData := Mux(
+          info.isUnsigned,
+          rhalf(15, 0),
+          signExtendHalfWord(rhalf(15, 0))
+        )
     }
 
     // Connect Arbiter output to Upstream

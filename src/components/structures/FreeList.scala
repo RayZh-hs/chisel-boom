@@ -4,13 +4,14 @@ import chisel3._
 import chisel3.util._
 import utility.CycleAwareModule
 
-/**
-  * Free List
-  * 
+/** Free List
+  *
   * Holds the list of free physical registers.
   *
-  * @param numRegs Total number of physical registers
-  * @param numArchRegs Number of architectural registers
+  * @param numRegs
+  *   Total number of physical registers
+  * @param numArchRegs
+  *   Number of architectural registers
   */
 class FreeList(numRegs: Int, numArchRegs: Int) extends CycleAwareModule {
     // Derived Parameters

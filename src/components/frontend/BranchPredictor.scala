@@ -3,12 +3,11 @@ package components.frontend
 import chisel3._
 import chisel3.util._
 
-/**
-  * Branch Target Buffer
+/** Branch Target Buffer
   *
-  * A simple Branch Target Buffer (BTB) implementation that stores
-  * branch target addresses for taken branches. Uses a 2-bit saturating
-  * counter for prediction.
+  * A simple Branch Target Buffer (BTB) implementation that stores branch target
+  * addresses for taken branches. Uses a 2-bit saturating counter for
+  * prediction.
   */
 class BranchTargetBuffer extends Module {
     // IO Definition

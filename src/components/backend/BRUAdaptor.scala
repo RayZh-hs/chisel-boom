@@ -9,8 +9,7 @@ import components.structures.{BRUInfo, IssueBufferEntry}
 import utility.CycleAwareModule
 import chisel3.util.experimental.BoringUtils
 
-/**
-  * BRU Adaptor
+/** BRU Adaptor
   *
   * Bridges an Issue Buffer to the Branch Unit execution unit.
   */
@@ -21,7 +20,9 @@ class BRUAdaptor extends CycleAwareModule {
         val prfRead = new PRFReadBundle
         val brUpdate = Output(new BranchUpdateBundle)
         val flush = Input(new FlushBundle)
-        val busy = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
+        val busy =
+            if (common.Configurables.Profiling.Utilization) Some(Output(Bool()))
+            else None
     })
 
     val bru = Module(new BranchUnit)

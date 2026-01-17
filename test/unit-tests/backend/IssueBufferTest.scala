@@ -49,12 +49,12 @@ class IssueBufferTest extends AnyFlatSpec with Matchers {
         simulate(new IssueBuffer(new ALUInfo, 4, "IB")) { dut =>
             // Reset DUT
             resetDut(dut)
-            
+
             // Enqueue an instruction with non-ready src1
             dut.reset.poke(true.B)
             dut.clock.step()
             dut.reset.poke(false.B)
-            
+
             dut.io.broadcast.valid.poke(false.B)
             dut.io.in.valid.poke(true.B)
             dut.io.in.bits.src1.poke(5.U)
@@ -85,7 +85,7 @@ class IssueBufferTest extends AnyFlatSpec with Matchers {
         simulate(new IssueBuffer(new ALUInfo, 8, "IB")) { dut =>
             // Reset DUT
             resetDut(dut)
-            
+
             dut.io.in.valid.poke(true.B)
             dut.io.in.bits.robTag.poke(1.U)
             dut.io.in.bits.src1.poke(10.U) // Waiting on P10
@@ -133,7 +133,7 @@ class IssueBufferTest extends AnyFlatSpec with Matchers {
         simulate(new IssueBuffer(new ALUInfo, 8, "IB")) { dut =>
             // Reset DUT
             resetDut(dut)
-            
+
             // ROB Head = 60. Flush Tag = 2.
             // Range [60, max] and [0, 2] are safe.
             // 61 -> Safe

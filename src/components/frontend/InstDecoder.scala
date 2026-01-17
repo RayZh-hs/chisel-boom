@@ -6,8 +6,7 @@ import common._
 import common.Configurables._
 import utility.CycleAwareModule
 
-/**
-  * Instruction Decoder
+/** Instruction Decoder
   *
   * Decodes RISC-V instructions into control signals for the backend.
   */

@@ -85,7 +85,7 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
      * @note
      *   We use a Round-Robin issue policy to prevent Starvation
      *   (buffer filled by noops that do not get issued).
-     *   
+     * 
      *   Starvation is prevented by the Issue Logic (Dequeue), not the Enqueue Logic.
      */
     val lastIssuedIndex = RegInit((numEntries - 1).U(log2Ceil(numEntries).W))
@@ -165,7 +165,7 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
     }
 
     // Create a masked version of ready signals.
-    //Only look at entries with an index greater than the last one issued.
+    // Only look at entries with an index greater than the last one issued.
     val maskedReadyEntries = Wire(Vec(numEntries, Bool()))
     for (i <- 0 until numEntries) {
         maskedReadyEntries(i) := readyEntries(i) && (i.U > lastIssuedIndex)

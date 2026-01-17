@@ -5,12 +5,13 @@ import common._
 import common.Configurables._
 import utility.CycleAwareModule
 
-/**
-  * MMIO Router
-  * 
-  * Handles routing of memory requests to multiple MMIO devices based on address mappings.
+/** MMIO Router
   *
-  * @param mappings The mappings in question.
+  * Handles routing of memory requests to multiple MMIO devices based on address
+  * mappings.
+  *
+  * @param mappings
+  *   The mappings in question.
   */
 class MMIORouter(val mappings: Seq[UInt]) extends Module {
     // IO Definition
@@ -55,9 +56,8 @@ class MMIORouter(val mappings: Seq[UInt]) extends Module {
     io.upstream.resp.bits := respData
 }
 
-/**
-  * MMIO Interface Trait
-  * 
+/** MMIO Interface Trait
+  *
   * Defines a standard interface for MMIO devices.
   */
 trait MMIOInterface {
@@ -80,7 +80,7 @@ class PrintDevice extends CycleAwareModule with MMIOInterface {
 
     queue.io.enq.valid := write
     queue.io.enq.bits := io.req.bits.data
-    
+
     // Connect to output
     debugOut <> queue.io.deq
 
@@ -90,7 +90,7 @@ class PrintDevice extends CycleAwareModule with MMIOInterface {
 
 class ExitDevice extends CycleAwareModule with MMIOInterface {
     val exitOut = IO(Output(Valid(UInt(32.W))))
-    
+
     val stopping = RegInit(false.B)
     val exitCode = Reg(UInt(32.W))
 

@@ -6,12 +6,10 @@ import common.BroadcastBundle
 import common.Configurables
 import utility.CycleAwareModule
 
-/**
-  * Broadcast Channel
+/** Broadcast Channel
   *
-  * Arbitrates multiple execution unit broadcast results onto a single
-  * broadcast channel. Carries that information to all components that
-  * need it.
+  * Arbitrates multiple execution unit broadcast results onto a single broadcast
+  * channel. Carries that information to all components that need it.
   */
 class BroadcastChannel extends CycleAwareModule {
     // IO definition
@@ -25,7 +23,12 @@ class BroadcastChannel extends CycleAwareModule {
     })
 
     val arbiter = Module(new RRArbiter(new BroadcastBundle, 4))
-    arbiter.io.in <> Seq(io.aluResult, io.multResult, io.bruResult, io.memResult)
+    arbiter.io.in <> Seq(
+      io.aluResult,
+      io.multResult,
+      io.bruResult,
+      io.memResult
+    )
     io.broadcastOut.valid := arbiter.io.out.valid
     io.broadcastOut.bits := arbiter.io.out.bits
     arbiter.io.out.ready := true.B
