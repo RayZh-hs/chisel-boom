@@ -184,40 +184,18 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     rob.io.dispatch <> dispatcher.io.robOutput
 
     // Dispatch to Issue Buffers
-    class DispatcherQueueEntry extends Bundle {
-        val inst = new DecodedInstBundle
-        val rasSP = UInt(RAS_WIDTH.W)
-        val robTag = UInt(ROB_WIDTH.W)
-    }
+    // Connect Dispatcher to Router (Queue is internal to Router)
+    dispatchRouter.io.instInput <> dispatcher.io.instOutput
 
-    val dispatcherInstQueue = Module(
-      new Queue(
-        new DispatcherQueueEntry,
-        entries = 2,
-        pipe = false,
-        flow = false
-      )
-    )
-    dispatcherInstQueue.io.enq.valid := dispatcher.io.instOutput.valid
-    dispatcherInstQueue.io.enq.bits.inst := dispatcher.io.instOutput.bits.inst
-    dispatcherInstQueue.io.enq.bits.rasSP := dispatcher.io.instOutput.bits.rasSP
-    dispatcherInstQueue.io.enq.bits.robTag := rob.io.robTag
-    dispatcher.io.instOutput.ready := dispatcherInstQueue.io.enq.ready
-    dispatcherInstQueue.reset := reset.asBool || backendMispredict
-
-    // Router Inputs
-    dispatchRouter.io.instInput.valid := dispatcherInstQueue.io.deq.valid
-    dispatchRouter.io.instInput.bits.inst := dispatcherInstQueue.io.deq.bits.inst
-    dispatchRouter.io.instInput.bits.rasSP := dispatcherInstQueue.io.deq.bits.rasSP
-    dispatcherInstQueue.io.deq.ready := dispatchRouter.io.instInput.ready
-
-    dispatchRouter.io.robTagIn := dispatcherInstQueue.io.deq.bits.robTag
+    // Connect ROB Info to Router
+    dispatchRouter.io.robTagIn := rob.io.robTag
     dispatchRouter.io.robDispatchReady := rob.io.dispatch.ready
     dispatchRouter.io.rollbackValid := rob.io.rollback(0).valid
+    dispatchRouter.io.flush := backendMispredict
 
     // PRF Ready for Dispatch Routing
-    prf.io.readyAddrs(0) := dispatcherInstQueue.io.deq.bits.inst.prs1
-    prf.io.readyAddrs(1) := dispatcherInstQueue.io.deq.bits.inst.prs2
+    prf.io.readyAddrs(0) := dispatchRouter.io.prfReadAddr(0)
+    prf.io.readyAddrs(1) := dispatchRouter.io.prfReadAddr(1)
     dispatchRouter.io.prfReady(0) := prf.io.isReady(0)
     dispatchRouter.io.prfReady(1) := prf.io.isReady(1)
 
