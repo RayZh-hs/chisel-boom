@@ -50,8 +50,9 @@ class IssueBufferEntry[T <: Data](gen: T) extends Bundle {
   * @param name
   *   Name of the Issue Buffer (for debugging)
   */
-class IssueBuffer[T <: Data](gen: T, val numEntries: Int, name: String)
+class IssueBuffer[T <: Data](gen: T, entries: Int, name: String)
     extends CycleAwareModule with NonOrderedLogic {
+    def numEntries = entries
     
     val io = IO(new Bundle {
         val in = Flipped(Decoupled(new IssueBufferEntry(gen)))

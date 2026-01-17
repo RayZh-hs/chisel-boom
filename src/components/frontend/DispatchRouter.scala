@@ -35,6 +35,9 @@ class DispatchRouter extends Module {
 
         // Updates
         val setBusy = Valid(UInt(PREG_WIDTH.W))
+
+        // CDB
+        val broadcast = Input(Valid(new BroadcastBundle()))
     })
 
     // Internal Queue used to buffer instructions between Dispatcher and IBs
@@ -60,7 +63,7 @@ class DispatchRouter extends Module {
 
     // Wiring Queue -> Logic
     val inst = queue.io.deq.bits.inst
-    val valid = queue.io.deq.valid
+    val valid = queue.io.deq.valid 
     val rasSP = queue.io.deq.bits.rasSP
     val robTagFromQueue = queue.io.deq.bits.robTag
 

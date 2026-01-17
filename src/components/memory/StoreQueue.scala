@@ -9,11 +9,11 @@ import utility.{CycleAwareModule, QueueControlLogic}
 class StoreQueueEntry extends Bundle {
     val robTag = UInt(ROB_WIDTH.W)
     
-    val addrTag   = UInt(PREG_WIDTH.W)
+    val addrPreg   = UInt(PREG_WIDTH.W)
     val addrReady = Bool()
     val addrVal   = UInt(32.W)
 
-    val dataTag   = UInt(PREG_WIDTH.W)
+    val dataPreg   = UInt(PREG_WIDTH.W)
     val dataReady = Bool()
     val dataVal   = UInt(32.W)
 
@@ -30,7 +30,8 @@ class StoreQueueEntry extends Bundle {
     val isUnsigned  = Bool()
 }
 
-class StoreQueue(val numEntries: Int) extends CycleAwareModule with QueueControlLogic {
+class StoreQueue(entries: Int) extends CycleAwareModule with QueueControlLogic {
+    def numEntries = entries
 
     val io = IO(new Bundle {
         val in = Flipped(Decoupled(new StoreQueueEntry()))
@@ -42,11 +43,11 @@ class StoreQueue(val numEntries: Int) extends CycleAwareModule with QueueControl
         val robHead = Input(UInt(ROB_WIDTH.W)) 
 
         // Commit Broadcast to notify rob ready
-        val broadcastOut = Output(Decoupled(new BroadcastBundle())) 
+        val broadcastOut = Decoupled(new BroadcastBundle()) 
 
         // Monitor for LQ
         val contents = Output(Vec(numEntries, Valid(new StoreQueueEntry())))
-        val ptrs = Output(new Bundle { val head = UInt(); val tail = UInt() })
+        val ptrs = Output(new Bundle { val head = UInt(); val tail = UInt(); val maybeFull = Bool() })
 
         // Profiling
         val count =
@@ -63,16 +64,19 @@ class StoreQueue(val numEntries: Int) extends CycleAwareModule with QueueControl
     }
     io.ptrs.head := head
     io.ptrs.tail := tail
+    io.ptrs.maybeFull := maybeFull
 
     // Enqueue
-    io.in.ready := !isFull
+    io.in.ready := !isFull && !io.flush.valid
     when(io.in.fire) {
-        val e = io.in.bits
+        val e = Wire(new StoreQueueEntry())
+        e := io.in.bits
         e.addrComputed := false.B
         e.committed := false.B
         e.broadcasted := false.B
         buffer(tail) := e
         onEnqueue()
+        printf(p"[SQ] Enqueue: robTag=${e.robTag} addrTag=${e.addrPreg} addrReady=${e.addrReady} dataPreg=${e.dataPreg} dataReady=${e.dataReady}\n")
     }
 
     // CDB Broadcast Handling
@@ -82,11 +86,11 @@ class StoreQueue(val numEntries: Int) extends CycleAwareModule with QueueControl
         
         for (i <- 0 until numEntries) {
             when(valids(i)) {
-                when(!buffer(i).addrReady && buffer(i).addrTag === tag) {
+                when(!buffer(i).addrReady && buffer(i).addrPreg === tag) {
                     buffer(i).addrReady := true.B
                     buffer(i).addrVal   := value
                 }
-                when(!buffer(i).dataReady && buffer(i).dataTag === tag) {
+                when(!buffer(i).dataReady && buffer(i).dataPreg === tag) {
                     buffer(i).dataReady := true.B
                     buffer(i).dataVal   := value
                 }
@@ -104,9 +108,13 @@ class StoreQueue(val numEntries: Int) extends CycleAwareModule with QueueControl
     val doCalc = calcCandidates.asUInt.orR
     when(doCalc) {
         val entry = buffer(calcIdx)
-        entry.addrResolved := entry.addrVal + entry.imm
+        buffer(calcIdx).addrResolved := entry.addrVal + entry.imm
         buffer(calcIdx).addrComputed := true.B
     }
+
+    // Defaults
+    io.broadcastOut.valid := false.B
+    io.broadcastOut.bits := DontCare
 
     // Broadcast & Commit
     val readyMask = Wire(Vec(numEntries, Bool()))
@@ -124,8 +132,10 @@ class StoreQueue(val numEntries: Int) extends CycleAwareModule with QueueControl
         io.broadcastOut.bits.robTag := entry.robTag
         io.broadcastOut.bits.pdst := 0.U
         io.broadcastOut.bits.data := 0.U
+        io.broadcastOut.bits.writeEn := false.B
         when(io.broadcastOut.fire){
             buffer(broadcastIdx).broadcasted := true.B
+            printf(p"[SQ] Broadcast Done: robTag=${entry.robTag}\n")
         }
     }
 
@@ -139,6 +149,7 @@ class StoreQueue(val numEntries: Int) extends CycleAwareModule with QueueControl
         io.out.valid := true.B
         when(io.out.fire) {
             onDequeue() // Clears valids(head) = false
+            printf(p"[SQ] Dequeue (Writeback): robTag=${headEntry.robTag} addr=${Hexadecimal(headEntry.addrResolved)} data=${Hexadecimal(headEntry.dataVal)}\n")
         }
     }
 

@@ -245,9 +245,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     // Adaptor to PRF Write connections (Unified via Broadcast Channel)
     prf.io.write(0).addr := bc.io.broadcastOut.bits.pdst
     prf.io.write(0).data := bc.io.broadcastOut.bits.data
-    prf.io
-        .write(0)
-        .en := bc.io.broadcastOut.valid && bc.io.broadcastOut.bits.writeEn
+    prf.io.write(0).en := bc.io.broadcastOut.valid && bc.io.broadcastOut.bits.writeEn
 
     // Broadcast Channel connections
     bc.io.aluResult <> aluAdaptor.io.broadcastOut
@@ -263,6 +261,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     lsAdaptor.io.broadcastIn := broadcast
     rob.io.broadcastInput.valid := broadcast.valid
     rob.io.broadcastInput.bits := broadcast.bits
+    dispatchRouter.io.broadcast := broadcast
 
     // PRF Busy Table Update (Set Ready on Broadcast)
     prf.io.setReady.valid := broadcast.valid

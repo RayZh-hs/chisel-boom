@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import common._
 import components.structures.IssueBufferEntry
+import utility.CycleAwareModule
 
 /** A generic pipeline stage that:
   *   1. Accepts an IssueBufferEntry
@@ -11,7 +12,7 @@ import components.structures.IssueBufferEntry
   *   3. Latches the entry and the read data
   *   4. Handle Flushes
   */
-class OperandFetchStage[T <: Data](gen: T) extends Module {
+class OperandFetchStage[T <: Data](gen: T) extends CycleAwareModule {
     val io = IO(new Bundle {
         // Input from Issue Buffer
         val issueIn = Flipped(Decoupled(new IssueBufferEntry(gen.cloneType)))
@@ -72,4 +73,8 @@ class OperandFetchStage[T <: Data](gen: T) extends Module {
     io.out.bits.op2 := op2Reg
 
     io.busy := validReg
+
+    when(io.out.fire){
+        printf(p"OperandFetchStage: Dispatched instruction ROB#${io.out.bits.info.robTag}, op1=${io.out.bits.op1} from ${io.out.bits.info.src1}, op2=${io.out.bits.op2} from ${io.out.bits.info.src2}\n")
+    }
 }

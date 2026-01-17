@@ -19,7 +19,7 @@ trait QueueControlLogic {
     // --- Derived Status ---
     val ptrMatch = head === tail
     val isEmpty = ptrMatch && !maybeFull
-    val isFull = ptrMatch && maybeFull
+    val isFull = ((head + 1.U)(log2Ceil(numEntries) - 1, 0) === tail)
     
     def getCount: UInt = {
         Mux(isFull, numEntries.U, Mux(tail >= head, tail - head, numEntries.U + tail - head))

@@ -39,7 +39,7 @@ class LoadStoreAdaptor extends CycleAwareModule {
 
     // Instantiate Load and Store Queues
     val lq = Module(new LoadBuffer(numEntriesLQ = 8, numEntriesSQ = 8))
-    val sq = Module(new StoreQueue(numEntries = 8))
+    val sq = Module(new StoreQueue(entries = 8))
 
     io.lsqCount.foreach(_ := lq.io.count.getOrElse(0.U) + sq.io.count.getOrElse(0.U))
 
@@ -65,14 +65,40 @@ class LoadStoreAdaptor extends CycleAwareModule {
     sq.io.in.valid := false.B
     io.issueIn.ready := Mux(isLoad, lq.io.in.ready, sq.io.in.ready)
 
+    io.prfRead.addr1 := io.issueIn.bits.src1
+    io.prfRead.addr2 := io.issueIn.bits.src2
+
+    val src1Ready = Wire(Bool())
+    val src2Ready = Wire(Bool())
+    val src1Data = Wire(UInt(32.W))
+    val src2Data = Wire(UInt(32.W))
+
+    src1Ready := io.issueIn.bits.src1Ready
+    src2Ready := io.issueIn.bits.src2Ready
+    src1Data := io.prfRead.data1
+    src2Data := io.prfRead.data2
+
+    when(io.broadcastIn.valid) {
+        val bcastTag = io.broadcastIn.bits.pdst
+        when(io.issueIn.bits.src1 === bcastTag) {
+            src1Ready := true.B
+            src1Data := io.broadcastIn.bits.data
+        }
+        when(io.issueIn.bits.src2 === bcastTag) {
+            src2Ready := true.B
+            src2Data := io.broadcastIn.bits.data
+        }
+    }
+
+
     // Convert incoming instruction to a LoadBufferEntry
-    val lq_entry = Wire(new LoadBufferEntry)
+    val lq_entry = Wire(new LoadBufferEntry(3)) // log2Ceil(8)
     lq_entry := DontCare
     lq_entry.robTag := io.issueIn.bits.robTag
     lq_entry.pdst := io.issueIn.bits.pdst
-    lq_entry.addrTag := io.issueIn.bits.src1
-    lq_entry.addrReady := false.B // Operands arrive via broadcast
-    lq_entry.addrVal := 0.U
+    lq_entry.addrPreg := io.issueIn.bits.src1
+    lq_entry.addrReady := src1Ready
+    lq_entry.addrVal := src1Data
     lq_entry.imm := io.issueIn.bits.info.imm
     lq_entry.opWidth := io.issueIn.bits.info.opWidth
     lq_entry.isUnsigned := io.issueIn.bits.info.isUnsigned
@@ -82,12 +108,12 @@ class LoadStoreAdaptor extends CycleAwareModule {
     val sq_entry = Wire(new StoreQueueEntry)
     sq_entry := DontCare
     sq_entry.robTag := io.issueIn.bits.robTag
-    sq_entry.addrTag := io.issueIn.bits.src1
-    sq_entry.addrReady := false.B // Operands arrive via broadcast
-    sq_entry.addrVal := 0.U
-    sq_entry.dataTag := io.issueIn.bits.src2
-    sq_entry.dataReady := false.B // Operands arrive via broadcast
-    sq_entry.dataVal := 0.U
+    sq_entry.addrPreg := io.issueIn.bits.src1
+    sq_entry.addrReady := src1Ready
+    sq_entry.addrVal := src1Data
+    sq_entry.dataPreg := io.issueIn.bits.src2
+    sq_entry.dataReady := src2Ready
+    sq_entry.dataVal := src2Data
     sq_entry.imm := io.issueIn.bits.info.imm
     sq_entry.opWidth := io.issueIn.bits.info.opWidth
     sq_entry.isUnsigned := io.issueIn.bits.info.isUnsigned
@@ -101,10 +127,6 @@ class LoadStoreAdaptor extends CycleAwareModule {
         }
     }
 
-    // Unused PRF read ports. Operands are handled via broadcast within LQ/SQ
-    io.prfRead.addr1 := 0.U
-    io.prfRead.addr2 := 0.U
-
     // =========================================================================
     // 2. Memory & Writeback Arbitration
     // =========================================================================
@@ -112,26 +134,35 @@ class LoadStoreAdaptor extends CycleAwareModule {
     val s3Ready = Wire(Bool())
 
     // Arbitrate between loads from LQ and stores from SQ for memory access
-    val memArbiter = Module(new RRArbiter(new MemoryRequest, 2))
+    val memArbiter = Module(new RRArbiter(new LoadStoreAction, 2))
 
     // Port 0: Loads from LQ that need to access cache
     memArbiter.io.in(0).valid := lq.io.out.valid
     lq.io.out.ready := memArbiter.io.in(0).ready
-    memArbiter.io.in(0).bits.req.bits.addr := lq.io.out.bits.addrResolved
-    memArbiter.io.in(0).bits.req.bits.data := 0.U
-    memArbiter.io.in(0).bits.req.bits.isLoad := true.B
-    memArbiter.io.in(0).bits.req.bits.opWidth := lq.io.out.bits.opWidth
-    memArbiter.io.in(0).bits.req.bits.isUnsigned := lq.io.out.bits.isUnsigned
-    memArbiter.io.in(0).bits.req.bits.targetReg := lq.io.out.bits.pdst
+    
+    val loadAction = Wire(new LoadStoreAction)
+    loadAction := DontCare
+    loadAction.addr := lq.io.out.bits.addrResolved
+    loadAction.data := 0.U
+    loadAction.isLoad := true.B
+    loadAction.opWidth := lq.io.out.bits.opWidth
+    loadAction.isUnsigned := lq.io.out.bits.isUnsigned
+    loadAction.targetReg := lq.io.out.bits.pdst
+    memArbiter.io.in(0).bits := loadAction
 
     // Port 1: Stores from SQ that are ready to commit to memory
     memArbiter.io.in(1).valid := sq.io.out.valid
     sq.io.out.ready := memArbiter.io.in(1).ready
-    memArbiter.io.in(1).bits.req.bits.addr := sq.io.out.bits.addrResolved
-    memArbiter.io.in(1).bits.req.bits.data := sq.io.out.bits.dataVal
-    memArbiter.io.in(1).bits.req.bits.isLoad := false.B
-    memArbiter.io.in(1).bits.req.bits.opWidth := sq.io.out.bits.opWidth
-    memArbiter.io.in(1).bits.req.bits.isUnsigned := DontCare
+    
+    val storeAction = Wire(new LoadStoreAction)
+    storeAction := DontCare
+    storeAction.addr := sq.io.out.bits.addrResolved
+    storeAction.data := sq.io.out.bits.dataVal
+    storeAction.isLoad := false.B
+    storeAction.opWidth := sq.io.out.bits.opWidth
+    storeAction.isUnsigned := DontCare
+    storeAction.targetReg := 0.U
+    memArbiter.io.in(1).bits := storeAction
 
     // Connect arbiter to memory system, gated by S3 tracker readiness
     io.mem.req.valid := memArbiter.io.out.valid && s3Ready
@@ -152,7 +183,7 @@ class LoadStoreAdaptor extends CycleAwareModule {
     // 3. Stage 3: Memory Flight Tracker (Preserved Logic)
     // =========================================================================
     val s3Valid = RegInit(false.B)
-    val s3Bits = Reg(new LoadBufferEntry()) // Holds info about the in-flight load
+    val s3Bits = Reg(new LoadBufferEntry(3)) // Holds info about the in-flight load
     val s3Data = Reg(UInt(32.W))
     val s3AddrDebug = Reg(UInt(32.W))
     val s3WaitingResp = RegInit(false.B)
