@@ -12,58 +12,74 @@ env:
   VERILATOR_ROOT: ${{ github.workspace }}/verilator-install
 
 jobs:
+  # JOB 1: Prepare Verilator
+  setup-verilator:
+    environment: ci
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Verilator
+        id: cache-verilator
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.VERILATOR_ROOT }}
+          key: verilator-${{ vars.VERILATOR_VERSION }}-v1
+
+      - name: Install Verilator
+        if: steps.cache-verilator.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git help2man perl python3 make autoconf g++ flex bison \
+            libfl2 libfl-dev zlib1g zlib1g-dev
+          
+          git clone https://github.com/verilator/verilator
+          cd verilator
+          git checkout v${{ vars.VERILATOR_VERSION }}
+          
+          autoconf
+          ./configure --prefix=${{ env.VERILATOR_ROOT }}
+          make -j$(nproc)
+          make install
+
+  # JOB 2: Run the actual tests
   test:
+    needs: setup-verilator # Ensure setup-verilator is run first
     environment: ci
     runs-on: ubuntu-22.04
     
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up JDK
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
+      - uses: actions/checkout@v4
+      
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-    - name: Install Mill
-      uses: zhutmost/setup-mill@main
-      with:
-        mill-version: 0.12.7
-    
-    - name: Cache Verilator
-      id: cache-verilator
-      uses: actions/cache@v3
-      with:
-        path: ${{ env.VERILATOR_ROOT }}
-        key: verilator-${{ vars.VERILATOR_VERSION }}-v1
+      - name: Install Mill
+        uses: zhutmost/setup-mill@main
+        with:
+          mill-version: 0.12.7
+      
+      - name: Restore Verilator Cache
+        id: cache-verilator
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.VERILATOR_ROOT }}
+          key: verilator-${{ vars.VERILATOR_VERSION }}-v1
+          fail-on-cache-miss: true  # Fail fast if setup-verilator didn't work
 
-    - name: Install Verilator
-      if: steps.cache-verilator.outputs.cache-hit != 'true'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          git help2man perl python3 make autoconf g++ flex bison \
-          libfl2 libfl-dev zlib1g zlib1g-dev
-        
-        git clone https://github.com/verilator/verilator
-        cd verilator
-        git checkout v${{ vars.VERILATOR_VERSION }}
-        
-        autoconf
-        ./configure --prefix=${{ env.VERILATOR_ROOT }}
-        make -j$(nproc)
-        make install
+      - name: Add Verilator to PATH
+        run: |
+          echo "${{ env.VERILATOR_ROOT }}/bin" >> $GITHUB_PATH
+          echo "VERILATOR_ROOT=${{ env.VERILATOR_ROOT }}" >> $GITHUB_ENV
+          # Smoke test
+          ${{ env.VERILATOR_ROOT }}/bin/verilator --version
 
-    - name: Add Verilator to PATH
-      run: |
-        echo "${{ env.VERILATOR_ROOT }}/bin" >> $GITHUB_PATH
-        echo "VERILATOR_ROOT=${{ env.VERILATOR_ROOT }}" >> $GITHUB_ENV
-    
-    - name: Check Verilator version
-      run: verilator --version
+      - name: Setup RISCV Toolchain
+        uses: gregdavill/setup-riscv-gnu-toolchain@v2.0
 
-    - name: Setup RISCV Toolchain
-      uses: gregdavill/setup-riscv-gnu-toolchain@v2.0
-
-    - name: Run tests
-      run: mill test
+      - name: Run tests
+        run: mill test
