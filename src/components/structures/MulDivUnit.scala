@@ -104,7 +104,6 @@ class MulDivUnit extends Module {
         val isRem = (fn === MduFunc.REM) || (fn === MduFunc.REMU)
 
         when(isDiv || isRem) {
-            // TODO remove hardcoded MMIO values
             // Setup Division
             val divBy0 = (b === 0.U)
             val signedOverflow =
