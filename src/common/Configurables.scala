@@ -9,7 +9,7 @@ object Configurables {
     val MEM_WIDTH  = 14     // 16KB data memory (8-bit per slot)
     val RAS_WIDTH  = 3      // Return Address Stack size
     
-    val MUL_LATENCY = 2    // Multiplier latency in cycles
+    val WALLACE_RDEPTH = 6  // Number of reduction iterations per Wallace tree layer
 
     // Configuration for debug output.
     // Set to true to enable printf outputs in the simulation by default;
