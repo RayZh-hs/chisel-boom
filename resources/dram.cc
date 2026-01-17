@@ -40,45 +40,94 @@ extern "C" void dram_init(const char* filename) {
         return;
     }
     
-    std::string line;
+    std::string token;
     uint32_t addr = 0;
-    int loaded = 0;
-    int lines_read = 0;
+    int inst_count = 0;
     
     // Reset memory
     std::fill(mem_storage.begin(), mem_storage.end(), 0);
 
-    while (std::getline(file, line)) {
-        lines_read++;
-        // Strip comments
-        size_t comment = line.find("//");
-        if (comment != std::string::npos) line = line.substr(0, comment);
+    // while (std::getline(file, line)) {
+    //     lines_read++;
+    //     // Strip comments
+    //     size_t comment = line.find("//");
+    //     if (comment != std::string::npos) line = line.substr(0, comment);
         
-        while (!line.empty() && isspace(line.back())) line.pop_back();
-        while (!line.empty() && isspace(line.front())) line.erase(0, 1);
+    //     while (!line.empty() && isspace(line.back())) line.pop_back();
+    //     while (!line.empty() && isspace(line.front())) line.erase(0, 1);
         
-        if (line.empty()) continue;
+    //     if (line.empty()) continue;
         
-        if (line[0] == '@') {
-             continue; 
-        }
+    //     if (line[0] == '@') {
+    //         throw std::runtime_error("DRAM init does not support address directives (@).");
+    //     }
 
-        try {
-            uint32_t val = (uint32_t)std::stoul(line, nullptr, 16);
+    //     try {
+    //         uint32_t val = (uint32_t)std::stoul(line, nullptr, 16);
             
+    //         if (addr + 4 <= mem_storage.size()) {
+    //             mem_storage[addr+0] = val & 0xFF;
+    //             mem_storage[addr+1] = (val >> 8) & 0xFF;
+    //             mem_storage[addr+2] = (val >> 16) & 0xFF;
+    //             mem_storage[addr+3] = (val >> 24) & 0xFF;
+    //             addr += 4;
+    //             loaded += 4;
+    //         }
+    //     } catch (...) {
+    //     }
+    // }
+
+    // read in one token at a time
+    while (file >> token) {
+        if (token.empty()) continue;
+        if (token[0] == '/') {
+            // Comment, skip rest of line
+            std::string rest_of_line;
+            std::getline(file, rest_of_line);
+            continue;
+        } else if (token[0] == '@') {
+            // If starting with @, then it is an address directive
+            addr = (uint32_t)std::stoul(token.substr(1), nullptr, 16);
+            continue;
+        } else {
+            // Data token, identify its length
+            size_t len = token.length();
+            uint32_t val = 0;
+            if (len == 2) {
+                // read 4 and concatentrate into one word
+                std::string bytes[4] = {token};
+                for (int i=1; i<4; i++) {
+                    if (!(file >> bytes[i])) {
+                        throw std::runtime_error("Unexpected end of file while reading bytes.");
+                    }
+                }
+                // 93 02 F0 FF -> FFF00293
+                val |= (uint32_t)std::stoul(bytes[3], nullptr, 16) << 24;
+                val |= (uint32_t)std::stoul(bytes[2], nullptr, 16) << 16;
+                val |= (uint32_t)std::stoul(bytes[1], nullptr, 16) << 8;
+                val |= (uint32_t)std::stoul(bytes[0], nullptr, 16);
+            } else if (len == 8) {
+                // 1-to-1 mapping
+                val = (uint32_t)std::stoul(token, nullptr, 16);
+            } else {
+                throw std::runtime_error("Invalid token length in hex file: " + token);
+            }
+            // store to memory
             if (addr + 4 <= mem_storage.size()) {
                 mem_storage[addr+0] = val & 0xFF;
                 mem_storage[addr+1] = (val >> 8) & 0xFF;
                 mem_storage[addr+2] = (val >> 16) & 0xFF;
                 mem_storage[addr+3] = (val >> 24) & 0xFF;
                 addr += 4;
-                loaded += 4;
+                inst_count++;
+            } else {
+                throw std::runtime_error("DRAM init: Address out of bounds while loading data.");
             }
-        } catch (...) {
         }
     }
+
     if(debug_log.is_open()) {
-        debug_log << "[DPI-C] Initialized RAM from " << filename << " (" << loaded << " bytes loaded)" << std::endl;
+        debug_log << "[DPI-C] Initialized RAM from " << filename << " (" << inst_count * 4 << " bytes loaded)" << std::endl;
         debug_log << "[DPI-C] Memory Head (0x00): ";
         debug_log << std::hex << std::setfill('0');
         for(int i=0; i<16; i++) debug_log << std::setw(2) << (int)mem_storage[i] << " ";

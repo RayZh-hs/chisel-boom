@@ -4,4 +4,4 @@
 
 _start:
     li t0, 0xFFFFFFFF
-    sw a0, 0(t0)
+    sb a0, 0(t0)

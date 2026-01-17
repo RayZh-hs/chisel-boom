@@ -7,7 +7,7 @@ _start:
     call put
     li a0, 0
     li t0, 0xFFFFFFFF
-    sw a0, 0(t0)
+    sb a0, 0(t0)
 
 put:
     li t0, 0x80000000
