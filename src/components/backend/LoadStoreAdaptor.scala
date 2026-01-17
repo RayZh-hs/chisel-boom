@@ -28,9 +28,12 @@ class LoadStoreAdaptor extends CycleAwareModule {
         // Memory Interface
         val mem = Flipped(new MemoryInterface)
         val busy = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
+        val stallCommit = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
+        val lsqCount = if (common.Configurables.Profiling.Utilization) Some(Output(UInt(log2Ceil(9).W))) else None // 8 entries
     })
 
-    val lsq = Module(new SequentialIssueBuffer(new LoadStoreInfo, 8, "LSQ"))
+    val lsq = Module(new SequentialIssueBuffer(new LoadStoreInfo, 16, "LSQ"))
+    io.lsqCount.foreach(_ := lsq.io.count.get)
 
     // Connect LSQ
     lsq.io.in <> io.issueIn
@@ -66,6 +69,8 @@ class LoadStoreAdaptor extends CycleAwareModule {
     val isStoreS2 = s2Bits.info.isStore
     val isLoadS2 = !s2Bits.info.isStore
     val canCommitStoreS2 = isStoreS2 && (io.robHead === s2Bits.robTag)
+    
+    io.stallCommit.foreach(_ := s2Valid && isStoreS2 && !canCommitStoreS2)
 
     // S2 is ready to advance if:
     // 1. It's a Load (it will fire memory req and move to S3)

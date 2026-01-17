@@ -23,7 +23,7 @@ class FetchToDecodeBundle extends Bundle {
   *   Memory access uops assume: `paddr` is `prs1`, `psrc` is `prs2`, `pdst` is
   *   `pdst`.
   */
-class DecodeToDispatchBundle extends Bundle {
+class DecodedInstBundle extends Bundle {
     // - categorizing operation
     val fUnitType = FunUnitType() // functional unit type
     val aluOpType = ALUOpType()
@@ -49,6 +49,11 @@ class DecodeToDispatchBundle extends Bundle {
     // pdst is assumed to be pdst
 }
 
+class DecodedInstWithRAS extends Bundle {
+    val inst = new DecodedInstBundle
+    val rasSP = UInt(RAS_WIDTH.W)
+}
+
 class DispatchToROBBundle extends Bundle {
     val ldst = UInt(5.W)
     val pdst = UInt(PREG_WIDTH.W)
@@ -72,6 +77,7 @@ class DispatchToBRQBundle extends Bundle {
     val prs1, prs2 = UInt(PREG_WIDTH.W)
     val (useImm, imm) = (Bool(), UInt(32.W))
     val pc = UInt(32.W)
+    val rasSP = UInt(RAS_WIDTH.W)
 }
 
 class DispatchToLSQBundle extends Bundle {
@@ -105,6 +111,7 @@ class BranchUpdateBundle extends Bundle {
     val robTag = UInt(ROB_WIDTH.W)
     val predict = Bool()
     val predictedTarget = UInt(32.W)
+    val rasSP = UInt(RAS_WIDTH.W)
 }
 
 class FlushBundle extends Bundle {
@@ -140,6 +147,12 @@ class LoadStoreAction extends Bundle {
     val targetReg = UInt(PREG_WIDTH.W)
 }
 
+class RASAdaptorBundle extends Bundle {
+    val flush = Bool()
+    val flushNextPC = UInt(32.W)
+    val currentSP = UInt(RAS_WIDTH.W)
+}
+
 class MemoryInterface extends Bundle {
     val req = Flipped(Valid(new LoadStoreAction))
     val resp = Valid(UInt(32.W))
@@ -160,12 +173,52 @@ class BoomCoreProfileBundle extends Bundle {
 
     // Utilization
     val busyFetcher = optfield(Utilization, UInt(32.W))
+    val fetcherStallBuffer = optfield(Utilization, UInt(32.W))
+
     val busyDecoder = optfield(Utilization, UInt(32.W))
+    val decoderStallDispatch = optfield(Utilization, UInt(32.W))
+
     val busyDispatcher = optfield(Utilization, UInt(32.W))
+    val dispatcherStallFreeList = optfield(Utilization, UInt(32.W))
+    val dispatcherStallROB = optfield(Utilization, UInt(32.W))
+    val dispatcherStallIssue = optfield(Utilization, UInt(32.W))
+
+    val busyIssueALU = optfield(Utilization, UInt(32.W))
+    val issueALUStallOperands = optfield(Utilization, UInt(32.W))
+    val issueALUStallPort = optfield(Utilization, UInt(32.W))
+
+    val busyIssueBRU = optfield(Utilization, UInt(32.W))
+    val issueBRUStallOperands = optfield(Utilization, UInt(32.W))
+    val issueBRUStallPort = optfield(Utilization, UInt(32.W))
+
     val busyALU = optfield(Utilization, UInt(32.W))
     val busyBRU = optfield(Utilization, UInt(32.W))
+    
     val busyLSU = optfield(Utilization, UInt(32.W))
+    val lsuStallCommit = optfield(Utilization, UInt(32.W))
+
+    val busyWriteback = optfield(Utilization, UInt(32.W))
     val busyROB = optfield(Utilization, UInt(32.W))
+
+    // Queue Depths (Accumulated)
+    val fetchQueueDepth = optfield(Utilization, UInt(64.W))
+    val issueALUDepth = optfield(Utilization, UInt(64.W))
+    val issueBRUDepth = optfield(Utilization, UInt(64.W))
+    val lsuQueueDepth = optfield(Utilization, UInt(64.W))
+    val robDepth = optfield(Utilization, UInt(64.W))
+
+    // Throughput Counts (Fired Events)
+    val countFetcher = optfield(Utilization, UInt(64.W))
+    val countDecoder = optfield(Utilization, UInt(64.W))
+    val countDispatcher = optfield(Utilization, UInt(64.W))
+    val countIssueALU = optfield(Utilization, UInt(64.W))
+    val countIssueBRU = optfield(Utilization, UInt(64.W))
+    val countLSU = optfield(Utilization, UInt(64.W))
+    val countWriteback = optfield(Utilization, UInt(64.W))
+
+    // Dependency Resolution (Accumulated Wait Cycles)
+    val waitDepALU = optfield(Utilization, UInt(64.W))
+    val waitDepBRU = optfield(Utilization, UInt(64.W))
 
     // Rollback
     val totalRollbackEvents = optfield(RollbackTime, UInt(32.W))
