@@ -47,7 +47,6 @@ jobs:
         
         git clone https://github.com/verilator/verilator
         cd verilator
-        # 3. Reference the variable here as well
         git checkout v${{ vars.VERILATOR_VERSION }}
         
         autoconf
@@ -59,7 +58,9 @@ jobs:
       run: |
         echo "${{ env.VERILATOR_ROOT }}/bin" >> $GITHUB_PATH
         echo "VERILATOR_ROOT=${{ env.VERILATOR_ROOT }}" >> $GITHUB_ENV
-        verilator --version
+    
+    - name: Check Verilator version
+      run: verilator --version
 
     - name: Setup RISCV Toolchain
       uses: gregdavill/setup-riscv-gnu-toolchain@v2.0
