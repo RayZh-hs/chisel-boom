@@ -4,7 +4,13 @@ import chisel3._
 import chisel3.util._
 import common.Configurables._
 
+/** Return Address Stack (RAS)
+  *
+  * A cyclic hardware stack used to stage return addresses for function
+  * calls/rets.
+  */
 class ReturnAddressStack extends Module {
+    // IO Definition
     val io = IO(new Bundle {
         val push = Input(Bool())
         val pop = Input(Bool())

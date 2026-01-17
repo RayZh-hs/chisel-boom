@@ -4,12 +4,22 @@ import chisel3._
 import chisel3.util._
 import utility.CycleAwareModule
 
+/**
+  * Free List
+  * 
+  * Holds the list of free physical registers.
+  *
+  * @param numRegs Total number of physical registers
+  * @param numArchRegs Number of architectural registers
+  */
 class FreeList(numRegs: Int, numArchRegs: Int) extends CycleAwareModule {
+    // Derived Parameters
     val numFreeRegisters = numRegs - numArchRegs
     val capacity = 1 << log2Ceil(numFreeRegisters)
     val width = log2Ceil(numRegs)
     val ptrWidth = log2Ceil(capacity)
 
+    // IO Definition
     val io = IO(new Bundle {
         val allocate = Decoupled(UInt(width.W))
         val free = Flipped(Decoupled(UInt(width.W)))
@@ -34,20 +44,18 @@ class FreeList(numRegs: Int, numArchRegs: Int) extends CycleAwareModule {
         }
     }
 
-    // --- Optimized Prefetch Logic ---
+    // Prefetch Logic
     val prefetchValid = RegInit(false.B)
     val prefetchData = Reg(UInt(width.W))
 
     // Helper signals
     val empty = head === tail
     val ramHasData = !empty
-
-    // We consume the prefetch register if the output fires
     val consuming = io.allocate.fire
 
-    // We need to refill if:
-    // 1. We are currently invalid (startup or ran dry)
-    // 2. OR we are currently valid, but consuming the data (pipeline refill)
+    // We need to refill if either:
+    // 1. Currently invalid (startup or ran dry)
+    // 2. Currently valid but consuming the data (pipeline refill)
     val needsRefill = !prefetchValid || consuming
 
     // Define deq (read from RAM) logic
@@ -70,8 +78,7 @@ class FreeList(numRegs: Int, numArchRegs: Int) extends CycleAwareModule {
     io.allocate.valid := prefetchValid
     io.allocate.bits := prefetchData
 
-    // --- Free Logic ---
-
+    // Free Logic
     io.free.ready := !isInit
     io.rollbackFree(0).ready := !isInit
     io.rollbackFree(1).ready := !isInit
@@ -97,7 +104,7 @@ class FreeList(numRegs: Int, numArchRegs: Int) extends CycleAwareModule {
 
     when(!isInit) {
         // This assertion will trigger in simulation if the Renamer/ROB logic
-        // attempts to return more registers than exist in the system.
+        // attempts to return more registers than there exist in the system.
         val nextFreeCount = tail - head +& numEnq - deq.asUInt
         assert(
           nextFreeCount <= numFreeRegisters.U,

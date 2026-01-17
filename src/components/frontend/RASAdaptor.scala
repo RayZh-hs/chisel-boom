@@ -69,7 +69,7 @@ class RASAdaptor extends CycleAwareModule {
     val isRet = isJALR && (rd === 0.U) && (rs1 === 1.U || rs1 === 5.U)
 
     when(io.recover) {
-      printf(p"RAS: Recovering RAS to SP=${io.recoverSP}\n")
+        printf(p"RAS: Recovering RAS to SP=${io.recoverSP}\n")
     }
 
     // RAS Operations: These operations should only occur when io.out.ready
@@ -86,16 +86,16 @@ class RASAdaptor extends CycleAwareModule {
         val targetRET = ras.io.readVal
 
         // We can only reliably correct PC for JAL (static) and RET (RAS)
-
         val calculatedTarget = Mux(isRet, targetRET, targetJAL)
-        val isPredictionWrong = (inPacket.predictedTarget =/= calculatedTarget) || (!inPacket.predict)
+        val isPredictionWrong =
+            (inPacket.predictedTarget =/= calculatedTarget) || (!inPacket.predict)
         val canCorrect = isJAL || isRet
 
         io.out.bits.currentSP := ras.io.currentSP
         io.out.bits.flush := fire && canCorrect && isPredictionWrong
         io.out.bits.flushNextPC := calculatedTarget
 
-        // Debugging info
+        // Debugging Info
         when(canCorrect && isPredictionWrong && io.out.ready) {
             printf(
               p"RAS: isRet=${isRet}, isCall=${isCall}, pc=0x${Hexadecimal(inPacket.pc)}\n"

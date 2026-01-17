@@ -6,7 +6,13 @@ import common._
 import common.Configurables._
 import components.structures.{MulDivUnit, MultInfo, IssueBufferEntry}
 
+/**
+  * Mult Adaptor
+  *
+  * Bridges an Issue Buffer to the Mult/Div execution unit.
+  */
 class MultAdaptor extends Module {
+    // IO Definition
     val io = IO(new Bundle {
         val issueIn = Flipped(Decoupled(new IssueBufferEntry(new MultInfo)))
         val broadcastOut = Decoupled(new BroadcastBundle)
@@ -35,10 +41,7 @@ class MultAdaptor extends Module {
     val s3_rob    = Reg(UInt(ROB_WIDTH.W))
     val s3_result = Reg(UInt(32.W))
 
-    // =================================================================================
-    // Stage 1: Issue Logic
-    // =================================================================================
-    
+    // Stage 1: Issue Logic    
     io.prfRead.addr1 := io.issueIn.bits.src1
     io.prfRead.addr2 := io.issueIn.bits.src2
 
@@ -59,10 +62,7 @@ class MultAdaptor extends Module {
         s1_valid := false.B
     }
 
-    // =================================================================================
-    // Stage 2: Mult Execution
-    // =================================================================================
-
+    // Stage 2: Mul Execution
     mult.io.req.valid   := s1_valid
     mult.io.req.bits.fn := s1_info.info.multOp.asUInt
     mult.io.req.bits.a  := s1_op1
@@ -116,8 +116,6 @@ class MultAdaptor extends Module {
         s3_valid := false.B
     }
 
-    // =================================================================================
-    // Profiling
-    // =================================================================================
+    // Profiling Info
     io.busy.foreach(_ := s1_valid || s2_valid || s3_valid)
 }

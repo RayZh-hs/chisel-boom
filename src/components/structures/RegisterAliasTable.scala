@@ -15,6 +15,7 @@ class RegisterAliasTable(
     val nUpdatePorts: Int,
     val nRollbackPorts: Int
 ) extends CycleAwareModule {
+    // IO Definition
     val io = IO(new Bundle {
         // Read ports for logical to physical mapping
         val readL = Input(Vec(nReadPorts, UInt(5.W)))

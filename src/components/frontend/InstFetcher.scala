@@ -5,7 +5,13 @@ import chisel3.util._
 import common._
 import utility.CycleAwareModule
 
+/** Instruction Fetcher
+  *
+  * Fetches instructions from the instruction cache, handles PC updates, and
+  * interfaces with the Branch Target Buffer (BTB) for branch prediction.
+  */
 class InstFetcher extends CycleAwareModule {
+    // IO Definition
     val io = IO(new Bundle {
         val pcOverwrite =
             Input(Valid(UInt(32.W))) // Overwrite PC when misprediction occurs
@@ -20,8 +26,13 @@ class InstFetcher extends CycleAwareModule {
 
         val ifOut = Decoupled(new FetchToDecodeBundle())
 
-        val busy = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
-        val stallBuffer = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
+        // Used for profiling
+        val busy =
+            if (common.Configurables.Profiling.Utilization) Some(Output(Bool()))
+            else None
+        val stallBuffer =
+            if (common.Configurables.Profiling.Utilization) Some(Output(Bool()))
+            else None
     })
 
     val pc = RegInit(0.U(32.W))
@@ -38,16 +49,13 @@ class InstFetcher extends CycleAwareModule {
     val s2Fire = s2Valid && io.ifOut.ready && io.icache.resp.valid
     val s1Ready = !s2Valid || s2Fire || io.pcOverwrite.valid
 
-    // =========================================================
-    // Stage 1 (S1): PC Generation & Request
-    // =========================================================
-
+    // Stage 1: PC Generation & Request
     // fetchAddr is what is sent to ICache and BTB
     val fetchAddr = Wire(UInt(32.W))
     when(io.pcOverwrite.valid) {
         fetchAddr := io.pcOverwrite.bits
     }.elsewhen(s2Valid && !s2Fire) {
-        fetchAddr := s2PC // Hold the target pc if ifOut stall or cache miss
+        fetchAddr := s2PC // Hold target pc if ifOut stall or cache miss
     }.elsewhen(io.btbResult.valid) {
         fetchAddr := io.btbResult.bits
     }.otherwise {
@@ -58,9 +66,11 @@ class InstFetcher extends CycleAwareModule {
     io.icache.req.valid := !reset.asBool
     io.icache.req.bits := fetchAddr
 
-    // (Note: We ignore icache.req.ready here. If cache is not ready (refilling),
-    // it won't return valid data, s2Fire will be false, and we naturally retry
-    // this fetchAddr next cycle).
+    /*
+     * @note
+     *   Ignore icache.req.ready here. If cache is not ready (refilling),
+     *   it won't return valid data, s2Fire will be false, and we naturally retry this fetchAddr next cycle).
+     */
 
     // Update PC for next cycle
     val nextPC = Wire(UInt(32.W))
@@ -75,10 +85,7 @@ class InstFetcher extends CycleAwareModule {
     }
     pc := nextPC
 
-    // =========================================================
     // Stage 2: Output Logic
-    // =========================================================
-
     val s1Fire = s1Ready
 
     when(s1Fire) {
@@ -88,7 +95,7 @@ class InstFetcher extends CycleAwareModule {
         s2Valid := false.B
     }
 
-    // Output valid only on Cache Hit
+    // Output valid only on Cache hit
     io.ifOut.valid := s2Valid && !io.pcOverwrite.valid && io.icache.resp.valid
 
     io.ifOut.bits.pc := s2PC
@@ -98,7 +105,7 @@ class InstFetcher extends CycleAwareModule {
 
     io.icache.resp.ready := s2Fire
 
-    // Debugging
+    // Debugging Data
     when(io.ifOut.fire) {
         printf(
           p"FETCH: PC=0x${Hexadecimal(io.ifOut.bits.pc)} Inst=0x${Hexadecimal(io.ifOut.bits.inst)} Predict=${io.ifOut.bits.predict}\n"

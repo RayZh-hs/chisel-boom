@@ -7,6 +7,13 @@ import common.Configurables._
 import components.structures._
 import utility.CycleAwareModule
 
+/**
+  * Load Store Adaptor
+  *
+  * Bridges an Issue Buffer to the Load/Store execution unit.
+  * 
+  * Handles all load/store logic sequentially.
+  */
 class LoadStoreAdaptor extends CycleAwareModule {
     val io = IO(new Bundle {
         val issueIn =
@@ -30,15 +37,14 @@ class LoadStoreAdaptor extends CycleAwareModule {
             else None
     })
 
-    // --- LSQ Instance ---
+    // LSQ Instance
     val lsq = Module(new SequentialIssueBuffer(new LoadStoreInfo, 16, "LSQ"))
     io.lsqCount.foreach(_ := lsq.io.count.get)
     lsq.io.in <> io.issueIn
     lsq.io.broadcast := io.broadcastIn
     lsq.io.flush := io.flush
 
-    // --- Pipeline Registers ---
-
+    // Pipeline Registers
     // Stage 1: Decode / Read PRF
     val s1Valid = RegInit(false.B)
     val s1Bits = Reg(new SequentialBufferEntry(new LoadStoreInfo))
@@ -60,18 +66,19 @@ class LoadStoreAdaptor extends CycleAwareModule {
     val s3AddrDebug = Reg(UInt(32.W))
     val s3WaitingResp = RegInit(false.B)
 
-    // --- NEW: Track if S3 is "dead" (flushed) but waiting for Ghost Response ---
+    /** Fix: Track if S3 is "dead" (flushed) but waiting for Ghost Response
+      * @author rogerflowey
+      */
     val s3IsDead = RegInit(false.B)
-    // --- Internal Wires ---
     val s1Ready = Wire(Bool())
     val s2Ready = Wire(Bool())
     val s3Ready = Wire(Bool())
 
-    // --- Broadcast Arbiter ---
+    // Broadcast Arbiter
     val wbArbiter = Module(new RRArbiter(new BroadcastBundle, 2))
     io.broadcastOut <> wbArbiter.io.out
 
-    // --- Profiling wiring ---
+    // Profiling
     io.busy.foreach(_ := s1Valid || s2Valid || s3Valid)
     
     // Replicate commit stall logic for profiling
@@ -79,10 +86,7 @@ class LoadStoreAdaptor extends CycleAwareModule {
     val isCommitted_prof = s2RegCommitted || (isStoreS2_prof && io.robHead === s2Bits.robTag)
     io.stallCommit.foreach(_ := s2Valid && isStoreS2_prof && !isCommitted_prof)
 
-    // =================================================================================
     // Stage 1: Issue & PRF Read
-    // =================================================================================
-
     lsq.io.out.ready := s1Ready
     val s1Killed = io.flush.checkKilled(lsq.io.out.bits.robTag)
 
@@ -99,10 +103,7 @@ class LoadStoreAdaptor extends CycleAwareModule {
     val s1Fire = s1Valid && s2Ready
     s1Ready := !s1Valid || s2Ready
 
-    // =================================================================================
     // Stage 2: Execute, Address Calc, Store Logic, Mem Request
-    // =================================================================================
-
     val isStoreS2 = s2Bits.info.isStore
     val isLoadS2 = !isStoreS2
     val effAddr = (s2Data1.asSInt + s2Bits.info.imm.asSInt).asUInt
@@ -154,36 +155,32 @@ class LoadStoreAdaptor extends CycleAwareModule {
         s2Valid := false.B
     }
 
-    // =================================================================================
-    // Stage 3: Variable Latency Response & Writeback (FIXED)
-    // =================================================================================
+    // Stage 3: Variable Latency Response & Writeback
 
     val isStoreS3 = s3Bits.info.isStore
     val isLoadS3 = !isStoreS3
 
-    // 1. Detect Flush
-    // If flushed, we do NOT clear s3Valid immediately if we are waiting for a response.
-    // Instead, we mark it as "Dead".
+    // Stage 3.1: Detect Flush (fix bfd662b4dbc5cb5c67767885417a3e171009ee94)
+    // If flushed, do not clear s3Valid immediately if we are waiting for a response.
+    // Instead, mark as "Dead".
     val s3FlushHit = io.flush.checkKilled(s3Bits.robTag) && isLoadS3
     when(s3FlushHit) {
         s3IsDead := true.B
     }
 
-    // 2. Handle Response
+    // Stage 3.2: Handle Response
     when(io.mem.resp.valid) {
         s3Data := io.mem.resp.bits
         s3WaitingResp := false.B
     }
     io.mem.resp.ready := true.B
 
-    // 3. Completion Logic
-    // We are "processing" if we are still waiting for memory.
+    // Stage 3.3: Completion Logic
     val s3IsPending = s3WaitingResp
-    // We are "done" with the memory part if not pending.
     val s3MemDone = s3Valid && !s3IsPending
 
-    // 4. Writeback Arbiter (Priority 1: Loads)
-    // ONLY request writeback if Done, is Load, NOT marked dead, and NOT currently being flushed.
+    // Stage 3.4: Writeback Arbiter (Priority 1: Loads)
+    // Only request writeback if done, is Load, not marked dead, and not currently being flushed.
     wbArbiter.io
         .in(1)
         .valid := s3MemDone && isLoadS3 && !s3IsDead && !s3FlushHit
@@ -192,13 +189,13 @@ class LoadStoreAdaptor extends CycleAwareModule {
     wbArbiter.io.in(1).bits.data := s3Data
     wbArbiter.io.in(1).bits.writeEn := true.B
 
-    // 5. Fire/Drain Logic
+    // Stage 3.5: Fire/Drain Logic
     // We can empty S3 (Fire) if:
-    // A. We are NOT waiting for a response (s3IsPending is false).
-    // B. AND one of the following:
-    //    1. It's a Load that finished Writeback.
-    //    2. It's a Store that finished (ACK received).
-    //    3. It's a Load that was Killed/Dead (we just drop it).
+    // A. Not waiting for a response (s3IsPending is false).
+    // B. It is either:
+    //    1. A Load that finished Writeback.
+    //    2. A Store that finished (ACK received).
+    //    3. A Load that was Killed/Dead (just drop it).
 
     val s3IsDeadOrFlushed = s3IsDead || s3FlushHit
 
@@ -221,13 +218,8 @@ class LoadStoreAdaptor extends CycleAwareModule {
         // Reset Dead status for the new instruction
         s3IsDead := false.B
     }
-    // Note: We removed the .elsewhen(s3Killed) block.
-    // If s3Killed is true but we are waiting, s3Valid stays true (via latching)
-    // until the response returns, at which point s3Fire triggers via the "Dead" path.
 
-    // =================================================================================
-    // Debug
-    // =================================================================================
+    // Debug Printing
     when(Elaboration.printOnMemAccess.B) {
         when(io.mem.req.fire && !io.mem.req.bits.isLoad) {
             printf(

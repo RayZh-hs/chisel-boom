@@ -7,6 +7,11 @@ import common.Configurables._
 import components.structures.ArithmeticLogicUnit
 import components.structures.{ALUInfo, IssueBufferEntry}
 
+/**
+  * ALU Adaptor
+  *
+  * Bridges the Issue Buffer to the ALU execution unit.
+  */
 class ALUAdaptor extends Module {
     val io = IO(new Bundle {
         val issueIn = Flipped(Decoupled(new IssueBufferEntry(new ALUInfo)))

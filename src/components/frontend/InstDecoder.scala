@@ -6,7 +6,13 @@ import common._
 import common.Configurables._
 import utility.CycleAwareModule
 
+/**
+  * Instruction Decoder
+  *
+  * Decodes RISC-V instructions into control signals for the backend.
+  */
 class InstDecoder extends CycleAwareModule {
+    // IO Definition
     val io = IO(new Bundle {
         val in = Flipped(Decoupled(new FetchToDecodeBundle))
         val out = Decoupled(new DecodedInstBundle)
@@ -48,7 +54,7 @@ class InstDecoder extends CycleAwareModule {
       32
     )
 
-    // Default signals
+    // Default Signals
     val fUnitType = Wire(FunUnitType())
     val aluOpType = Wire(ALUOpType())
     val multOpType = Wire(MultOpType())
@@ -74,7 +80,7 @@ class InstDecoder extends CycleAwareModule {
     useImm := false.B
     imm := 0.U
 
-    // Decoding logic
+    // Decoding Logic
     when(opcode === "b0110111".U) { // LUI
         fUnitType := FunUnitType.ALU
         aluOpType := ALUOpType.LUI
@@ -178,7 +184,7 @@ class InstDecoder extends CycleAwareModule {
         }
     }
 
-    // Register indices
+    // Register Indices
     val validLdst = opcode === "b0110111".U || // LUI
         opcode === "b0010111".U || // AUIPC
         opcode === "b1101111".U || // JAL
@@ -202,7 +208,7 @@ class InstDecoder extends CycleAwareModule {
     val lrs1 = Mux(validLrs1, rs1, 0.U)
     val lrs2 = Mux(validLrs2, rs2, 0.U)
 
-    // Output assignment
+    // Output Assignment
     io.out.valid := io.in.valid
     io.in.ready := io.out.ready
 

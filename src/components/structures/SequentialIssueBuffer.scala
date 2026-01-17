@@ -27,6 +27,15 @@ class SequentialBufferEntry[T <: Data](gen: T) extends Bundle {
         else None
 }
 
+/** Sequential Issue Buffer
+  *
+  * @param gen
+  *   The generator of the info bundle
+  * @param entries
+  *   Number of entries in the Issue Buffer
+  * @param name
+  *   Name of the Issue Buffer (for debugging)
+  */
 class SequentialIssueBuffer[T <: Data](gen: T, entries: Int, name: String)
     extends CycleAwareModule {
     val io = IO(new Bundle {
@@ -35,7 +44,10 @@ class SequentialIssueBuffer[T <: Data](gen: T, entries: Int, name: String)
         val out = Decoupled(new SequentialBufferEntry(gen))
 
         val flush = Input(new FlushBundle)
-        val count = if (common.Configurables.Profiling.Utilization) Some(Output(UInt(log2Ceil(entries + 1).W))) else None
+        val count =
+            if (common.Configurables.Profiling.Utilization)
+                Some(Output(UInt(log2Ceil(entries + 1).W)))
+            else None
     })
 
     val buffer = Reg(Vec(entries, new SequentialBufferEntry(gen)))
@@ -48,7 +60,11 @@ class SequentialIssueBuffer[T <: Data](gen: T, entries: Int, name: String)
     val isFull = ptrMatch && maybeFull
 
     io.count.foreach { c =>
-        c := Mux(isFull, entries.U, Mux(tail >= head, tail - head, entries.U + tail - head))
+        c := Mux(
+          isFull,
+          entries.U,
+          Mux(tail >= head, tail - head, entries.U + tail - head)
+        )
     }
 
     // --- Broadcast Logic ---

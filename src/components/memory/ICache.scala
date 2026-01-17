@@ -5,6 +5,13 @@ import chisel3.util._
 import common._
 import common.Configurables._
 
+/**
+  * Instruction Cache
+  * 
+  * A simple direct-mapped instruction cache.
+  *
+  * @param conf Cache configuration parameters
+  */
 class ICache(conf: CacheConfig) extends Module {
     val io = IO(new Bundle {
         // Request Interface

@@ -6,6 +6,13 @@ import common.BroadcastBundle
 import common.Configurables
 import utility.CycleAwareModule
 
+/**
+  * Broadcast Channel
+  *
+  * Arbitrates multiple execution unit broadcast results onto a single
+  * broadcast channel. Carries that information to all components that
+  * need it.
+  */
 class BroadcastChannel extends CycleAwareModule {
     // IO definition
     val io = IO(new Bundle {

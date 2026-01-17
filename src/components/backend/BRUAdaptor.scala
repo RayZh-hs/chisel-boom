@@ -9,6 +9,11 @@ import components.structures.{BRUInfo, IssueBufferEntry}
 import utility.CycleAwareModule
 import chisel3.util.experimental.BoringUtils
 
+/**
+  * BRU Adaptor
+  *
+  * Bridges an Issue Buffer to the Branch Unit execution unit.
+  */
 class BRUAdaptor extends CycleAwareModule {
     val io = IO(new Bundle {
         val issueIn = Flipped(Decoupled(new IssueBufferEntry(new BRUInfo)))
@@ -81,7 +86,7 @@ class BRUAdaptor extends CycleAwareModule {
         when(io.brUpdate.valid) { s3UpdSent := true.B }
     }
 
-    // --- Data Path Connections ---
+    // Data Path Connections
     io.prfRead.addr1 := s1Bits.src1
     io.prfRead.addr2 := s1Bits.src2
 
@@ -92,7 +97,7 @@ class BRUAdaptor extends CycleAwareModule {
     bru.io.bruOp := s2Bits.info.bruOp
     bru.io.cmpOp := s2Bits.info.cmpOp
 
-    // --- Outputs ---
+    // Outputs
     val isWritebackInstS3 = s3Bits.info.bruOp.isOneOf(
       BRUOpType.JAL,
       BRUOpType.JALR,

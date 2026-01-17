@@ -5,7 +5,15 @@ import common._
 import common.Configurables._
 import utility.CycleAwareModule
 
+/**
+  * MMIO Router
+  * 
+  * Handles routing of memory requests to multiple MMIO devices based on address mappings.
+  *
+  * @param mappings The mappings in question.
+  */
 class MMIORouter(val mappings: Seq[UInt]) extends Module {
+    // IO Definition
     val io = IO(new Bundle {
         val upstream = Flipped(new MemoryRequest)
         // Parameterized ports to connect to devices
@@ -27,18 +35,16 @@ class MMIORouter(val mappings: Seq[UInt]) extends Module {
         }
     }
 
-    // Response Logic (1 cycle latency)
-    // [FIX] Generate response valid for both Load AND Store requests.
+    // Response Logic (1 Cycle Latency)
     io.upstream.resp.valid := RegNext(
       io.upstream.req.valid && anySel
     )
 
-    // Broadcast ready to devices (simplification)
+    // Broadcast ready to devices
     for (i <- 0 until mappings.length) {
         io.devices(i).resp.ready := io.upstream.resp.ready
     }
 
-    // Mux for responses
     val respData = Wire(UInt(32.W))
     respData := 0.U
     for (i <- 0 until mappings.length) {
@@ -49,7 +55,12 @@ class MMIORouter(val mappings: Seq[UInt]) extends Module {
     io.upstream.resp.bits := respData
 }
 
-class MMIODevice extends CycleAwareModule {
+/**
+  * MMIO Interface Trait
+  * 
+  * Defines a standard interface for MMIO devices.
+  */
+trait MMIOInterface {
     val io = IO(Flipped(new MemoryRequest))
 
     io.req.ready := true.B
@@ -58,7 +69,7 @@ class MMIODevice extends CycleAwareModule {
     io.resp.bits := 0.U
 }
 
-class PrintDevice extends MMIODevice {
+class PrintDevice extends CycleAwareModule with MMIOInterface {
     val debugOut = IO(Decoupled(UInt(32.W)))
 
     // A large enough queue to buffer output
@@ -77,7 +88,7 @@ class PrintDevice extends MMIODevice {
     io.req.ready := queue.io.enq.ready
 }
 
-class ExitDevice extends MMIODevice {
+class ExitDevice extends CycleAwareModule with MMIOInterface {
     val exitOut = IO(Output(Valid(UInt(32.W))))
     
     val stopping = RegInit(false.B)

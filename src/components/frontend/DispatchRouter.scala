@@ -8,7 +8,15 @@ import components.structures._
 import components.structures.SequentialBufferEntry
 import components.structures.LoadStoreInfo
 
+/** Dispatch Router
+  *
+  * Routes decoded instructions to the appropriate Issue Buffer. Used to handle
+  * the wiring from Dispatcher to multiple IBs.
+  *
+  * Fully combinational, does not consume a cycle.
+  */
 class DispatchRouter extends Module {
+    // IO Definition
     val io = IO(new Bundle {
         val instInput = Flipped(Decoupled(new DecodedInstWithRAS))
         val robTagIn = Input(UInt(ROB_WIDTH.W))
@@ -29,7 +37,7 @@ class DispatchRouter extends Module {
 
     val inst = io.instInput.bits.inst
     val valid = io.instInput.valid
-    
+
     // Decode Unit Types
     val isALU = inst.fUnitType === FunUnitType.ALU
     val isMULT = inst.fUnitType === FunUnitType.MULT
@@ -107,7 +115,7 @@ class DispatchRouter extends Module {
       inst.isStore,
       src2Ready,
       true.B
-    ) 
+    )
     io.lsuIB.bits.info.opWidth := inst.opWidth
     io.lsuIB.bits.info.isStore := inst.isStore
     io.lsuIB.bits.info.isUnsigned := inst.isUnsigned
@@ -118,11 +126,16 @@ class DispatchRouter extends Module {
 
     // Determine readiness
     // Valid if target buffer is ready && rob dispatch ready
-    val targetReady = Mux(isALU, io.aluIB.ready,
-        Mux(isMULT, io.multIB.ready,
-        Mux(isBRU, io.bruIB.ready,
-        Mux(isLSU, io.lsuIB.ready, false.B))))
-    
+    val targetReady = Mux(
+      isALU,
+      io.aluIB.ready,
+      Mux(
+        isMULT,
+        io.multIB.ready,
+        Mux(isBRU, io.bruIB.ready, Mux(isLSU, io.lsuIB.ready, false.B))
+      )
+    )
+
     io.instInput.ready := targetReady && readyForDispatch
 
     // Set Busy
