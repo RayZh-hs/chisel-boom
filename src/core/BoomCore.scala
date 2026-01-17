@@ -29,18 +29,11 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
 
     // Component Instantiation
     val fetcher = Module(new InstFetcher)
-    val ifQueue = Module(
-      new Queue(
-        new FetchToDecodeBundle,
-        entries = 2,
-        pipe = false,
-        flow = false
-      )
-    )
     val decoder = Module(new InstDecoder)
     val rasAdaptor = Module(new RASAdaptor)
-    val decodeRASPlexer = Module(new DispatchRASPlexer)
+    val decodeRASPlexer = Module(new PreDispatchPlexer)
     val dispatcher = Module(new InstDispatcher)
+    val dispatchRouter = Module(new DispatchRouter)
     val rat = Module(new RegisterAliasTable(3, 1, 2))
     val freeList = Module(new FreeList(Derived.PREG_COUNT, 32))
     val icache = Module(
@@ -117,38 +110,46 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     fetcher.io.icache.resp <> icache.io.resp
 
     // Frontend queue (in-stage buffer between fetcher and decoder)
-    ifQueue.io.enq <> fetcher.io.ifOut
+    val fetcherDecoderQueue = Module(
+      new Queue(
+        new FetchToDecodeBundle,
+        entries = 2,
+        pipe = false,
+        flow = false
+      )
+    )
+    fetcherDecoderQueue.io.enq <> fetcher.io.ifOut
 
+    // RAS Adaptor connections
     val rasPredictedValid = RegNext(rasAdaptor.io.out.fire, init = false.B)
     val rasPredictedSignal =
         RegEnable(rasAdaptor.io.out.bits, rasAdaptor.io.out.fire)
-
     val rasFlush = rasPredictedValid && rasPredictedSignal.flush
     val rasFlushTargetPC = rasPredictedSignal.flushNextPC
 
-    // Decoder and connections
+    // Decoder connections
     // Wire up Decoder & RASAdaptor to output of ifQueue
     // -- decoder.io.in <> ifQueue.io.deq
     // -- rasAdaptor.io.in <> ifQueue.io.deq
-    ifQueue.io.deq.ready := decoder.io.in.ready && rasAdaptor.io.in.ready
-    decoder.io.in.valid := ifQueue.io.deq.valid && !rasFlush
-    decoder.io.in.bits := ifQueue.io.deq.bits
-    rasAdaptor.io.in.valid := ifQueue.io.deq.valid && !rasFlush
-    rasAdaptor.io.in.bits := ifQueue.io.deq.bits
+    fetcherDecoderQueue.io.deq.ready := decoder.io.in.ready && rasAdaptor.io.in.ready
+    decoder.io.in.valid := fetcherDecoderQueue.io.deq.valid && !rasFlush
+    decoder.io.in.bits := fetcherDecoderQueue.io.deq.bits
+    rasAdaptor.io.in.valid := fetcherDecoderQueue.io.deq.valid && !rasFlush
+    rasAdaptor.io.in.bits := fetcherDecoderQueue.io.deq.bits
 
     // Wire output of Decoder & RASAdaptor to Plexer
     decodeRASPlexer.io.instFromDecoder <> decoder.io.out
     decodeRASPlexer.io.rasBundleFromAdaptor <> rasAdaptor.io.out
 
-    val decoderDispatcherQueue = Module(
+    val plexerDispatcherQueue = Module(
       new Queue(new DecodedInstWithRAS, entries = 2, pipe = false, flow = false)
     )
 
     // Dispatcher connections
     // Combine Inst and RasSP into the queue
     // Wire the Plexer output to Dispatcher
-    decoderDispatcherQueue.io.enq <> decodeRASPlexer.io.plexToDispatcher
-    dispatcher.io.instInput <> decoderDispatcherQueue.io.deq
+    plexerDispatcherQueue.io.enq <> decodeRASPlexer.io.plexToDispatcher
+    dispatcher.io.instInput <> plexerDispatcherQueue.io.deq
 
     // On RAS predict overwrite, set pc_overwrite for IF and reset ifQueue
 
@@ -158,9 +159,9 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
 
     val backendMispredict =
         bruAdaptor.io.brUpdate.valid && bruAdaptor.io.brUpdate.mispredict
-    decoderDispatcherQueue.reset := reset.asBool || backendMispredict
-    ifQueue.reset := reset.asBool || fetcher.io.pcOverwrite.valid
-    when(ifQueue.reset.asBool) {
+    plexerDispatcherQueue.reset := reset.asBool || backendMispredict
+    fetcherDecoderQueue.reset := reset.asBool || fetcher.io.pcOverwrite.valid
+    when(fetcherDecoderQueue.reset.asBool) {
         printf(p"IF Queue Reset\n")
     }
 
@@ -179,12 +180,10 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
 
     dispatcher.io.freeListAccess.allocate <> freeList.io.allocate
 
-    // # Backend
     // ROB connections
     rob.io.dispatch <> dispatcher.io.robOutput
 
     // Dispatch to Issue Buffers
-
     class DispatcherQueueEntry extends Bundle {
         val inst = new DecodedInstBundle
         val rasSP = UInt(RAS_WIDTH.W)
@@ -204,10 +203,6 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     dispatcherInstQueue.io.enq.bits.rasSP := dispatcher.io.instOutput.bits.rasSP
     dispatcherInstQueue.io.enq.bits.robTag := rob.io.robTag
     dispatcher.io.instOutput.ready := dispatcherInstQueue.io.enq.ready
-
-    // DispatchRouting Module
-    val dispatchRouter = Module(new DispatchRouter)
-
     dispatcherInstQueue.reset := reset.asBool || backendMispredict
 
     // Router Inputs
@@ -232,6 +227,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     bruIB.io.in <> dispatchRouter.io.bruIB
     lsAdaptor.io.issueIn <> dispatchRouter.io.lsuIB
 
+    // # Backend
     // PRF Busy Table Update (Set Busy on Dispatch)
     prf.io.setBusy.valid := dispatchRouter.io.setBusy.valid
     prf.io.setBusy.bits := dispatchRouter.io.setBusy.bits
@@ -309,6 +305,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     rob.io.brUpdate.bits.robTag := brUpdate.robTag
     rob.io.brUpdate.bits.mispredict := mispredict
 
+    // # Misprediction
     // Fetcher PC Overwrite (Misprediction or RAS Re-predict)
     when(mispredict) {
         fetcher.io.pcOverwrite.valid := true.B
@@ -431,7 +428,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         val issueMultStallPort = multIB.io.stallPort.get
         val lsuStallCommit = lsAdaptor.io.stallCommit.get
 
-        val fetchQueueDepth = ifQueue.io.count
+        val fetchQueueDepth = fetcherDecoderQueue.io.count
         val issueALUDepth = aluIB.io.count.get
         val issueBRUDepth = bruIB.io.count.get
         val issueMultDepth = multIB.io.count.get

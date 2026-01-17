@@ -5,9 +5,9 @@ import chisel3.util._
 import common._
 import common.Configurables._
 
-/** Dispatch RAS Plexer
+/** Pre-Dispatch Plexer
   *
-  * This module combines signals from RASAdaptor and InstDispatcher. It pipes
+  * This module combines signals from RASAdaptor and InstDecoder. It pipes
   * the same ready signal to both modules coming from Dispatcher.
   *
   * When the downstream stage is ready, it extracts data from both slots and,
@@ -16,7 +16,7 @@ import common.Configurables._
   * This is a fully combinational module, with no internal state and does not
   * cost one cycle latency to the pipeline.
   */
-class DispatchRASPlexer extends Module {
+class PreDispatchPlexer extends Module {
     val io = IO(new Bundle {
         val instFromDecoder = Flipped(Decoupled(new DecodedInstBundle))
         val rasBundleFromAdaptor = Flipped(Decoupled(new RASAdaptorBundle))
