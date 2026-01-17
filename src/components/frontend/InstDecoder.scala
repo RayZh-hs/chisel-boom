@@ -51,6 +51,7 @@ class InstDecoder extends CycleAwareModule {
     // Default signals
     val fUnitType = Wire(FunUnitType())
     val aluOpType = Wire(ALUOpType())
+    val multOpType = Wire(MultOpType())
     val bruOpType = Wire(BRUOpType())
     val cmpOpType = Wire(CmpOpType())
     val memOpWidth = Wire(MemOpWidth())
@@ -63,6 +64,7 @@ class InstDecoder extends CycleAwareModule {
     // Defaults
     fUnitType := FunUnitType.ALU
     aluOpType := ALUOpType.ADD
+    multOpType := MultOpType.MUL
     bruOpType := BRUOpType.CBR
     cmpOpType := CmpOpType.EQ
     memOpWidth := MemOpWidth.WORD
@@ -149,24 +151,30 @@ class InstDecoder extends CycleAwareModule {
                     .otherwise { aluOpType := ALUOpType.SRL } // SRLI
             }
         }
-    }.elsewhen(opcode === "b0110011".U) { // ALU R-Type
-        fUnitType := FunUnitType.ALU
-        useImm := false.B
-        switch(funct3) {
-            is(0.U) {
-                when(funct7(5)) { aluOpType := ALUOpType.SUB }
-                    .otherwise { aluOpType := ALUOpType.ADD }
+    }.elsewhen(opcode === "b0110011".U) { // ALU R-Type or M-Extension
+        when(funct7 === "b0000001".U) { // M-Extension
+            fUnitType := FunUnitType.MULT
+            useImm := false.B
+            multOpType := MultOpType.fromInt(funct3)
+        }.otherwise {
+            fUnitType := FunUnitType.ALU
+            useImm := false.B
+            switch(funct3) {
+                is(0.U) {
+                    when(funct7(5)) { aluOpType := ALUOpType.SUB }
+                        .otherwise { aluOpType := ALUOpType.ADD }
+                }
+                is(1.U) { aluOpType := ALUOpType.SLL }
+                is(2.U) { aluOpType := ALUOpType.SLT }
+                is(3.U) { aluOpType := ALUOpType.SLTU }
+                is(4.U) { aluOpType := ALUOpType.XOR }
+                is(5.U) {
+                    when(funct7(5)) { aluOpType := ALUOpType.SRA }
+                        .otherwise { aluOpType := ALUOpType.SRL }
+                }
+                is(6.U) { aluOpType := ALUOpType.OR }
+                is(7.U) { aluOpType := ALUOpType.AND }
             }
-            is(1.U) { aluOpType := ALUOpType.SLL }
-            is(2.U) { aluOpType := ALUOpType.SLT }
-            is(3.U) { aluOpType := ALUOpType.SLTU }
-            is(4.U) { aluOpType := ALUOpType.XOR }
-            is(5.U) {
-                when(funct7(5)) { aluOpType := ALUOpType.SRA }
-                    .otherwise { aluOpType := ALUOpType.SRL }
-            }
-            is(6.U) { aluOpType := ALUOpType.OR }
-            is(7.U) { aluOpType := ALUOpType.AND }
         }
     }
 
@@ -200,6 +208,7 @@ class InstDecoder extends CycleAwareModule {
 
     io.out.bits.fUnitType := fUnitType
     io.out.bits.aluOpType := aluOpType
+    io.out.bits.multOpType := multOpType
     io.out.bits.bruOpType := bruOpType
     io.out.bits.cmpOpType := cmpOpType
     io.out.bits.isLoad := isLoad

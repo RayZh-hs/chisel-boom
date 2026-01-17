@@ -10,6 +10,10 @@ class ALUInfo extends Bundle {
     val aluOp = ALUOpType()
 }
 
+class MultInfo extends Bundle {
+    val multOp = MultOpType()
+}
+
 class BRUInfo extends Bundle {
     val bruOp = BRUOpType()
     val cmpOp = CmpOpType()
