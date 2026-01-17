@@ -15,11 +15,11 @@ import components.structures.IssueBufferEntry
 class OperandFetchStage[T <: Data](gen: T) extends Module {
     val io = IO(new Bundle {
         // Input from Issue Buffer
-        val issueIn = Flipped(Decoupled(new IssueBufferEntry(gen)))
+        val issueIn = Flipped(Decoupled(new IssueBufferEntry(gen.cloneType)))
         
         // Output to Execution (Decoupled to handle backpressure)
         val out = Decoupled(new Bundle {
-            val info = new IssueBufferEntry(gen)
+            val info = new IssueBufferEntry(gen.cloneType)
             val op1  = UInt(32.W)
             val op2  = UInt(32.W)
         })
@@ -39,7 +39,7 @@ class OperandFetchStage[T <: Data](gen: T) extends Module {
 
     // --- State Registers ---
     val validReg = RegInit(false.B)
-    val infoReg  = Reg(new IssueBufferEntry(gen))
+    val infoReg  = Reg(new IssueBufferEntry(gen.cloneType))
     val op1Reg   = Reg(UInt(32.W))
     val op2Reg   = Reg(UInt(32.W))
 
