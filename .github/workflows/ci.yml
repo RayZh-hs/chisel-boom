@@ -75,15 +75,15 @@ jobs:
         run: |
           # The binaries stay in /bin
           echo "${{ github.workspace }}/verilator-install/bin" >> $GITHUB_PATH
-          
-          # The "Root" for headers is in /share/verilator
-          echo "VERILATOR_ROOT=${{ github.workspace }}/verilator-install/share/verilator" >> $GITHUB_ENV
+
+          # Unset VERILATOR_ROOT
+          echo "VERILATOR_ROOT=" >> $GITHUB_ENV
 
       - name: Verify Verilator
         run: |
           verilator --version
-          echo "Verilator Root is: $VERILATOR_ROOT"
-          ls $VERILATOR_ROOT/include/verilated.mk
+          INSTALL_PATH="${{ github.workspace }}/verilator-install"
+          ls -l $INSTALL_PATH/share/verilator/include/verilated.mk
 
       - name: Setup RISCV Toolchain
         uses: gregdavill/setup-riscv-gnu-toolchain@v2.0
