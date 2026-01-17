@@ -2,15 +2,18 @@ import mill._
 import mill.scalalib._
 
 object `package` extends RootModule with ScalaModule {
-    def scalaVersion = "2.13.12"
+    // Updated to the latest stable Scala 2.13 version
+    def scalaVersion = "2.13.18"
 
     def ivyDeps = Agg(
-      ivy"org.chipsalliance::chisel:6.5.0",
+      // Updated to the newest Chisel 7.6.0 (Dec 2025)
+      ivy"org.chipsalliance::chisel:7.6.0",
       ivy"org.scalatest::scalatest:3.2.19"
     )
 
     def scalacPluginIvyDeps = Agg(
-      ivy"org.chipsalliance:chisel-plugin_2.13.12:6.5.0"
+      // Plugin version must match Chisel version and Scala version
+      ivy"org.chipsalliance:chisel-plugin_2.13.18:7.6.0"
     )
 
     def sources = T.sources(millSourcePath / "src", millSourcePath / "synthesis")
@@ -18,8 +21,7 @@ object `package` extends RootModule with ScalaModule {
     object test extends ScalaTests with TestModule.ScalaTest {
         def sources = T.sources(millSourcePath)
         def ivyDeps = Agg(
-          ivy"org.scalatest::scalatest:3.2.19",
-          ivy"edu.berkeley.cs::chiseltest:6.0.0"
+            ivy"org.scalatest::scalatest:3.2.19"
         )
         def testFramework = "org.scalatest.tools.Framework"
         def reportProp = T.input { System.getProperty("report", "false") }

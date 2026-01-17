@@ -28,8 +28,6 @@ object Configurables {
             branchMispredictionRate || Utilization || IPC || RollbackTime
         }
 
-        // Utility for automatic pruning in synthesis.
-        // This will be automatically called when building for synthesis to avoid unnecessary overhead.
         def prune() = {
             branchMispredictionRate = false
             Utilization = false

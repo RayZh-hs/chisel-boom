@@ -153,9 +153,9 @@ class RASAdaptorBundle extends Bundle {
     val currentSP = UInt(RAS_WIDTH.W)
 }
 
-class MemoryInterface extends Bundle {
-    val req = Flipped(Valid(new LoadStoreAction))
-    val resp = Valid(UInt(32.W))
+class MemoryRequest extends Bundle {
+    val req = Decoupled(new LoadStoreAction)
+    val resp = Flipped(Decoupled(UInt(32.W)))
 }
 
 class BoomCoreProfileBundle extends Bundle {
