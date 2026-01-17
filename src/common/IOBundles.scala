@@ -27,6 +27,7 @@ class DecodedInstBundle extends Bundle {
     // - categorizing operation
     val fUnitType = FunUnitType() // functional unit type
     val aluOpType = ALUOpType()
+    val multOpType = MultOpType()
     val bruOpType = BRUOpType()
     val cmpOpType = CmpOpType()
     val isLoad = Bool()
@@ -68,6 +69,12 @@ class DispatchToALQBundle extends Bundle {
     val aluOpType = ALUOpType()
     val prs1, prs2 = UInt(PREG_WIDTH.W)
     val (useImm, imm) = (Bool(), UInt(32.W))
+    val pdst = UInt(PREG_WIDTH.W)
+}
+
+class DispatchToMultQBundle extends Bundle {
+    val multOpType = MultOpType()
+    val prs1, prs2 = UInt(PREG_WIDTH.W)
     val pdst = UInt(PREG_WIDTH.W)
 }
 
@@ -157,7 +164,6 @@ class MemoryRequest extends Bundle {
     val req = Decoupled(new LoadStoreAction)
     val resp = Flipped(Decoupled(UInt(32.W)))
 }
-
 class BoomCoreProfileBundle extends Bundle {
     import common.Configurables.Profiling._
     def optfield[T <: Data](cond: Boolean, gen: => T): Option[T] = {
@@ -191,8 +197,13 @@ class BoomCoreProfileBundle extends Bundle {
     val issueBRUStallOperands = optfield(Utilization, UInt(32.W))
     val issueBRUStallPort = optfield(Utilization, UInt(32.W))
 
+    val busyIssueMult = optfield(Utilization, UInt(32.W))
+    val issueMultStallOperands = optfield(Utilization, UInt(32.W))
+    val issueMultStallPort = optfield(Utilization, UInt(32.W))
+
     val busyALU = optfield(Utilization, UInt(32.W))
     val busyBRU = optfield(Utilization, UInt(32.W))
+    val busyMult = optfield(Utilization, UInt(32.W))
     
     val busyLSU = optfield(Utilization, UInt(32.W))
     val lsuStallCommit = optfield(Utilization, UInt(32.W))
@@ -204,6 +215,7 @@ class BoomCoreProfileBundle extends Bundle {
     val fetchQueueDepth = optfield(Utilization, UInt(64.W))
     val issueALUDepth = optfield(Utilization, UInt(64.W))
     val issueBRUDepth = optfield(Utilization, UInt(64.W))
+    val issueMultDepth = optfield(Utilization, UInt(64.W))
     val lsuQueueDepth = optfield(Utilization, UInt(64.W))
     val robDepth = optfield(Utilization, UInt(64.W))
 
@@ -213,14 +225,23 @@ class BoomCoreProfileBundle extends Bundle {
     val countDispatcher = optfield(Utilization, UInt(64.W))
     val countIssueALU = optfield(Utilization, UInt(64.W))
     val countIssueBRU = optfield(Utilization, UInt(64.W))
+    val countIssueMult = optfield(Utilization, UInt(64.W))
     val countLSU = optfield(Utilization, UInt(64.W))
     val countWriteback = optfield(Utilization, UInt(64.W))
 
     // Dependency Resolution (Accumulated Wait Cycles)
     val waitDepALU = optfield(Utilization, UInt(64.W))
     val waitDepBRU = optfield(Utilization, UInt(64.W))
+    val waitDepMult = optfield(Utilization, UInt(64.W))
 
     // Rollback
     val totalRollbackEvents = optfield(RollbackTime, UInt(32.W))
     val totalRollbackCycles = optfield(RollbackTime, UInt(32.W))
+
+    // Cache Stats
+    val dcacheHits = optfield(CacheStats, UInt(64.W))
+    val dcacheMisses = optfield(CacheStats, UInt(64.W))
+    val icacheHits = optfield(CacheStats, UInt(64.W))
+    val icacheMisses = optfield(CacheStats, UInt(64.W))
+    val dramAccesses = optfield(CacheStats, UInt(64.W))
 }

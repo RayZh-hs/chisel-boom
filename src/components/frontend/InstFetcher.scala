@@ -11,6 +11,7 @@ class InstFetcher extends CycleAwareModule {
             Input(Valid(UInt(32.W))) // Overwrite PC when misprediction occurs
         val instAddr = Output(UInt(32.W)) // Debug/Trace output
         val btbResult = Input(Valid(UInt(32.W))) // Branch Target from BTB
+
         val icache = new Bundle {
             val req = Decoupled(UInt(32.W)) // We send Address
             val resp =

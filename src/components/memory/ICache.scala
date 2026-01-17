@@ -17,6 +17,7 @@ class ICache(conf: CacheConfig) extends Module {
         val dram = new SimpleMemIO(
           MemConfig(idWidth = 4, addrWidth = 32, dataWidth = (1 << conf.nCacheLineWidth) * 8)
         )
+        val events = new CacheEvents
     })
 
     val nSets = 1 << conf.nSetsWidth
@@ -42,6 +43,10 @@ class ICache(conf: CacheConfig) extends Module {
     val state = RegInit(sReady)
     val refillAddr = Reg(UInt(32.W)) // Used only to talk to DRAM, not to replay to CPU
     val refillSent = RegInit(false.B)
+    val justRefilled = RegInit(false.B)
+
+    io.events.hit := false.B
+    io.events.miss := false.B
 
     // -----------------------------------------------------------
     // Stage 1: Request (Cycle 0)
@@ -68,6 +73,10 @@ class ICache(conf: CacheConfig) extends Module {
     
     val hit = s1_valid && tagRead.valid && (tagRead.tag === get_tag(s1_addr))
     val miss = s1_valid && !hit
+    
+    io.events.hit := hit && !justRefilled
+    io.events.miss := miss && (state === sReady)
+    when(s1_valid) { justRefilled := false.B }
 
     // If Hit: Present Data
     val aligned_offset = Cat(get_offset(s1_addr)(conf.nCacheLineWidth - 1, 2), 0.U(2.W))
@@ -124,5 +133,6 @@ class ICache(conf: CacheConfig) extends Module {
         // The Fetcher is still holding the address, so next cycle it will request again
         // and get a Hit.
         state := sReady
+        justRefilled := true.B
     }
 }

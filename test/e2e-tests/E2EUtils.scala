@@ -140,7 +140,7 @@ object E2EUtils {
         } else {
             Nil
         }
-        val dependencies = Seq(cFile, linkLd, crt0) ++ headerFiles
+        val dependencies = Seq(cFile, linkLd, crt0, mathC) ++ headerFiles
 
         // If hex exists and is newer than all dependencies, skip rebuild
         if (Files.exists(hex)) {
@@ -155,7 +155,7 @@ object E2EUtils {
 
         val compileCmd = Seq(
           gcc,
-          "-march=rv32i",
+          "-march=rv32im",
           "-mabi=ilp32",
           "-O0",
           "-ffreestanding",
@@ -213,16 +213,18 @@ object E2EUtils {
         timedOut: Boolean
     )
 
+    def setupSimulation() {
+        val requireReport = System.getProperty("report") == "true"
+        // println(s"requireReport=$requireReport, isAnyEnabled=${common.Configurables.Profiling.isAnyEnabled}")
+        if (!requireReport) {
+            common.Configurables.Profiling.prune()
+        }
+    }
     def runTestWithHex(
         hexPath: Path,
         maxCycles: Int = Configurables.MAX_CYCLE_COUNT
     ): SimulationResult = {
-        // Setup profiling options (from HEAD logic)
-        val requireReport = System.getProperty("report") == "true"
-        if (!requireReport) {
-            common.Configurables.Profiling.prune()
-        }
-
+        setupSimulation()
         // Shared path for the hex file to avoid recompilation of BoomCore
         // We place it outside the specific test run directory so it persists/is accessible
         Files.copy(hexPath, sharedHexPath, StandardCopyOption.REPLACE_EXISTING)
@@ -363,8 +365,10 @@ object E2EUtils {
                 val dispatcher = p.busyDispatcher.get.peek().litValue
                 val issueALU = p.busyIssueALU.get.peek().litValue
                 val issueBRU = p.busyIssueBRU.get.peek().litValue
+                val issueMult = p.busyIssueMult.get.peek().litValue
                 val alu = p.busyALU.get.peek().litValue
                 val bru = p.busyBRU.get.peek().litValue
+                val mult = p.busyMult.get.peek().litValue
                 val lsu = p.busyLSU.get.peek().litValue
                 val writeback = p.busyWriteback.get.peek().litValue
                 val rob = p.busyROB.get.peek().litValue
@@ -375,12 +379,14 @@ object E2EUtils {
                 val countDispatcher = p.countDispatcher.get.peek().litValue
                 val countIssueALU = p.countIssueALU.get.peek().litValue
                 val countIssueBRU = p.countIssueBRU.get.peek().litValue
+                val countIssueMult = p.countIssueMult.get.peek().litValue
                 val countLSU = p.countLSU.get.peek().litValue
                 val countWriteback = p.countWriteback.get.peek().litValue
                 
                 // Dependency Waits
                 val waitDepALU = p.waitDepALU.get.peek().litValue
                 val waitDepBRU = p.waitDepBRU.get.peek().litValue
+                val waitDepMult = p.waitDepMult.get.peek().litValue
 
                 // Fetch new stall signals
                 val fetcherStallBuffer = p.fetcherStallBuffer.get.peek().litValue
@@ -392,6 +398,8 @@ object E2EUtils {
                 val issueALUStallPort = p.issueALUStallPort.get.peek().litValue
                 val issueBRUStallOperands = p.issueBRUStallOperands.get.peek().litValue
                 val issueBRUStallPort = p.issueBRUStallPort.get.peek().litValue
+                val issueMultStallOperands = p.issueMultStallOperands.get.peek().litValue
+                val issueMultStallPort = p.issueMultStallPort.get.peek().litValue
                 val lsuStallCommit = p.lsuStallCommit.get.peek().litValue
 
                 def formatUtil(name: String, busy: BigInt): Unit = {
@@ -433,8 +441,15 @@ object E2EUtils {
                 val avgWaitBRU = if(countIssueBRU > 0) waitDepBRU.toDouble / countIssueBRU.toDouble else 0.0
                 println(f"    Avg Dep Latency   : $avgWaitBRU%.2f cycles/instr")
 
+                formatUtil("Issue-Mult", issueMult)
+                formatSubUtil("Stall-Operands", issueMultStallOperands)
+                formatSubUtil("Stall-Port", issueMultStallPort)
+                val avgWaitMult = if(countIssueMult > 0) waitDepMult.toDouble / countIssueMult.toDouble else 0.0
+                println(f"    Avg Dep Latency   : $avgWaitMult%.2f cycles/instr")
+
                 formatUtil("ALU", alu)
                 formatUtil("BRU", bru)
+                formatUtil("Mult", mult)
                 formatUtilWithThroughput("LSU", lsu, countLSU)
                 formatSubUtil("Stall-Commit", lsuStallCommit)
 
@@ -449,8 +464,10 @@ object E2EUtils {
                 // Issue ALU Depth
                 val issueALUD = if(cycle > 0) p.issueALUDepth.get.peek().litValue.toDouble / cycle.toDouble else 0.0
                 val issueBRUD = if(cycle > 0) p.issueBRUDepth.get.peek().litValue.toDouble / cycle.toDouble else 0.0
+                val issueMultD = if(cycle > 0) p.issueMultDepth.get.peek().litValue.toDouble / cycle.toDouble else 0.0
                 println(f"  Issue ALU   : $issueALUD%.2f")
                 println(f"  Issue BRU   : $issueBRUD%.2f")
+                println(f"  Issue Mult  : $issueMultD%.2f")
 
                 // LSU Depth
                 val lsuD = if(cycle > 0) p.lsuQueueDepth.get.peek().litValue.toDouble / cycle.toDouble else 0.0
@@ -476,6 +493,11 @@ object E2EUtils {
             println("=========================================================")
         }
 
-        SimulationResult(result, outputBuffer.toSeq, cycle, !done)
+        SimulationResult(
+          result,
+          outputBuffer.toSeq,
+          cycle,
+          !done && cycle >= maxCycles
+        )
     }
 }

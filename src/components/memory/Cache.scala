@@ -22,12 +22,18 @@ class CachePort extends Bundle {
     val ready = Output(Bool())
 }
 
+class CacheEvents extends Bundle {
+    val hit = Output(Bool())
+    val miss = Output(Bool())
+}
+
 class Cache(conf: CacheConfig) extends Module {
     val io = IO(new Bundle {
         val port = new CachePort
         val dram = new SimpleMemIO(
           MemConfig(idWidth = 4, addrWidth = 32, dataWidth = (1 << conf.nCacheLineWidth) * 8)
         )
+        val events = new CacheEvents
     })
 
     val nSets = 1 << conf.nSetsWidth
@@ -60,6 +66,10 @@ class Cache(conf: CacheConfig) extends Module {
     val sentRead  = RegInit(false.B)
     val gotWriteResp = RegInit(false.B)
     val gotReadResp  = RegInit(false.B)
+    val isRefill = RegInit(false.B)
+
+    io.events.hit := false.B
+    io.events.miss := false.B
 
     // Signals for Logic
     val reg_index = reqReg.addr(conf.nCacheLineWidth + conf.nSetsWidth - 1, conf.nCacheLineWidth)
@@ -94,6 +104,7 @@ class Cache(conf: CacheConfig) extends Module {
         reqReg.wdata := io.port.wdata
         reqReg.wmask := io.port.wmask
         reqReg.isWr := io.port.isWr
+        isRefill := false.B
         state := sTagCheck
     }
 
@@ -109,6 +120,9 @@ class Cache(conf: CacheConfig) extends Module {
 
     when(state === sTagCheck) {
         val hit = tagRead.valid && (tagRead.tag === reg_tag)
+        io.events.hit := hit && !isRefill
+        io.events.miss := !hit
+
         when(hit) {
             when(reqReg.isWr) {
                 val wdataBytesSeq = Seq.tabulate(4)(i => reqReg.wdata(8 * i + 7, 8 * i))
@@ -143,6 +157,7 @@ class Cache(conf: CacheConfig) extends Module {
             gotWriteResp := !dirty
             sentRead := false.B
             gotReadResp := false.B
+            isRefill := true.B
             state := sDramAccess
         }
     }

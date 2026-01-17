@@ -44,10 +44,10 @@ class E2ESimTests extends AnyFunSuite {
                 )
 
                 if (simRes.output.isEmpty && expected.length == 1) {
-                            assert(
-                              simRes.result == expected.head,
-                              s"Expected return value ${expected.head}, got ${simRes.result} (No output captured)"
-                            )
+                    assert(
+                      simRes.result == expected.head,
+                      s"Expected return value ${expected.head}, got ${simRes.result} (No output captured)"
+                    )
                 } else {
                     assert(
                       simRes.output == expected,

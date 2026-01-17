@@ -36,7 +36,6 @@ object RunHexDump extends App {
     } else {
         hexFile
     }
-
     println(s"Running simulation using hex file: $normalizedPath")
     println("Simulation started.")
 

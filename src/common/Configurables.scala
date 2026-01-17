@@ -8,6 +8,8 @@ object Configurables {
     val IMEM_WIDTH = 12     // 4096 words = 16KB instruction memory
     val MEM_WIDTH  = 14     // 16KB data memory (8-bit per slot)
     val RAS_WIDTH  = 3      // Return Address Stack size
+    
+    val MUL_LATENCY = 2    // Multiplier latency in cycles
 
     // Configuration for debug output.
     // Set to true to enable printf outputs in the simulation by default;
@@ -22,10 +24,11 @@ object Configurables {
         var Utilization:             Boolean = true    // Track utilization of various structures
         var IPC:                     Boolean = true    // Track IPC (Instructions Per Cycle)
         var RollbackTime:            Boolean = true    // Track average rollback time
+        var CacheStats:              Boolean = true    // Track L1 D-Cache/I-Cache stats
 
         // Shorthand for any profiling option being enabled
         def isAnyEnabled: Boolean = {
-            branchMispredictionRate || Utilization || IPC || RollbackTime
+            branchMispredictionRate || Utilization || IPC || RollbackTime || CacheStats
         }
 
         def prune() = {
@@ -33,6 +36,7 @@ object Configurables {
             Utilization = false
             IPC = false
             RollbackTime = false
+            CacheStats = false
         }
     }
 
