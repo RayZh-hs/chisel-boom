@@ -60,8 +60,8 @@ def build_boom():
     chip.input(sv_files)
     chip.use(asap7_demo)
 
-    # Target clock time: 2000 ps
-    chip.clock('clock', period=2) # Put a small value here to stress timing and obtain maximal optimization
+    # Target clock time: 1000 ps ~ 1 GHz
+    chip.clock('clock', period=1) # Put a small value here to stress timing and obtain maximal optimization
 
     # Important: Define 'SYNTHESIS' so Chisel/sv2v strips out $finish/$fatal/printf
     chip.add('option', 'define', 'SYNTHESIS')
