@@ -20,8 +20,7 @@ filelist.f
 
 .env
 
-.env
-
+profiling
 test_run_dir
 *.log
 synthesis/

@@ -1,0 +1,58 @@
+#!/bin/bash
+set -e
+
+function requires() {
+    if ! command -v $1 &>/dev/null; then
+        echo "Requires $1"
+        exit 1
+    fi
+}
+requires mill
+requires sed
+requires python3
+
+# --quiet flag to suppress stdout
+IS_QUIET=false
+while [[ "$1" != "" ]]; do
+    case $1 in
+    --quiet)
+        IS_QUIET=true
+        ;;
+    --help)
+        echo "Usage: ./profile.sh [--quiet]"
+        echo "  --quiet    Suppress stdout output, only save profiling data to files"
+        exit 0
+        ;;
+    *)
+        echo "Unknown option: $1"
+        exit 1
+        ;;
+    esac
+    shift
+done
+
+cd $MANGO_REPO_PATH
+
+if [ -d profiling ]; then
+    read -p "Press Enter to overwrite existing profiling data and continue ..."
+else
+    mkdir -p profiling
+fi
+
+if $IS_QUIET; then
+    echo ">>> E2ESimTests"
+    mill -Dreport=true --no-server test.testOnly e2e.E2ESimTests --quiet 2>&1 \
+    | tee >(stdbuf -oL sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' > profiling/E2ESimTests.profile) >/dev/null
+    echo ">>> E2ETests"
+    mill -Dreport=true --no-server test.testOnly e2e.E2ETests --quiet 2>&1 \
+    | tee >(stdbuf -oL sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' > profiling/E2ETests.profile) >/dev/null
+else
+    echo ">>> E2ESimTests"
+    mill -Dreport=true --no-server test.testOnly e2e.E2ESimTests 2>&1 \
+    | tee >(stdbuf -oL sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' > profiling/E2ESimTests.profile)
+    echo ">>> E2ETests"
+    mill -Dreport=true --no-server test.testOnly e2e.E2ETests 2>&1 \
+    | tee >(stdbuf -oL sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' > profiling/E2ETests.profile)
+fi
+
+python3 scripts/master_profiler.py
