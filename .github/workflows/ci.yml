@@ -38,7 +38,9 @@ jobs:
       if: steps.cache-verilator.outputs.cache-hit != 'true'
       run: |
         sudo apt-get update
-        sudo apt-get install -y git help2man perl python3 make autoconf g++ flex bison
+        sudo apt-get install -y \
+          git help2man perl python3 make autoconf g++ flex bison \
+          libfl2 libfl-dev zlib1g zlib1g-dev
         
         git clone https://github.com/verilator/verilator
         cd verilator
