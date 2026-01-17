@@ -2,38 +2,89 @@ name: CI
 
 on:
   push:
-    branches: [ "main", "feature/ci-cd" ]
+    branches: ["main", "feature/ci-cd"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 env:
-  OBJCACHE: "env" 
+  OBJCACHE: "env"
   CCACHE_DISABLE: 1
 
 jobs:
-  test:
+  # JOB 1: Prepare Verilator
+  setup-verilator:
+    environment: ci
     runs-on: ubuntu-22.04
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up JDK
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
+      - uses: actions/checkout@v4
 
-    - name: Install Mill
-      uses: zhutmost/setup-mill@main
-      with:
-        mill-version: 0.12.7
-    
-    - name: Install Verilator
-      uses: veryl-lang/setup-verilator@v1
-      with:
-        version: 5.024
+      - name: Cache Verilator Build
+        id: cache-verilator
+        uses: actions/cache@v3
+        with:
+          path: verilator-build
+          key: verilator-build-${{ vars.VERILATOR_VERSION }}-v1
 
-    - name: Setup RISCV Toolchain
-      uses: gregdavill/setup-riscv-gnu-toolchain@v2.0
+      - name: Build Verilator
+        if: steps.cache-verilator.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git help2man perl python3 make autoconf g++ flex bison \
+            libfl2 libfl-dev zlib1g zlib1g-dev
 
-    - name: Run tests
-      run: mill test
+          git clone https://github.com/verilator/verilator verilator-build
+          cd verilator-build
+          git checkout v${{ vars.VERILATOR_VERSION }}
+
+          autoconf
+          ./configure
+          make -j$(nproc)
+
+      - name: Install Verilator
+        run: |
+          cd verilator-build
+          sudo make install
+
+  # JOB 2: Run the actual tests
+  test:
+    needs: setup-verilator
+    environment: ci
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      - name: Install Mill
+        uses: zhutmost/setup-mill@main
+        with:
+          mill-version: 0.12.7
+
+      - name: Restore Verilator Build Cache
+        id: cache-verilator
+        uses: actions/cache@v3
+        with:
+          path: verilator-build
+          key: verilator-build-${{ vars.VERILATOR_VERSION }}-v1
+          fail-on-cache-miss: true
+
+      - name: Install Verilator
+        run: |
+          cd verilator-build
+          sudo make install
+
+      - name: Verify Verilator
+        run: |
+          verilator --version
+
+      - name: Setup RISCV Toolchain
+        uses: gregdavill/setup-riscv-gnu-toolchain@v2.0
+
+      - name: Run tests
+        run: mill test
