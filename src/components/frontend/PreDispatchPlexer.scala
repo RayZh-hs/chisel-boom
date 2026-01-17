@@ -7,8 +7,8 @@ import common.Configurables._
 
 /** Pre-Dispatch Plexer
   *
-  * This module combines signals from RASAdaptor and InstDecoder. It pipes
-  * the same ready signal to both modules coming from Dispatcher.
+  * This module combines signals from RASAdaptor and InstDecoder. It pipes the
+  * same ready signal to both modules coming from Dispatcher.
   *
   * When the downstream stage is ready, it extracts data from both slots and,
   * depending on the PC overwrite status, swaps the PC target.

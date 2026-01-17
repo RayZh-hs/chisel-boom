@@ -144,13 +144,15 @@ class WallaceTree(opAWidth: Int, opBWidth: Int, reductionDepth: Int)
         // Update for next iteration
         width = layer.outWidth
         height = layer.outHeight
-        activeLayerInput = RegNext(layer.io.out, 0.U.asTypeOf(layer.io.out)).toSeq
+        activeLayerInput =
+            RegNext(layer.io.out, 0.U.asTypeOf(layer.io.out)).toSeq
     }
 
     // Stage 2: Addition
     val finalSum = Wire(UInt(productWidth.W))
     if (height == 2) {
-        finalSum := (activeLayerInput(0) + activeLayerInput(1)).asUInt(productWidth-1, 0)
+        finalSum := (activeLayerInput(0) + activeLayerInput(1))
+            .asUInt(productWidth - 1, 0)
     } else if (height == 1) {
         // This should only happen when the initial height == 1
         finalSum := activeLayerInput(0).pad(productWidth)
