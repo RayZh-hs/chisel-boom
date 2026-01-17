@@ -27,7 +27,7 @@ object ALUOpType extends ChiselEnum {
   * Includes: `MUL`, `MULH`, `MULHSU`, `MULHU`
   */
 object MultOpType extends ChiselEnum {
-    val MUL, MULH, MULHSU, MULHU = Value
+    val MUL, MULH, MULHSU, MULHU, DIV, DIVU, REM, REMU = Value
 
     def fromInt(i: UInt): Type = {
         val w = Wire(MultOpType())
@@ -37,6 +37,10 @@ object MultOpType extends ChiselEnum {
             is(1.U) { w := MULH }
             is(2.U) { w := MULHSU }
             is(3.U) { w := MULHU }
+            is(4.U) { w := DIV }
+            is(5.U) { w := DIVU }
+            is(6.U) { w := REM }
+            is(7.U) { w := REMU }
         }
         w
     }

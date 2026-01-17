@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import common._
 import common.Configurables._
-import components.structures.{RiscVMultiplier, MulFunc, MultInfo, IssueBufferEntry}
+import components.structures.{MulDivUnit, MultInfo, IssueBufferEntry}
 
 class MultAdaptor extends Module {
     val io = IO(new Bundle {
@@ -18,7 +18,7 @@ class MultAdaptor extends Module {
         val busy = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
     })
 
-    val mult = Module(new RiscVMultiplier)
+    val mult = Module(new MulDivUnit)
 
     val s1_valid = RegInit(false.B)
     val s1_info  = Reg(new IssueBufferEntry(new MultInfo))
