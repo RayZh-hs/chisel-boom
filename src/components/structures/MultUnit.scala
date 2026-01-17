@@ -140,7 +140,7 @@ class MulDivUnit extends Module {
           // --- Multiplication Setup ---
           // Initialize counter to wait for pipeline latency
           // We subtract 1 because the cycle we enter sCalc counts as the first propagation
-          cnt   := (mulLatency - 1).U 
+          cnt   := mulLatency.U 
           state := sCalc
         }
       }
