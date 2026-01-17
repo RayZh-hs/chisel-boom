@@ -220,7 +220,6 @@ object E2EUtils {
             common.Configurables.Profiling.prune()
         }
     }
-
     def runTestWithHex(
         hexPath: Path,
         maxCycles: Int = Configurables.MAX_CYCLE_COUNT

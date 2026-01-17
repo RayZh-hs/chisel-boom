@@ -154,17 +154,16 @@ class LoadStoreAction extends Bundle {
     val targetReg = UInt(PREG_WIDTH.W)
 }
 
-class MemoryRequest extends Bundle {
-    val req = Decoupled(new LoadStoreAction)
-    val resp = Flipped(Decoupled(UInt(32.W)))
-}
-
 class RASAdaptorBundle extends Bundle {
     val flush = Bool()
     val flushNextPC = UInt(32.W)
     val currentSP = UInt(RAS_WIDTH.W)
 }
 
+class MemoryRequest extends Bundle {
+    val req = Decoupled(new LoadStoreAction)
+    val resp = Flipped(Decoupled(UInt(32.W)))
+}
 class BoomCoreProfileBundle extends Bundle {
     import common.Configurables.Profiling._
     def optfield[T <: Data](cond: Boolean, gen: => T): Option[T] = {

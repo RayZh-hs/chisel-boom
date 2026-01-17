@@ -96,12 +96,18 @@ class FreeList(numRegs: Int, numArchRegs: Int) extends CycleAwareModule {
     }
 
     when(!isInit) {
-        // Assert logic
-        // We calculate next state to ensure no overflow
+        // This assertion will trigger in simulation if the Renamer/ROB logic
+        // attempts to return more registers than exist in the system.
+        val nextFreeCount = tail - head +& numEnq - deq.asUInt
         assert(
-          (tail - head +& numEnq - deq.asUInt) <= numFreeRegisters.U,
-          "FreeList Overflow: Architectural limit of %d regs exceeded!",
-          numFreeRegisters.U
+          nextFreeCount <= numFreeRegisters.U,
+          "FreeList Overflow: Architectural limit of %d regs exceeded! head=%d tail=%d numEnq=%d deq=%d nextCount=%d",
+          numFreeRegisters.U,
+          head,
+          tail,
+          numEnq,
+          deq.asUInt,
+          nextFreeCount
         )
 
         head := head + deq.asUInt

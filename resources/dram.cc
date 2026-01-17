@@ -24,7 +24,7 @@ struct Response {
 static std::vector<Response> resp_queue;
 
 extern "C" void dram_init(const char* filename) {
-    debug_log.open("/home/rogerw/project/chisel-boom/dram.log", std::ios::out | std::ios::trunc);
+    debug_log.open("dram.log", std::ios::out | std::ios::trunc);
     if (!debug_log.is_open()) {
         std::cerr << "[DPI-C] Fail to open dram.log" << std::endl;
     }

@@ -28,11 +28,13 @@ object RunHexDump extends App {
         sys.exit(1)
     }
 
-    // If the hex file uses byte-alignment, convert to word-alignment
-    val normalizedPath = convertByteToWordAligned(hexFile)
-    if (!isByteAligned(hexFile)) {
-        println(s"Hex file $hexFile is not byte-aligned. Converting to word-aligned format.")
-        println(s"Converted hex file saved to: $normalizedPath")
+    val normalizedPath = if (try { isByteAligned(hexFile) } catch { case _: Throwable => false }) {
+        println(s"Hex file $hexFile is byte-aligned. Converting to word-aligned format.")
+        val p = convertByteToWordAligned(hexFile)
+        println(s"Converted hex file saved to: $p")
+        p
+    } else {
+        hexFile
     }
     println(s"Running simulation using hex file: $normalizedPath")
     println("Simulation started.")

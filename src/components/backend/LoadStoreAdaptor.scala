@@ -33,7 +33,6 @@ class LoadStoreAdaptor extends CycleAwareModule {
     // --- LSQ Instance ---
     val lsq = Module(new SequentialIssueBuffer(new LoadStoreInfo, 16, "LSQ"))
     io.lsqCount.foreach(_ := lsq.io.count.get)
-
     lsq.io.in <> io.issueIn
     lsq.io.broadcast := io.broadcastIn
     lsq.io.flush := io.flush
@@ -63,17 +62,22 @@ class LoadStoreAdaptor extends CycleAwareModule {
 
     // --- NEW: Track if S3 is "dead" (flushed) but waiting for Ghost Response ---
     val s3IsDead = RegInit(false.B)
-
     // --- Internal Wires ---
     val s1Ready = Wire(Bool())
     val s2Ready = Wire(Bool())
     val s3Ready = Wire(Bool())
 
-    io.busy.foreach(_ := s1Valid || s2Valid || s3Valid)
-
     // --- Broadcast Arbiter ---
     val wbArbiter = Module(new RRArbiter(new BroadcastBundle, 2))
     io.broadcastOut <> wbArbiter.io.out
+
+    // --- Profiling wiring ---
+    io.busy.foreach(_ := s1Valid || s2Valid || s3Valid)
+    
+    // Replicate commit stall logic for profiling
+    val isStoreS2_prof = s2Bits.info.isStore
+    val isCommitted_prof = s2RegCommitted || (isStoreS2_prof && io.robHead === s2Bits.robTag)
+    io.stallCommit.foreach(_ := s2Valid && isStoreS2_prof && !isCommitted_prof)
 
     // =================================================================================
     // Stage 1: Issue & PRF Read
