@@ -69,6 +69,31 @@ object CmpOpType extends ChiselEnum {
   */
 object MemOpWidth extends ChiselEnum {
     val BYTE, HALFWORD, WORD, DWORD = Value
+
+    def toByteMask(width: Type, addrLowBits: UInt): UInt = {
+        val mask = Wire(UInt(4.W))
+        mask := 0.U
+        switch(width) {
+            is(BYTE) {
+                switch(addrLowBits(1, 0)) {
+                    is(0.U) { mask := "b0001".U }
+                    is(1.U) { mask := "b0010".U }
+                    is(2.U) { mask := "b0100".U }
+                    is(3.U) { mask := "b1000".U }
+                }
+            }
+            is(HALFWORD) {
+                switch(addrLowBits(1)) {
+                    is(false.B) { mask := "b0011".U }
+                    is(true.B) { mask := "b1100".U }
+                }
+            }
+            is(WORD) {
+                mask := "b1111".U
+            }
+        }
+        mask
+    }
 }
 
 /** Physical Register Busy Status
