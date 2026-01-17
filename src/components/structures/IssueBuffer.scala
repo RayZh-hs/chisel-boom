@@ -39,6 +39,17 @@ class IssueBufferEntry[T <: Data](gen: T) extends Bundle {
         else None
 }
 
+/** Issue Buffer
+  *
+  * Fully parametized Issue Buffer supporting any type of info bundle.
+  *
+  * @param gen
+  *   The generator of the info bundle
+  * @param numEntries
+  *   Number of entries in the Issue Buffer
+  * @param name
+  *   Name of the Issue Buffer (for debugging)
+  */
 class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
     extends CycleAwareModule {
     val io = IO(new Bundle {
@@ -47,24 +58,42 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
         val out = Decoupled(new IssueBufferEntry(gen))
 
         val flush = Input(new FlushBundle)
-        
-        val stallOperands = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
-        val stallPort = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
 
-        val count = if (common.Configurables.Profiling.Utilization) Some(Output(UInt(log2Ceil(numEntries + 1).W))) else None
-        
-        val waitDepCount = if (common.Configurables.Profiling.Utilization) Some(Output(UInt(log2Ceil(numEntries + 1).W))) else None
+        // Profiling Outputs
+        val stallOperands =
+            if (common.Configurables.Profiling.Utilization) Some(Output(Bool()))
+            else None
+        val stallPort =
+            if (common.Configurables.Profiling.Utilization) Some(Output(Bool()))
+            else None
+        val count =
+            if (common.Configurables.Profiling.Utilization)
+                Some(Output(UInt(log2Ceil(numEntries + 1).W)))
+            else None
+        val waitDepCount =
+            if (common.Configurables.Profiling.Utilization)
+                Some(Output(UInt(log2Ceil(numEntries + 1).W)))
+            else None
     })
 
     val buffer = Reg(Vec(numEntries, new IssueBufferEntry(gen)))
     val valid = RegInit(VecInit(Seq.fill(numEntries)(false.B)))
 
-    // --- Round Robin State ---
+    // Fix: Round Robin State
     // Tracks the index of the last instruction issued to ensure fairness
+    /*
+     * @note
+     *   We use a Round-Robin issue policy to prevent Starvation
+     *   (buffer filled by noops that do not get issued).
+     * 
+     *   Starvation is prevented by the Issue Logic (Dequeue), not the Enqueue Logic.
+     */
     val lastIssuedIndex = RegInit((numEntries - 1).U(log2Ceil(numEntries).W))
     io.count.foreach(_ := PopCount(valid))
     io.waitDepCount.foreach { c =>
-        c := PopCount(valid.zip(buffer).map { case (v, b) => v && (!b.src1Ready || !b.src2Ready) })
+        c := PopCount(valid.zip(buffer).map { case (v, b) =>
+            v && (!b.src1Ready || !b.src2Ready)
+        })
     }
 
     when(io.flush.valid) {
@@ -75,7 +104,7 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
         }
     }
 
-    // 4. Update Readiness (Snoop/Broadcast)
+    // Update readiness on Broadcast
     when(io.broadcast.valid) {
         val resPdst = io.broadcast.bits.pdst
         for (i <- 0 until numEntries) {
@@ -96,14 +125,11 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
         }
     }
 
-    // 3. Enqueue Logic
+    // Enqueue Logic
     val canEnqueue = !valid.asUInt.andR
     io.in.ready := canEnqueue && !io.flush.valid
 
-    // Note: We still fill the lowest empty slot.
-    // Starvation is prevented by the Issue Logic (Dequeue), not the Enqueue Logic.
     val emptyIndex = PriorityEncoder(valid.map(!_))
-
     when(io.in.fire) {
         val entry = io.in.bits
         val broadcastMatch1 =
@@ -130,7 +156,7 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
         }
     }
 
-    // 5. Issue Logic (Round-Robin Selection)
+    // Issue Logic (Fix: Use Round-Robin Selection)
     val readyEntries = Wire(Vec(numEntries, Bool()))
     for (i <- 0 until numEntries) {
         readyEntries(i) := valid(i) && buffer(i).src1Ready && buffer(
@@ -139,16 +165,16 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
     }
 
     // Create a masked version of ready signals.
-    // We only look at entries with an index GREATER than the last one issued.
+    // Only look at entries with an index greater than the last one issued.
     val maskedReadyEntries = Wire(Vec(numEntries, Bool()))
     for (i <- 0 until numEntries) {
         maskedReadyEntries(i) := readyEntries(i) && (i.U > lastIssuedIndex)
     }
 
-    // Check if there are any ready entries in the masked region (wrap-around logic)
+    // Check if there are any ready entries in the masked region (wrap-around)
     val hasReadyInMask = maskedReadyEntries.asUInt.orR
 
-    // If we have a ready entry after the pointer, pick that.
+    // If we have a ready entry after the pointer, pick it.
     // Otherwise, wrap around and pick the first available from the start.
     val nextIndex = PriorityEncoder(maskedReadyEntries)
     val wrapIndex = PriorityEncoder(readyEntries)
@@ -158,8 +184,10 @@ class IssueBuffer[T <: Data](gen: T, numEntries: Int, name: String)
 
     io.out.valid := canIssue && !io.flush.valid
     io.out.bits := buffer(issueIndex)
-    
-    io.stallOperands.foreach(_ := valid.asUInt.orR && !canIssue && !io.flush.valid)
+
+    io.stallOperands.foreach(
+      _ := valid.asUInt.orR && !canIssue && !io.flush.valid
+    )
     io.stallPort.foreach(_ := io.out.valid && !io.out.ready)
 
     when(io.out.fire) {

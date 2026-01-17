@@ -9,6 +9,10 @@ import components.structures.{BRUInfo, IssueBufferEntry}
 import utility.CycleAwareModule
 import chisel3.util.experimental.BoringUtils
 
+/** BRU Adaptor
+  *
+  * Bridges an Issue Buffer to the Branch Unit execution unit.
+  */
 class BRUAdaptor extends CycleAwareModule {
     val io = IO(new Bundle {
         val issueIn = Flipped(Decoupled(new IssueBufferEntry(new BRUInfo)))
@@ -16,7 +20,9 @@ class BRUAdaptor extends CycleAwareModule {
         val prfRead = new PRFReadBundle
         val brUpdate = Output(new BranchUpdateBundle)
         val flush = Input(new FlushBundle)
-        val busy = if (common.Configurables.Profiling.Utilization) Some(Output(Bool())) else None
+        val busy =
+            if (common.Configurables.Profiling.Utilization) Some(Output(Bool()))
+            else None
     })
 
     val bru = Module(new BranchUnit)
@@ -38,13 +44,13 @@ class BRUAdaptor extends CycleAwareModule {
 
     // Connect Fetch Stage
     fetch.io.issueIn <> io.issueIn
-    io.prfRead       <> fetch.io.prfRead
-    fetch.io.flush   := io.flush
+    io.prfRead <> fetch.io.prfRead
+    fetch.io.flush := io.flush
     fetch.io.out.ready := s3Ready
 
     val s2Info = fetch.io.out.bits.info
-    val s2op1  = fetch.io.out.bits.op1
-    val s2op2  = fetch.io.out.bits.op2
+    val s2op1 = fetch.io.out.bits.op1
+    val s2op2 = fetch.io.out.bits.op2
 
     // Stage 3 Transition
     when(s3Ready) {
@@ -60,7 +66,7 @@ class BRUAdaptor extends CycleAwareModule {
         when(io.brUpdate.valid) { s3UpdSent := true.B }
     }
 
-    // --- Data Path Connections ---
+    // Data Path Connections
     bru.io.inA := s2op1
     bru.io.inB := s2op2
     bru.io.pc := s2Info.info.pc
@@ -68,7 +74,7 @@ class BRUAdaptor extends CycleAwareModule {
     bru.io.bruOp := s2Info.info.bruOp
     bru.io.cmpOp := s2Info.info.cmpOp
 
-    // --- Outputs ---
+    // Outputs
     val isWritebackInstS3 = s3Bits.info.bruOp.isOneOf(
       BRUOpType.JAL,
       BRUOpType.JALR,

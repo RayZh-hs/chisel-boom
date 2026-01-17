@@ -11,7 +11,16 @@ import components.memory._
 import common._
 import common.Configurables._
 
+/** Boom Core
+  *
+  * Core of our Boom Lite Processor, integrating frontend, backend, memory
+  * system, and MMIO devices.
+  *
+  * @param hexFile
+  *   Path to the 32-bit hex file to load into DRAM.
+  */
 class BoomCore(val hexFile: String) extends CycleAwareModule {
+    // IO Definition
     val io = IO(new Bundle {
         val exit = Output(Valid(UInt(32.W)))
         val put = Decoupled(UInt(32.W))
@@ -20,22 +29,15 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
 
     // Component Instantiation
     val fetcher = Module(new InstFetcher)
-    val ifQueue = Module(
-      new Queue(
-        new FetchToDecodeBundle,
-        entries = 2,
-        pipe = false,
-        flow = false
-      )
-    )
     val decoder = Module(new InstDecoder)
     val rasAdaptor = Module(new RASAdaptor)
-    val decodeRASPlexer = Module(new DispatchRASPlexer)
+    val decodeRASPlexer = Module(new PreDispatchPlexer)
     val dispatcher = Module(new InstDispatcher)
+    val dispatchRouter = Module(new DispatchRouter)
     val rat = Module(new RegisterAliasTable(3, 1, 2))
     val freeList = Module(new FreeList(Derived.PREG_COUNT, 32))
     val icache = Module(
-        new ICache(CacheConfig(nSetsWidth = 6, nCacheLineWidth = 4, idOffset = 2))
+      new ICache(CacheConfig(nSetsWidth = 6, nCacheLineWidth = 4, idOffset = 2))
     )
     val btb = Module(new BranchTargetBuffer)
 
@@ -44,9 +46,12 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     val multIB = Module(new IssueBuffer(new MultInfo, 8, "MULT_IB"))
     val bruIB = Module(new IssueBuffer(new BRUInfo, 16, "BRU_IB"))
     val aluAdaptor = Module(new ALUAdaptor)
-    val multAdaptor = Module(new MultAdaptor)
+    val multAdaptor = Module(new MulDivAdaptor)
     val bruAdaptor = Module(new BRUAdaptor)
+    val prf = Module(new PhysicalRegisterFile(Derived.PREG_COUNT, 8, 1, 32))
+    val bc = Module(new BroadcastChannel)
 
+    // # Unified Memory System
     // Memory Subsystem and MMIO Devices
     // val lsu = Module(new LoadStoreUnit) // Removed: Replaced by Cache+DRAM inside MemorySubsystem
     val printDevice = Module(new PrintDevice)
@@ -55,20 +60,18 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     val memory = Module(new MemorySubsystem)
     val lsAdaptor = Module(new LoadStoreAdaptor)
 
-    // --- Unified Memory System Integration ---
+    // Unified Memory System Integration
     val memConf = MemConfig(idWidth = 4, addrWidth = 32, dataWidth = 128)
-    
-    // Switch to DPI-based DRAM
     val dram = Module(new DPIDRAM(memConf, hexFile))
     dram.io.clock := clock
     dram.io.reset := reset.asBool
 
     // Arbiter for DRAM Requests (2 Masters: D-Cache (0), I-Cache (1))
     val dramArb = Module(new RRArbiter(new MemRequest(memConf), 2))
-    
+
     // Connect D-Cache (memory) to Arbiter Port 0
     dramArb.io.in(0) <> memory.io.dram.req
-    
+
     // Connect I-Cache (imem) to Arbiter Port 1
     dramArb.io.in(1) <> icache.io.dram.req
 
@@ -97,11 +100,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     io.exit <> exitDevice.exitOut
     io.put <> printDevice.debugOut
 
-    val prf = Module(new PhysicalRegisterFile(Derived.PREG_COUNT, 8, 1, 32))
-    val bc = Module(new BroadcastChannel)
-
-    // --- Frontend Wiring ---
-
+    // # Frontend
     // BTB integration
     btb.io.pc := fetcher.io.instAddr
     fetcher.io.btbResult := btb.io.target
@@ -111,52 +110,59 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     fetcher.io.icache.resp <> icache.io.resp
 
     // Frontend queue (in-stage buffer between fetcher and decoder)
-    ifQueue.io.enq <> fetcher.io.ifOut
+    val fetcherDecoderQueue = Module(
+      new Queue(
+        new FetchToDecodeBundle,
+        entries = 2,
+        pipe = false,
+        flow = false
+      )
+    )
+    fetcherDecoderQueue.io.enq <> fetcher.io.ifOut
 
+    // RAS Adaptor connections
     val rasPredictedValid = RegNext(rasAdaptor.io.out.fire, init = false.B)
     val rasPredictedSignal =
         RegEnable(rasAdaptor.io.out.bits, rasAdaptor.io.out.fire)
-    
     val rasFlush = rasPredictedValid && rasPredictedSignal.flush
     val rasFlushTargetPC = rasPredictedSignal.flushNextPC
 
-
-    // Decoder and connections
+    // Decoder connections
     // Wire up Decoder & RASAdaptor to output of ifQueue
     // -- decoder.io.in <> ifQueue.io.deq
     // -- rasAdaptor.io.in <> ifQueue.io.deq
-    ifQueue.io.deq.ready := decoder.io.in.ready && rasAdaptor.io.in.ready
-    decoder.io.in.valid := ifQueue.io.deq.valid && !rasFlush
-    decoder.io.in.bits := ifQueue.io.deq.bits
-    rasAdaptor.io.in.valid := ifQueue.io.deq.valid && !rasFlush
-    rasAdaptor.io.in.bits := ifQueue.io.deq.bits
+    fetcherDecoderQueue.io.deq.ready := decoder.io.in.ready && rasAdaptor.io.in.ready
+    decoder.io.in.valid := fetcherDecoderQueue.io.deq.valid && !rasFlush
+    decoder.io.in.bits := fetcherDecoderQueue.io.deq.bits
+    rasAdaptor.io.in.valid := fetcherDecoderQueue.io.deq.valid && !rasFlush
+    rasAdaptor.io.in.bits := fetcherDecoderQueue.io.deq.bits
 
     // Wire output of Decoder & RASAdaptor to Plexer
     decodeRASPlexer.io.instFromDecoder <> decoder.io.out
     decodeRASPlexer.io.rasBundleFromAdaptor <> rasAdaptor.io.out
 
-    val decoderDispatcherQueue = Module(
+    val plexerDispatcherQueue = Module(
       new Queue(new DecodedInstWithRAS, entries = 2, pipe = false, flow = false)
     )
 
     // Dispatcher connections
     // Combine Inst and RasSP into the queue
     // Wire the Plexer output to Dispatcher
-    decoderDispatcherQueue.io.enq <> decodeRASPlexer.io.plexToDispatcher
-    dispatcher.io.instInput <> decoderDispatcherQueue.io.deq
+    plexerDispatcherQueue.io.enq <> decodeRASPlexer.io.plexToDispatcher
+    dispatcher.io.instInput <> plexerDispatcherQueue.io.deq
 
     // On RAS predict overwrite, set pc_overwrite for IF and reset ifQueue
-    
+
     // RAS Recovery
     rasAdaptor.io.recover := bruAdaptor.io.brUpdate.valid && bruAdaptor.io.brUpdate.mispredict
     rasAdaptor.io.recoverSP := bruAdaptor.io.brUpdate.rasSP
 
     val backendMispredict =
         bruAdaptor.io.brUpdate.valid && bruAdaptor.io.brUpdate.mispredict
-    decoderDispatcherQueue.reset := reset.asBool || backendMispredict
-    ifQueue.reset := reset.asBool || fetcher.io.pcOverwrite.valid
-    when(ifQueue.reset.asBool) {
-      printf(p"IF Queue Reset\n")
+    plexerDispatcherQueue.reset := reset.asBool || backendMispredict
+    fetcherDecoderQueue.reset := reset.asBool || fetcher.io.pcOverwrite.valid
+    when(fetcherDecoderQueue.reset.asBool) {
+        printf(p"IF Queue Reset\n")
     }
 
     // RAT and FreeList connections
@@ -174,51 +180,22 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
 
     dispatcher.io.freeListAccess.allocate <> freeList.io.allocate
 
-    // --- Backend Wiring ---
-
     // ROB connections
     rob.io.dispatch <> dispatcher.io.robOutput
 
     // Dispatch to Issue Buffers
+    // Connect Dispatcher to Router (Queue is internal to Router)
+    dispatchRouter.io.instInput <> dispatcher.io.instOutput
 
-    class DispatcherQueueEntry extends Bundle {
-        val inst = new DecodedInstBundle
-        val rasSP = UInt(RAS_WIDTH.W)
-        val robTag = UInt(ROB_WIDTH.W)
-    }
-
-    val dispatcherInstQueue = Module(
-      new Queue(
-        new DispatcherQueueEntry,
-        entries = 2,
-        pipe = false,
-        flow = false
-      )
-    )
-    dispatcherInstQueue.io.enq.valid := dispatcher.io.instOutput.valid
-    dispatcherInstQueue.io.enq.bits.inst := dispatcher.io.instOutput.bits.inst
-    dispatcherInstQueue.io.enq.bits.rasSP := dispatcher.io.instOutput.bits.rasSP
-    dispatcherInstQueue.io.enq.bits.robTag := rob.io.robTag
-    dispatcher.io.instOutput.ready := dispatcherInstQueue.io.enq.ready
-    
-    // DispatchRouting Module
-    val dispatchRouter = Module(new DispatchRouter)
-
-    dispatcherInstQueue.reset := reset.asBool || backendMispredict
-
-    // Router Inputs
-    dispatchRouter.io.instInput.valid := dispatcherInstQueue.io.deq.valid
-    dispatchRouter.io.instInput.bits.inst := dispatcherInstQueue.io.deq.bits.inst
-    dispatchRouter.io.instInput.bits.rasSP := dispatcherInstQueue.io.deq.bits.rasSP
-    dispatcherInstQueue.io.deq.ready := dispatchRouter.io.instInput.ready
-
-    dispatchRouter.io.robTagIn := dispatcherInstQueue.io.deq.bits.robTag
+    // Connect ROB Info to Router
+    dispatchRouter.io.robTagIn := rob.io.robTag
     dispatchRouter.io.robDispatchReady := rob.io.dispatch.ready
     dispatchRouter.io.rollbackValid := rob.io.rollback(0).valid
-    
+    dispatchRouter.io.flush := backendMispredict
+
     // PRF Ready for Dispatch Routing
-    prf.io.readyAddrs(0) := dispatcherInstQueue.io.deq.bits.inst.prs1
-    prf.io.readyAddrs(1) := dispatcherInstQueue.io.deq.bits.inst.prs2
+    prf.io.readyAddrs(0) := dispatchRouter.io.prfReadAddr(0)
+    prf.io.readyAddrs(1) := dispatchRouter.io.prfReadAddr(1)
     dispatchRouter.io.prfReady(0) := prf.io.isReady(0)
     dispatchRouter.io.prfReady(1) := prf.io.isReady(1)
 
@@ -228,6 +205,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     bruIB.io.in <> dispatchRouter.io.bruIB
     lsAdaptor.io.issueIn <> dispatchRouter.io.lsuIB
 
+    // # Backend
     // PRF Busy Table Update (Set Busy on Dispatch)
     prf.io.setBusy.valid := dispatchRouter.io.setBusy.valid
     prf.io.setBusy.bits := dispatchRouter.io.setBusy.bits
@@ -257,7 +235,6 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     lsAdaptor.io.prfRead.data1 := prf.io.read(4).data
     prf.io.read(5).addr := lsAdaptor.io.prfRead.addr2
     lsAdaptor.io.prfRead.data2 := prf.io.read(5).data
-    
 
     // Mult uses ports 6, 7
     prf.io.read(6).addr := multAdaptor.io.prfRead.addr1
@@ -287,7 +264,6 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     rob.io.broadcastInput.valid := broadcast.valid
     rob.io.broadcastInput.bits := broadcast.bits
 
-
     // PRF Busy Table Update (Set Ready on Broadcast)
     prf.io.setReady.valid := broadcast.valid
     prf.io.setReady.bits := broadcast.bits.pdst
@@ -307,6 +283,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     rob.io.brUpdate.bits.robTag := brUpdate.robTag
     rob.io.brUpdate.bits.mispredict := mispredict
 
+    // # Misprediction
     // Fetcher PC Overwrite (Misprediction or RAS Re-predict)
     when(mispredict) {
         fetcher.io.pcOverwrite.valid := true.B
@@ -339,7 +316,6 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     bruAdaptor.io.flush := flushCtrl
     lsAdaptor.io.flush := flushCtrl
 
-
     // Unused PRF readyAddrs
     prf.io.readyAddrs(2) := 0.U
     prf.io.readyAddrs(3) := 0.U
@@ -348,8 +324,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     prf.io.readyAddrs(6) := 0.U
     prf.io.readyAddrs(7) := 0.U
 
-    // --- Commit and Rollback logic for renaming ---
-
+    // # Commit & Rollback
     val commit = rob.io.commit
     val rollback = rob.io.rollback
 
@@ -362,14 +337,18 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         rat.rollback(i).bits.ldst := rollback(i).bits.ldst
         rat.rollback(i).bits.stalePdst := rollback(i).bits.stalePdst
 
-        freeList.io.rollbackFree(i).valid := rollback(i).valid && (rollback(i).bits.ldst =/= 0.U)
+        freeList.io.rollbackFree(i).valid := rollback(i).valid && (rollback(
+          i
+        ).bits.ldst =/= 0.U)
         freeList.io.rollbackFree(i).bits := rollback(i).bits.pdst
 
-        prf.io.clrBusy(i).valid := rollback(i).valid && (rollback(i).bits.pdst =/= 0.U)
+        prf.io.clrBusy(i).valid := rollback(i).valid && (rollback(
+          i
+        ).bits.pdst =/= 0.U)
         prf.io.clrBusy(i).bits := rollback(i).bits.pdst
     }
 
-    // --- Profiling ---
+    // # Debug & Profiling
     if (Configurables.Profiling.branchMispredictionRate) {
         val totalBranches = WireInit(0.U(32.W))
         val totalMispredicts = WireInit(0.U(32.W))
@@ -414,7 +393,8 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         val robBusy = rob.io.commit.valid
 
         val fetcherStallBuffer = fetcher.io.stallBuffer.get
-        val decoderStallDispatch = decoder.io.out.valid && !dispatcher.io.instInput.ready
+        val decoderStallDispatch =
+            decoder.io.out.valid && !dispatcher.io.instInput.ready
         val dispatcherStallFreeList = dispatcher.io.stallFreeList.get
         val dispatcherStallROB = dispatcher.io.stallROB.get
         val dispatcherStallIssue = dispatcher.io.stallIssue.get
@@ -426,7 +406,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         val issueMultStallPort = multIB.io.stallPort.get
         val lsuStallCommit = lsAdaptor.io.stallCommit.get
 
-        val fetchQueueDepth = ifQueue.io.count
+        val fetchQueueDepth = fetcherDecoderQueue.io.count
         val issueALUDepth = aluIB.io.count.get
         val issueBRUDepth = bruIB.io.count.get
         val issueMultDepth = multIB.io.count.get
@@ -475,21 +455,27 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         val countIssueMultSum = RegInit(0.U(64.W))
         val countLSUSum = RegInit(0.U(64.W))
         val countWritebackSum = RegInit(0.U(64.W))
-        
+
         val waitDepALUSum = RegInit(0.U(64.W))
         val waitDepBRUSum = RegInit(0.U(64.W))
         val waitDepMultSum = RegInit(0.U(64.W))
-        
+
         // Counter Updates
         when(fetcher.io.ifOut.fire) { countFetcherSum := countFetcherSum + 1.U }
         when(decoder.io.out.fire) { countDecoderSum := countDecoderSum + 1.U }
-        when(dispatcher.io.instOutput.fire) { countDispatcherSum := countDispatcherSum + 1.U }
+        when(dispatcher.io.instOutput.fire) {
+            countDispatcherSum := countDispatcherSum + 1.U
+        }
         when(aluIB.io.out.fire) { countIssueALUSum := countIssueALUSum + 1.U }
         when(bruIB.io.out.fire) { countIssueBRUSum := countIssueBRUSum + 1.U }
-        when(multIB.io.out.fire) { countIssueMultSum := countIssueMultSum + 1.U }
+        when(multIB.io.out.fire) {
+            countIssueMultSum := countIssueMultSum + 1.U
+        }
         // LSU entry: dispatch fires to LSQ
         when(lsAdaptor.io.issueIn.fire) { countLSUSum := countLSUSum + 1.U }
-        when(bc.io.broadcastOut.valid) { countWritebackSum := countWritebackSum + 1.U }
+        when(bc.io.broadcastOut.valid) {
+            countWritebackSum := countWritebackSum + 1.U
+        }
 
         waitDepALUSum := waitDepALUSum + aluIB.io.waitDepCount.get
         waitDepBRUSum := waitDepBRUSum + bruIB.io.waitDepCount.get
@@ -497,7 +483,9 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
 
         when(fetcherBusy) { fetcherBusyCount := fetcherBusyCount + 1.U }
         when(decoderBusy) { decoderBusyCount := decoderBusyCount + 1.U }
-        when(dispatcherBusy) { dispatcherBusyCount := dispatcherBusyCount + 1.U }
+        when(dispatcherBusy) {
+            dispatcherBusyCount := dispatcherBusyCount + 1.U
+        }
         when(issueALUBusy) { issueALUBusyCount := issueALUBusyCount + 1.U }
         when(issueBRUBusy) { issueBRUBusyCount := issueBRUBusyCount + 1.U }
         when(issueMultBusy) { issueMultBusyCount := issueMultBusyCount + 1.U }
@@ -508,18 +496,42 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         when(writebackBusy) { writebackBusyCount := writebackBusyCount + 1.U }
         when(robBusy) { robBusyCount := robBusyCount + 1.U }
 
-        when(fetcherStallBuffer) { fetcherStallBufferCount := fetcherStallBufferCount + 1.U }
-        when(decoderStallDispatch) { decoderStallDispatchCount := decoderStallDispatchCount + 1.U }
-        when(dispatcherStallFreeList) { dispatcherStallFreeListCount := dispatcherStallFreeListCount + 1.U }
-        when(dispatcherStallROB) { dispatcherStallROBCount := dispatcherStallROBCount + 1.U }
-        when(dispatcherStallIssue) { dispatcherStallIssueCount := dispatcherStallIssueCount + 1.U }
-        when(issueALUStallOperands) { issueALUStallOperandsCount := issueALUStallOperandsCount + 1.U }
-        when(issueALUStallPort) { issueALUStallPortCount := issueALUStallPortCount + 1.U }
-        when(issueBRUStallOperands) { issueBRUStallOperandsCount := issueBRUStallOperandsCount + 1.U }
-        when(issueBRUStallPort) { issueBRUStallPortCount := issueBRUStallPortCount + 1.U }
-        when(issueMultStallOperands) { issueMultStallOperandsCount := issueMultStallOperandsCount + 1.U }
-        when(issueMultStallPort) { issueMultStallPortCount := issueMultStallPortCount + 1.U }
-        when(lsuStallCommit) { lsuStallCommitCount := lsuStallCommitCount + 1.U }
+        when(fetcherStallBuffer) {
+            fetcherStallBufferCount := fetcherStallBufferCount + 1.U
+        }
+        when(decoderStallDispatch) {
+            decoderStallDispatchCount := decoderStallDispatchCount + 1.U
+        }
+        when(dispatcherStallFreeList) {
+            dispatcherStallFreeListCount := dispatcherStallFreeListCount + 1.U
+        }
+        when(dispatcherStallROB) {
+            dispatcherStallROBCount := dispatcherStallROBCount + 1.U
+        }
+        when(dispatcherStallIssue) {
+            dispatcherStallIssueCount := dispatcherStallIssueCount + 1.U
+        }
+        when(issueALUStallOperands) {
+            issueALUStallOperandsCount := issueALUStallOperandsCount + 1.U
+        }
+        when(issueALUStallPort) {
+            issueALUStallPortCount := issueALUStallPortCount + 1.U
+        }
+        when(issueBRUStallOperands) {
+            issueBRUStallOperandsCount := issueBRUStallOperandsCount + 1.U
+        }
+        when(issueBRUStallPort) {
+            issueBRUStallPortCount := issueBRUStallPortCount + 1.U
+        }
+        when(issueMultStallOperands) {
+            issueMultStallOperandsCount := issueMultStallOperandsCount + 1.U
+        }
+        when(issueMultStallPort) {
+            issueMultStallPortCount := issueMultStallPortCount + 1.U
+        }
+        when(lsuStallCommit) {
+            lsuStallCommitCount := lsuStallCommitCount + 1.U
+        }
 
         fetchQueueDepthSum := fetchQueueDepthSum + fetchQueueDepth
         issueALUDepthSum := issueALUDepthSum + issueALUDepth
@@ -553,7 +565,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         io.profiler.issueMultStallOperands.get := issueMultStallOperandsCount
         io.profiler.issueMultStallPort.get := issueMultStallPortCount
         io.profiler.lsuStallCommit.get := lsuStallCommitCount
-        
+
         io.profiler.fetchQueueDepth.get := fetchQueueDepthSum
         io.profiler.issueALUDepth.get := issueALUDepthSum
         io.profiler.issueBRUDepth.get := issueBRUDepthSum
@@ -569,11 +581,11 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         io.profiler.countIssueMult.get := countIssueMultSum
         io.profiler.countLSU.get := countLSUSum
         io.profiler.countWriteback.get := countWritebackSum
-        
+
         io.profiler.waitDepALU.get := waitDepALUSum
         io.profiler.waitDepBRU.get := waitDepBRUSum
         io.profiler.waitDepMult.get := waitDepMultSum
-        
+
         dontTouch(fetcherBusyCount)
         dontTouch(decoderBusyCount)
         dontTouch(dispatcherBusyCount)
@@ -615,7 +627,9 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         when(memory.io.cacheEvents.miss) { dcacheMisses := dcacheMisses + 1.U }
         when(icache.io.events.hit) { icacheHits := icacheHits + 1.U }
         when(icache.io.events.miss) { icacheMisses := icacheMisses + 1.U }
-        when(dramArb.io.out.valid && dramArb.io.out.ready) { dramAccesses := dramAccesses + 1.U }
+        when(dramArb.io.out.valid && dramArb.io.out.ready) {
+            dramAccesses := dramAccesses + 1.U
+        }
 
         io.profiler.dcacheHits.get := dcacheHits
         io.profiler.dcacheMisses.get := dcacheMisses

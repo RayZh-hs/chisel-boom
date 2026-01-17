@@ -8,7 +8,7 @@ import common.Configurables._
 case class CacheConfig(
     nSetsWidth: Int,
     nCacheLineWidth: Int,
-    idOffset: Int = 0 
+    idOffset: Int = 0
 )
 
 class CachePort extends Bundle {
@@ -27,11 +27,20 @@ class CacheEvents extends Bundle {
     val miss = Output(Bool())
 }
 
+/** A simple direct-mapped write-back cache
+  *
+  * @param conf
+  *   Cache configuration parameters
+  */
 class Cache(conf: CacheConfig) extends Module {
     val io = IO(new Bundle {
         val port = new CachePort
         val dram = new SimpleMemIO(
-          MemConfig(idWidth = 4, addrWidth = 32, dataWidth = (1 << conf.nCacheLineWidth) * 8)
+          MemConfig(
+            idWidth = 4,
+            addrWidth = 32,
+            dataWidth = (1 << conf.nCacheLineWidth) * 8
+          )
         )
         val events = new CacheEvents
     })
@@ -39,7 +48,7 @@ class Cache(conf: CacheConfig) extends Module {
     val nSets = 1 << conf.nSetsWidth
     val nBytes = 1 << conf.nCacheLineWidth
     val tagWidth = 32 - conf.nSetsWidth - conf.nCacheLineWidth
-    
+
     val WR_ID = (0 + conf.idOffset).U(4.W)
     val RD_ID = (1 + conf.idOffset).U(4.W)
 
@@ -54,7 +63,7 @@ class Cache(conf: CacheConfig) extends Module {
 
     val sIdle :: sTagCheck :: sDramAccess :: sReplayRead :: Nil = Enum(4)
     val state = RegInit(sIdle)
-    
+
     val reqReg = Reg(new Bundle {
         val addr = UInt(32.W)
         val wdata = UInt(32.W)
@@ -63,19 +72,25 @@ class Cache(conf: CacheConfig) extends Module {
     })
 
     val sentWrite = RegInit(false.B)
-    val sentRead  = RegInit(false.B)
+    val sentRead = RegInit(false.B)
     val gotWriteResp = RegInit(false.B)
-    val gotReadResp  = RegInit(false.B)
+    val gotReadResp = RegInit(false.B)
     val isRefill = RegInit(false.B)
 
     io.events.hit := false.B
     io.events.miss := false.B
 
     // Signals for Logic
-    val reg_index = reqReg.addr(conf.nCacheLineWidth + conf.nSetsWidth - 1, conf.nCacheLineWidth)
+    val reg_index = reqReg.addr(
+      conf.nCacheLineWidth + conf.nSetsWidth - 1,
+      conf.nCacheLineWidth
+    )
     val reg_tag = reqReg.addr(31, conf.nCacheLineWidth + conf.nSetsWidth)
     val reg_offset = reqReg.addr(conf.nCacheLineWidth - 1, 0)
-    val port_index = io.port.addr(conf.nCacheLineWidth + conf.nSetsWidth - 1, conf.nCacheLineWidth)
+    val port_index = io.port.addr(
+      conf.nCacheLineWidth + conf.nSetsWidth - 1,
+      conf.nCacheLineWidth
+    )
 
     val isReplay = (state === sReplayRead)
     val read_index = Mux(isReplay, reg_index, port_index)
@@ -116,7 +131,7 @@ class Cache(conf: CacheConfig) extends Module {
     io.port.rdata := 0.U
     io.dram.req.valid := false.B
     io.dram.req.bits := DontCare
-    io.dram.resp.ready := true.B 
+    io.dram.resp.ready := true.B
 
     when(state === sTagCheck) {
         val hit = tagRead.valid && (tagRead.tag === reg_tag)
@@ -125,8 +140,11 @@ class Cache(conf: CacheConfig) extends Module {
 
         when(hit) {
             when(reqReg.isWr) {
-                val wdataBytesSeq = Seq.tabulate(4)(i => reqReg.wdata(8 * i + 7, 8 * i))
-                mem_wdata := VecInit(Seq.fill(nBytes / 4)(wdataBytesSeq).flatten)
+                val wdataBytesSeq =
+                    Seq.tabulate(4)(i => reqReg.wdata(8 * i + 7, 8 * i))
+                mem_wdata := VecInit(
+                  Seq.fill(nBytes / 4)(wdataBytesSeq).flatten
+                )
                 val fullMaskUInt = reqReg.wmask << reg_offset
                 mem_wmask := VecInit(Seq.tabulate(nBytes)(i => fullMaskUInt(i)))
                 mem_wen := true.B
@@ -134,23 +152,28 @@ class Cache(conf: CacheConfig) extends Module {
                 tags_wdata := tagRead
                 tags_wdata.dirty := true.B
                 tags_wen := true.B
-                
+
                 io.port.respValid := true.B
                 state := sIdle
-            } .otherwise {
-                val aligned_offset = Cat(reg_offset(conf.nCacheLineWidth - 1, 2), 0.U(2.W))
+            }.otherwise {
+                val aligned_offset =
+                    Cat(reg_offset(conf.nCacheLineWidth - 1, 2), 0.U(2.W))
                 io.port.rdata := Cat(
-                    dataRead((aligned_offset + 3.U).asUInt),
-                    dataRead((aligned_offset + 2.U).asUInt),
-                    dataRead((aligned_offset + 1.U).asUInt),
-                    dataRead(aligned_offset.asUInt)
+                  dataRead((aligned_offset + 3.U).asUInt),
+                  dataRead((aligned_offset + 2.U).asUInt),
+                  dataRead((aligned_offset + 1.U).asUInt),
+                  dataRead(aligned_offset.asUInt)
                 )
                 io.port.respValid := true.B
                 state := sIdle
             }
-        } .otherwise {
+        }.otherwise {
             val dirty = tagRead.dirty && tagRead.valid
-            dramWriteBackAddr := Cat(tagRead.tag, reg_index, 0.U(conf.nCacheLineWidth.W))
+            dramWriteBackAddr := Cat(
+              tagRead.tag,
+              reg_index,
+              0.U(conf.nCacheLineWidth.W)
+            )
             dramReadAddr := Cat(reg_tag, reg_index, 0.U(conf.nCacheLineWidth.W))
             when(dirty) { dramWriteBackData := dataRead }
             sentWrite := !dirty
@@ -171,7 +194,7 @@ class Cache(conf: CacheConfig) extends Module {
             io.dram.req.bits.isWr := true.B
             io.dram.req.bits.mask := Fill(nBytes, 1.U(1.W))
             when(io.dram.req.ready) { sentWrite := true.B }
-        } .elsewhen(!sentRead) {
+        }.elsewhen(!sentRead) {
             io.dram.req.valid := true.B
             io.dram.req.bits.id := RD_ID
             io.dram.req.bits.addr := dramReadAddr
@@ -183,10 +206,14 @@ class Cache(conf: CacheConfig) extends Module {
         when(io.dram.resp.valid) {
             when(io.dram.resp.bits.id === WR_ID) { gotWriteResp := true.B }
             when(io.dram.resp.bits.id === RD_ID) {
-                mem_wdata := VecInit(Seq.tabulate(nBytes)(i => io.dram.resp.bits.data(8 * i + 7, 8 * i)))
+                mem_wdata := VecInit(
+                  Seq.tabulate(nBytes)(i =>
+                      io.dram.resp.bits.data(8 * i + 7, 8 * i)
+                  )
+                )
                 mem_wmask := VecInit(Seq.fill(nBytes)(true.B))
-                mem_wen   := true.B
-                
+                mem_wen := true.B
+
                 tags_wdata.valid := true.B
                 tags_wdata.tag := reg_tag
                 tags_wdata.dirty := false.B

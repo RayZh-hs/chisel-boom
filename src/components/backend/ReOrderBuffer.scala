@@ -17,6 +17,19 @@ class ROBEntry extends Bundle {
     val pc = if (Configurables.Elaboration.pcInROB) Some(UInt(32.W)) else None
 }
 
+/** ReOrder Buffer (ROB)
+  *
+  * Implements a circular buffer to track in-flight instructions, their
+  * destination registers, and their readiness to commit.
+  *
+  * Ensures that instructions commit in program order, handling branch
+  * mispredictions by rolling back to the correct state.
+  *
+  * @note
+  *   After commit 5659d00769bccc0fff695d90dcfb5df86f01653e, the ROB can now
+  *   rollback up to 2 entries per cycle to handle branch mispredictions more
+  *   efficiently.
+  */
 class ReOrderBuffer extends CycleAwareModule {
     val io = IO(new Bundle {
         val dispatch = Flipped(Decoupled(new DispatchToROBBundle))
@@ -28,9 +41,14 @@ class ReOrderBuffer extends CycleAwareModule {
             val mispredict = Bool()
         }))
         val rollback = Vec(2, Output(Valid(new RollbackBundle)))
-        val isRollingBack = if (Configurables.Profiling.RollbackTime) Some(Output(Bool())) else None
+        val isRollingBack =
+            if (Configurables.Profiling.RollbackTime) Some(Output(Bool()))
+            else None
         val head = Output(UInt(ROB_WIDTH.W))
-        val count = if (common.Configurables.Profiling.Utilization) Some(Output(UInt((ROB_WIDTH + 1).W))) else None
+        val count =
+            if (common.Configurables.Profiling.Utilization)
+                Some(Output(UInt((ROB_WIDTH + 1).W)))
+            else None
     })
 
     private val entries = Derived.ROB_COUNT
@@ -52,8 +70,9 @@ class ReOrderBuffer extends CycleAwareModule {
     val targetTail = Reg(UInt(ROB_WIDTH.W))
 
     val rollbackDone = tail === targetTail
-    
-    val canPop2 = isRollingBack && (tail =/= targetTail) && (tailPrev =/= targetTail)
+
+    val canPop2 =
+        isRollingBack && (tail =/= targetTail) && (tailPrev =/= targetTail)
     val canPop1 = isRollingBack && !rollbackDone && !canPop2
     val doPopTail = canPop1 || canPop2
 
@@ -70,7 +89,11 @@ class ReOrderBuffer extends CycleAwareModule {
     val isEmpty = ptrMatch && !maybeFull
 
     io.count.foreach { c =>
-        c := Mux(isFull, entries.U, Mux(tail >= head, tail - head, entries.U + tail - head))
+        c := Mux(
+          isFull,
+          entries.U,
+          Mux(tail >= head, tail - head, entries.U + tail - head)
+        )
     }
 
     val doEnq = io.dispatch.fire && !isRollingBack
@@ -79,7 +102,7 @@ class ReOrderBuffer extends CycleAwareModule {
     when(doEnq) { tail := tailNext }
     when(doDeq) { head := nextPtr(head) }
     when(canPop2) { tail := tailPrev2 }
-    .elsewhen(canPop1) { tail := tailPrev }
+        .elsewhen(canPop1) { tail := tailPrev }
 
     when(doEnq && !doDeq) {
         maybeFull := tailNext === head
@@ -135,6 +158,7 @@ class ReOrderBuffer extends CycleAwareModule {
 
     io.head := head
 
+    // Debugging Info
     when(doEnq) {
         if (Configurables.Elaboration.pcInROB) {
             printf(

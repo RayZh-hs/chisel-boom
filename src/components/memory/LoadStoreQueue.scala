@@ -15,6 +15,9 @@ class StoreQueueEntry extends Bundle {
     val dataTag   = UInt(PREG_WIDTH.W)
     val dataReady = Bool()
     val imm       = UInt(32.W)
+
+    val addrVal   = UInt(32.W)         // Base address value
+    val dataVal   = UInt(32.W)         // Store data value
     
     val addrComputed = Bool()          // Has the Adder run?
     val addrResolved = UInt(32.W)      // The final address (addrVal + imm)
@@ -74,9 +77,11 @@ class StoreQueue(val entries: Int) extends CycleAwareModule with QueueControlLog
             when(valids(i)) {
                 when(!buffer(i).addrReady && buffer(i).addrTag === tag) {
                     buffer(i).addrReady := true.B
+                    buffer(i).addrVal   := value
                 }
                 when(!buffer(i).dataReady && buffer(i).dataTag === tag) {
                     buffer(i).dataReady := true.B
+                    buffer(i).dataVal   := value
                 }
             }
         }

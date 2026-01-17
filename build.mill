@@ -16,26 +16,27 @@ object `package` extends RootModule with ScalaModule {
       ivy"org.chipsalliance:chisel-plugin_2.13.18:7.6.0"
     )
 
-    def sources = T.sources(millSourcePath / "src", millSourcePath / "synthesis")
+    def sources =
+        T.sources(millSourcePath / "src", millSourcePath / "synthesis")
 
     object test extends ScalaTests with TestModule.ScalaTest {
         def sources = T.sources(millSourcePath)
         def ivyDeps = Agg(
-            ivy"org.scalatest::scalatest:3.2.19"
+          ivy"org.scalatest::scalatest:3.2.19"
         )
         def testFramework = "org.scalatest.tools.Framework"
         def reportProp = T.input { System.getProperty("report", "false") }
 
         override def forkArgs: Target[Seq[String]] = T {
-          Seq("-Dreport=" + reportProp())
+            Seq("-Dreport=" + reportProp())
         }
 
         override def forkShellArgs: Target[Seq[String]] = T {
-          Seq("-Dreport=" + reportProp())
+            Seq("-Dreport=" + reportProp())
         }
 
         override def forkCmdArgs: Target[Seq[String]] = T {
-          Seq("-Dreport=" + reportProp())
+            Seq("-Dreport=" + reportProp())
         }
     }
 }
