@@ -32,7 +32,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     val rasAdaptor = Module(new RASAdaptor)
     val decodeRASPlexer = Module(new DispatchRASPlexer)
     val dispatcher = Module(new InstDispatcher)
-    val rat = Module(new RegisterAliasTable(3, 1, 1))
+    val rat = Module(new RegisterAliasTable(3, 1, 2))
     val freeList = Module(new FreeList(Derived.PREG_COUNT, 32))
     val icache = Module(
         new ICache(CacheConfig(nSetsWidth = 6, nCacheLineWidth = 4, idOffset = 2))
@@ -213,7 +213,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     val src2Ready = prf.io.isReady(1)
 
     // ALU Issue Buffer Enqueue
-    aluIB.io.in.valid := instOutput.valid && isALU && !rob.io.rollback.valid
+    aluIB.io.in.valid := instOutput.valid && isALU && !rob.io.rollback(0).valid
     aluIB.io.in.bits.robTag := instOutput.bits.robTag
     aluIB.io.in.bits.pdst := instOutput.bits.inst.pdst
     aluIB.io.in.bits.src1 := instOutput.bits.inst.prs1
@@ -228,7 +228,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     }
 
     // BRU Issue Buffer Enqueue
-    bruIB.io.in.valid := instOutput.valid && isBRU && !rob.io.rollback.valid
+    bruIB.io.in.valid := instOutput.valid && isBRU && !rob.io.rollback(0).valid
     bruIB.io.in.bits.robTag := instOutput.bits.robTag
     bruIB.io.in.bits.pdst := instOutput.bits.inst.pdst
     bruIB.io.in.bits.src1 := instOutput.bits.inst.prs1
@@ -248,7 +248,7 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     }
 
     // LSU Issue Buffer Enqueue
-    lsAdaptor.io.issueIn.valid := instOutput.valid && isLSU && !rob.io.rollback.valid
+    lsAdaptor.io.issueIn.valid := instOutput.valid && isLSU && !rob.io.rollback(0).valid
     lsAdaptor.io.issueIn.bits.robTag := instOutput.bits.robTag
     lsAdaptor.io.issueIn.bits.pdst := instOutput.bits.inst.pdst
     lsAdaptor.io.issueIn.bits.src1 := instOutput.bits.inst.prs1
@@ -391,15 +391,17 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     freeList.io.free.bits := rob.io.commit.bits.stalePdst
     commit.ready := freeList.io.free.ready
 
-    rat.rollback(0).valid := rollback.valid
-    rat.rollback(0).bits.ldst := rollback.bits.ldst
-    rat.rollback(0).bits.stalePdst := rollback.bits.stalePdst
+    for (i <- 0 until 2) {
+        rat.rollback(i).valid := rollback(i).valid
+        rat.rollback(i).bits.ldst := rollback(i).bits.ldst
+        rat.rollback(i).bits.stalePdst := rollback(i).bits.stalePdst
 
-    freeList.io.rollbackFree.valid := rollback.valid && (rollback.bits.ldst =/= 0.U)
-    freeList.io.rollbackFree.bits := rollback.bits.pdst
+        freeList.io.rollbackFree(i).valid := rollback(i).valid && (rollback(i).bits.ldst =/= 0.U)
+        freeList.io.rollbackFree(i).bits := rollback(i).bits.pdst
 
-    prf.io.clrBusy.valid := rollback.valid && (rollback.bits.pdst =/= 0.U)
-    prf.io.clrBusy.bits := rollback.bits.pdst
+        prf.io.clrBusy(i).valid := rollback(i).valid && (rollback(i).bits.pdst =/= 0.U)
+        prf.io.clrBusy(i).bits := rollback(i).bits.pdst
+    }
 
     // --- Profiling ---
     if (Configurables.Profiling.branchMispredictionRate) {

@@ -34,7 +34,7 @@ class PhysicalRegisterFile(
         // Busy Table Interface
         val setBusy = Flipped(Valid(UInt(log2Ceil(numRegs).W)))
         val setReady = Flipped(Valid(UInt(log2Ceil(numRegs).W)))
-        val clrBusy = Flipped(Valid(UInt(log2Ceil(numRegs).W)))
+        val clrBusy = Vec(2, Flipped(Valid(UInt(log2Ceil(numRegs).W))))
         val isReady = Vec(numReadPorts, Output(Bool()))
         val readyAddrs = Vec(numReadPorts, Input(UInt(log2Ceil(numRegs).W)))
     })
@@ -74,8 +74,11 @@ class PhysicalRegisterFile(
     when(io.setReady.valid) {
         busyTable(io.setReady.bits) := false.B
     }
-    when(io.clrBusy.valid) {
-        busyTable(io.clrBusy.bits) := false.B
+    when(io.clrBusy(0).valid) {
+        busyTable(io.clrBusy(0).bits) := false.B
+    }
+    when(io.clrBusy(1).valid) {
+        busyTable(io.clrBusy(1).bits) := false.B
     }
     when(io.setBusy.valid) {
         busyTable(io.setBusy.bits) := true.B
