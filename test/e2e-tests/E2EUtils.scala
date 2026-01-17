@@ -252,7 +252,7 @@ object E2EUtils {
         var outputBuffer = scala.collection.mutable.ArrayBuffer[BigInt]()
         var done = false
 
-        val batchSize = 1
+        val batchSize = 4096
 
         while (!done && cycle < maxCycles) {
             debugCallback(cycle)
