@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import common._
 import utility.WallaceTree
+import common.Configurables.MMIOAddress._
 
 object MduFunc {
     // Multiplication
@@ -107,14 +108,13 @@ class MulDivUnit extends Module {
             // Setup Division
             val divBy0 = (b === 0.U)
             val signedOverflow =
-                (div_is_signed) &&
-                (a === "h80000000".U) && (b === "hFFFFFFFF".U)
+                (div_is_signed) && (a === PUT_ADDR.U) && (b === EXIT_ADDR.U)
 
             when(divBy0) {
-                rRes := Mux(isDiv, "hFFFFFFFF".U, a)
+                rRes := Mux(isDiv, EXIT_ADDR.U, a)
                 state := sDone
             }.elsewhen(signedOverflow) {
-                rRes := Mux(isDiv, "h80000000".U, 0.U)
+                rRes := Mux(isDiv, PUT_ADDR.U, 0.U)
                 state := sDone
             }.otherwise {
                 // Initialize iterative division
@@ -137,7 +137,11 @@ class MulDivUnit extends Module {
         // Wait for Wallace Tree pipeline
         when(cnt === 0.U) {
             // Select Lower or Upper 32 bits
-            rRes := Mux(rFn === MduFunc.MUL, wallace_corrected(31, 0), wallace_corrected(63, 32))
+            rRes := Mux(
+              rFn === MduFunc.MUL,
+              wallace_corrected(31, 0),
+              wallace_corrected(63, 32)
+            )
             state := sDone
         }.otherwise {
             cnt := cnt - 1.U

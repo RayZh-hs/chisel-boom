@@ -11,4 +11,4 @@ all MMIO devices have the highest bit of the address set to 1, which means the a
 ## MMIO Device Code
 
 - `0x8000_0000`: Print Device
-- `0x8000_0008`: Exit Device
+- `0xFFFF_FFFF`: Exit Device

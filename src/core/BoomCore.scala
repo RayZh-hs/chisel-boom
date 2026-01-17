@@ -56,7 +56,9 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     // val lsu = Module(new LoadStoreUnit) // Removed: Replaced by Cache+DRAM inside MemorySubsystem
     val printDevice = Module(new PrintDevice)
     val exitDevice = Module(new ExitDevice)
-    val mmio = Module(new MMIORouter(Seq("h80000000".U, "hFFFFFFFF".U)))
+    val mmio = Module(
+      new MMIORouter(Seq(MMIOAddress.PUT_ADDR.U, MMIOAddress.EXIT_ADDR.U))
+    )
     val memory = Module(new MemorySubsystem)
     val lsAdaptor = Module(new LoadStoreAdaptor)
 

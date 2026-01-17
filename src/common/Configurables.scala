@@ -62,6 +62,12 @@ object Configurables {
         }
     }
 
+    // MMIO Addresses
+    object MMIOAddress {
+        val EXIT_ADDR = "hFFFFFFFF" // Write byte to this address to exit the program
+        val PUT_ADDR  = "h80000000" // Write word to this address to output an integer
+    }
+
     // Derived constants from the above
     object Derived {
         val PREG_COUNT = 1 << PREG_WIDTH
