@@ -10,12 +10,14 @@ OUTPUT_FILENAME = "Master.profile"
 class ProfileAggregator:
     def __init__(self):
         # Accumulators for raw counts
+        self.testcases_count = 0
         self.total_branches = 0
         self.total_mispredictions = 0
         self.total_instructions = 0
         self.total_pcs_cycles = 0
         self.total_rollback_events = 0
         self.total_rollback_cycles = 0
+        self.total_ipc = 0.0
         
         # Speculation stats
         self.spec_dispatched = 0
@@ -67,7 +69,10 @@ class ProfileAggregator:
 
         current_section = None
         # Context trackers for hierarchical utilization parsing
-        last_util_parent = None 
+        last_util_parent = None
+
+        # Count "PROFILING REPORT" occurrences to track number of reports in file
+        self.testcases_count += sum(1 for line in lines if "PROFILING REPORT" in line)
         
         # We need to track cycles per report to weight queue depths correctly
         report_pcs_cycles = 0 
@@ -121,6 +126,9 @@ class ProfileAggregator:
                     val = int(self.parse_line_value(line))
                     self.total_pcs_cycles += val
                     report_pcs_cycles = val
+                elif "IPC:" in line:
+                    val = float(self.parse_line_value(line))
+                    self.total_ipc += val
 
             elif current_section == "ROLLBACK":
                 if "Total Rollback Events:" in line:
@@ -217,17 +225,20 @@ class ProfileAggregator:
         
         # --- Branch ---
         lines.append("Branch Misprediction Rate:")
-        lines.append(f"  Total Branches:       {self.total_branches}")
-        lines.append(f"  Total Mispredictions: {self.total_mispredictions}")
+        lines.append(f"  Total Branches:        {self.total_branches}")
+        lines.append(f"  Total Mispredictions:  {self.total_mispredictions}")
         rate = (self.total_mispredictions / self.total_branches * 100) if self.total_branches > 0 else 0
-        lines.append(f"  Misprediction Rate:   {rate:.2f}%")
+        lines.append(f"  Misprediction Rate:    {rate:.2f}%")
         
         # --- IPC ---
         lines.append("IPC Performance:")
-        lines.append(f"  Total Instructions:   {self.total_instructions}")
-        lines.append(f"  Total PCS Cycles:     {self.total_pcs_cycles}")
+        lines.append(f"  Total Instructions:    {self.total_instructions}")
+        lines.append(f"  Total PCS Cycles:      {self.total_pcs_cycles}")
+        # This measures opts out smaller testcases since large testcases dominate the cycle count
         ipc = (self.total_instructions / self.total_pcs_cycles) if self.total_pcs_cycles > 0 else 0
-        lines.append(f"  IPC:                  {ipc:.4f}")
+        lines.append(f"  Weighted IPC:          {ipc:.4f} (ignore)")
+        average_ipc = (self.total_ipc / self.testcases_count) if self.testcases_count > 0 else 0.0
+        lines.append(f"  Average IPC:           {average_ipc:.4f}")
         
         # --- Rollback ---
         lines.append("Rollback Performance:")
@@ -235,6 +246,30 @@ class ProfileAggregator:
         lines.append(f"  Total Rollback Cycles: {self.total_rollback_cycles}")
         avg_rb = (self.total_rollback_cycles / self.total_rollback_events) if self.total_rollback_events > 0 else 0
         lines.append(f"  Average Rollback Time: {avg_rb:.2f} cycles")
+        
+        # --- Queue Depth ---
+        lines.append("Average Queue/Buffer Depth:")
+        for label, data in self.queue_depths.items():
+            avg = (data['weighted_sum'] / data['total_cycles']) if data['total_cycles'] > 0 else 0
+            lines.append(f"  {(label + ':'):<12}           {avg:.2f}")
+
+        # --- Speculation ---
+        lines.append("Speculation Stats:")
+        lines.append(f"  Total Dispatched:      {self.spec_dispatched}")
+        lines.append(f"  Total Retired:         {self.spec_retired}")
+        lines.append(f"  Squashed Instructions: {self.spec_squashed}")
+        
+        # Add summary stats usually found at bottom of spec
+        # (Writeback and ROB-Commit percentages often repeated here)
+        if "Writeback" in self.utilization_stats:
+             d = self.utilization_stats["Writeback"]
+             p = (d['num'] / d['den'] * 100) if d['den'] > 0 else 0
+             lines.append(f"  Writeback:            {d['num']:>8} / {d['den']:>8} ({p:.2f}%)")
+        
+        if "ROB-Commit" in self.utilization_stats:
+             d = self.utilization_stats["ROB-Commit"]
+             p = (d['num'] / d['den'] * 100) if d['den'] > 0 else 0
+             lines.append(f"  ROB-Commit:           {d['num']:>8} / {d['den']:>8} ({p:.2f}%)")
         
         # --- Stage Utilization ---
         lines.append("Stage Utilization:")
@@ -260,70 +295,13 @@ class ProfileAggregator:
                 avg_tp = data['extras']['tp_accum'] / num
                 extra_str = f" [TP: {avg_tp:.2f} instr/busy-cycle]"
             
-            lines.append(f"  {stage:<10}: {num:>8} / {den:>8} ({pct:.2f}%) [Avg Util: {avg_util:.2f}%]{extra_str}")
+            lines.append(f"  {stage:<18}: {num:>8} / {den:>8} ({pct:>6.2f}%) [Avg Util: {avg_util:>6.2f}%]{extra_str}")
             
             for sub, sub_data in data['subs'].items():
                 s_num = sub_data['num']
                 s_den = sub_data['den']
                 s_pct = (s_num / s_den * 100) if s_den > 0 else 0
-                lines.append(f"    {sub:<16}: {s_num:>8} / {s_den:>8} ({s_pct:.2f}%)")
-                
-                # Special handling for Latency lines
-                if sub_data['extras']['lat_accum'] > 0 and s_num > 0:
-                     # Calculate avg latency (only print if we have data)
-                     # Note: In the source log, Avg Dep Latency is a separate line, 
-                     # but in our dict it's attached to the parent.
-                     # Wait, in the log "Avg Dep Latency" is a sibling of "Stall-Operands" 
-                     # strictly speaking, but logically part of the Issue block.
-                     # The structure in the log is:
-                     #   Issue-ALU
-                     #     Stall-Operands
-                     #     Stall-Port
-                     #     Avg Dep Latency
-                     pass
-
-            # Explicitly checking for "Avg Dep Latency" style lines which were parsed as subs
-            # If the parser treated "Avg Dep Latency" as a sub-stat (which it might have),
-            # we need to print it. 
-            # Actually, my parser looks for `key : num / den`. 
-            # "Avg Dep Latency : 30.27 cycles/instr" does NOT match num/den regex.
-            # So it wasn't caught in 'subs'.
-            
-            # Let's fix the Latency printing. 
-            # In the parser, if I didn't catch it as a fraction, I didn't store it?
-            # Correct. The current parser only stores fraction lines in `subs`.
-            # I need to handle "Avg Dep Latency" specifically.
-            # However, looking at the inputs, Latency is usually its own line. 
-            # I will skip recreating it perfectly if I didn't store it.
-            # *Correction*: The parser logic above misses "Avg Dep Latency" because 
-            # it expects `num / den`.
-            # Let's trust that for a summary, the main Utilization %s are the most critical.
-            # If "Avg Dep Latency" is crucial, the parser needs a tweak.
-            # Given the constraints, I will add a special check for Avg Dep Latency in the loop below.
-        
-        # --- Queue Depth ---
-        lines.append("Average Queue/Buffer Depth:")
-        for label, data in self.queue_depths.items():
-            avg = (data['weighted_sum'] / data['total_cycles']) if data['total_cycles'] > 0 else 0
-            lines.append(f"  {label:<12}: {avg:.2f}")
-
-        # --- Speculation ---
-        lines.append("Speculation Stats:")
-        lines.append(f"  Total Dispatched    : {self.spec_dispatched}")
-        lines.append(f"  Total Retired       : {self.spec_retired}")
-        lines.append(f"  Squashed Instructions: {self.spec_squashed}")
-        
-        # Add summary stats usually found at bottom of spec
-        # (Writeback and ROB-Commit percentages often repeated here)
-        if "Writeback" in self.utilization_stats:
-             d = self.utilization_stats["Writeback"]
-             p = (d['num'] / d['den'] * 100) if d['den'] > 0 else 0
-             lines.append(f"  Writeback   : {d['num']:>8} / {d['den']:>8} ({p:.2f}%)")
-        
-        if "ROB-Commit" in self.utilization_stats:
-             d = self.utilization_stats["ROB-Commit"]
-             p = (d['num'] / d['den'] * 100) if d['den'] > 0 else 0
-             lines.append(f"  ROB-Commit  : {d['num']:>8} / {d['den']:>8} ({p:.2f}%)")
+                lines.append(f"    {sub:<16}: {s_num:>8} / {s_den:>8} ({s_pct:>6.2f}%)")
              
         lines.append("=========================================================")
         
