@@ -5,7 +5,12 @@ import chisel3.util._
 import common._
 import utility.CycleAwareModule
 
+/** Branch Unit
+  *
+  * Detects branch mispredictions and corrects branch targets.
+  */
 class BranchUnit extends CycleAwareModule {
+    // IO Definition
     val io = IO(new Bundle {
         val inA = Input(UInt(32.W)) // rs1
         val inB = Input(UInt(32.W)) // rs2
@@ -27,7 +32,7 @@ class BranchUnit extends CycleAwareModule {
     val target =
         Mux(io.bruOp === BRUOpType.JALR, targetRaw & ~1.U(32.W), targetRaw)
 
-    // Shared adder for result calculation (NPC)
+    // Shared adder for result calculation
     val npc = io.pc + 4.U
     val result = Mux(io.bruOp === BRUOpType.AUIPC, targetRaw, npc)
 
@@ -58,5 +63,4 @@ class BranchUnit extends CycleAwareModule {
     io.taken := taken
     io.target := target
     io.result := result
-
 }

@@ -4,6 +4,10 @@ import chisel3._
 import chisel3.util._
 import common._
 
+/** Arithmetic Logic Unit (ALU)
+  *
+  * Performs arithmetic and logical operations based on the ALU operation code.
+  */
 class ArithmeticLogicUnit extends Module {
     val io = IO(new Bundle {
         val inA = Input(UInt(32.W))

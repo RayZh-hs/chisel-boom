@@ -5,6 +5,15 @@ import chisel3.util._
 import common._
 import common.Configurables._
 
+/** Load Store Unit
+  *
+  * The Load Store Unit (LSU) handles load and store requests to a simple
+  * synchronous memory.
+  *
+  * @note
+  *   It has been replaced by the MemorySubsystem module.
+  */
+@deprecated("Use MemorySubsystem with Cache and MMIO instead")
 class LoadStoreUnit extends Module {
     val io = IO(Flipped(new MemoryRequest))
 

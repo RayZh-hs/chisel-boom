@@ -8,14 +8,24 @@ import components.structures._
 import components.structures.SequentialBufferEntry
 import components.structures.LoadStoreInfo
 
+/** Dispatch Router
+  *
+  * Routes decoded instructions to the appropriate Issue Buffer. Used to handle
+  * the wiring from Dispatcher to multiple IBs.
+  *
+  * Fully combinational, does not consume a cycle.
+  */
 class DispatchRouter extends Module {
+    // IO Definition
     val io = IO(new Bundle {
         val instInput = Flipped(Decoupled(new DecodedInstWithRAS))
         val robTagIn = Input(UInt(ROB_WIDTH.W))
         val robDispatchReady = Input(Bool())
         val rollbackValid = Input(Bool())
+        val flush = Input(Bool())
 
         val prfReady = Input(Vec(2, Bool()))
+        val prfReadAddr = Output(Vec(2, UInt(PREG_WIDTH.W)))
 
         // Buffer Outputs
         val aluIB = Decoupled(new IssueBufferEntry(new ALUInfo))
@@ -27,9 +37,41 @@ class DispatchRouter extends Module {
         val setBusy = Valid(UInt(PREG_WIDTH.W))
     })
 
-    val inst = io.instInput.bits.inst
-    val valid = io.instInput.valid
-    
+    // Internal Queue used to buffer instructions between Dispatcher and IBs
+    class DispatcherQueueEntry extends Bundle {
+        val inst = new DecodedInstBundle
+        val rasSP = UInt(RAS_WIDTH.W)
+        val robTag = UInt(ROB_WIDTH.W)
+    }
+
+    val queue = Module(
+      new Queue(
+        new DispatcherQueueEntry,
+        entries = 2,
+        pipe = false,
+        flow = false
+      )
+    )
+
+    // Wiring Input -> Queue
+    queue.io.enq.valid := io.instInput.valid
+    queue.io.enq.bits.inst := io.instInput.bits.inst
+    queue.io.enq.bits.rasSP := io.instInput.bits.rasSP
+    queue.io.enq.bits.robTag := io.robTagIn
+    io.instInput.ready := queue.io.enq.ready
+
+    // Reset queue on flush
+    queue.reset := reset.asBool || io.flush
+
+    // Wiring Queue -> Logic
+    val inst = queue.io.deq.bits.inst
+    val valid = queue.io.deq.valid
+    val rasSP = queue.io.deq.bits.rasSP
+    val robTagFromQueue = queue.io.deq.bits.robTag
+
+    io.prfReadAddr(0) := inst.prs1
+    io.prfReadAddr(1) := inst.prs2
+
     // Decode Unit Types
     val isALU = inst.fUnitType === FunUnitType.ALU
     val isMULT = inst.fUnitType === FunUnitType.MULT
@@ -39,7 +81,7 @@ class DispatchRouter extends Module {
     // Common signals
     val src1Ready = io.prfReady(0)
     val src2Ready = io.prfReady(1)
-    val robTag = io.robTagIn
+    val robTag = robTagFromQueue
 
     val readyForDispatch = io.robDispatchReady && !io.rollbackValid
 
@@ -88,7 +130,7 @@ class DispatchRouter extends Module {
     io.bruIB.bits.info.pc := inst.pc
     io.bruIB.bits.info.predict := inst.predict
     io.bruIB.bits.info.predictedTarget := inst.predictedTarget
-    io.bruIB.bits.info.rasSP := io.instInput.bits.rasSP // Use RAS from Bundle
+    io.bruIB.bits.info.rasSP := rasSP // Use RAS from Queue
     if (Configurables.Elaboration.pcInIssueBuffer) {
         io.bruIB.bits.pc.get := inst.pc
     }
@@ -107,7 +149,7 @@ class DispatchRouter extends Module {
       inst.isStore,
       src2Ready,
       true.B
-    ) 
+    )
     io.lsuIB.bits.info.opWidth := inst.opWidth
     io.lsuIB.bits.info.isStore := inst.isStore
     io.lsuIB.bits.info.isUnsigned := inst.isUnsigned
@@ -118,15 +160,20 @@ class DispatchRouter extends Module {
 
     // Determine readiness
     // Valid if target buffer is ready && rob dispatch ready
-    val targetReady = Mux(isALU, io.aluIB.ready,
-        Mux(isMULT, io.multIB.ready,
-        Mux(isBRU, io.bruIB.ready,
-        Mux(isLSU, io.lsuIB.ready, false.B))))
-    
-    io.instInput.ready := targetReady && readyForDispatch
+    val targetReady = Mux(
+      isALU,
+      io.aluIB.ready,
+      Mux(
+        isMULT,
+        io.multIB.ready,
+        Mux(isBRU, io.bruIB.ready, Mux(isLSU, io.lsuIB.ready, false.B))
+      )
+    )
+
+    queue.io.deq.ready := targetReady && readyForDispatch
 
     // Set Busy
-    io.setBusy.valid := io.instInput.valid && io.instInput.ready && inst.pdst =/= 0.U
+    io.setBusy.valid := valid && queue.io.deq.ready && inst.pdst =/= 0.U
     io.setBusy.bits := inst.pdst
 
 }

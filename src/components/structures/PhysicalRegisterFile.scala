@@ -7,12 +7,26 @@ import common.Configurables._
 import common.RegBusyStatus
 import utility.CycleAwareModule
 
+/** Physical Register File
+  *
+  * Fully parametized Physical Register File with multiple read and write ports.
+  *
+  * @param numRegs
+  *   Number of physical registers
+  * @param numReadPorts
+  *   Number of read ports
+  * @param numWritePorts
+  *   Number of write ports
+  * @param dataWidth
+  *   Width of each register in bits (32 for RV32)
+  */
 class PhysicalRegisterFile(
     numRegs: Int,
     numReadPorts: Int,
     numWritePorts: Int,
     dataWidth: Int
 ) extends CycleAwareModule {
+    // IO Definition
     val io = IO(new Bundle {
         // Read Ports
         val read = Vec(

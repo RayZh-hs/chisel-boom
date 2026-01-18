@@ -9,7 +9,7 @@ object Configurables {
     val MEM_WIDTH  = 14     // 16KB data memory (8-bit per slot)
     val RAS_WIDTH  = 3      // Return Address Stack size
     
-    val MUL_LATENCY = 2    // Multiplier latency in cycles
+    val WALLACE_RDEPTH = 6  // Number of reduction iterations per Wallace tree layer
 
     // Configuration for debug output.
     // Set to true to enable printf outputs in the simulation by default;
@@ -60,6 +60,12 @@ object Configurables {
             printOnMemAccess = false
             cycleAwareness   = false
         }
+    }
+
+    // MMIO Addresses
+    object MMIOAddress {
+        val EXIT_ADDR = "hFFFFFFFF" // Write byte to this address to exit the program
+        val PUT_ADDR  = "h80000000" // Write word to this address to output an integer
     }
 
     // Derived constants from the above

@@ -319,7 +319,7 @@ object E2EUtils {
             println("                    PROFILING REPORT                     ")
             println("=========================================================")
 
-            val p = dut.io.profiler 
+            val p = dut.io.profiler
             if (common.Configurables.Profiling.branchMispredictionRate) {
                 val total = p.totalBranches.get.peek().litValue
                 val mispred = p.totalMispredicts.get.peek().litValue
@@ -338,9 +338,12 @@ object E2EUtils {
                 val insts = p.totalInstructions.get.peek().litValue
                 val cycles = p.totalCycles.get.peek().litValue
                 // Post cold start cycles (free list initialization)
-                val pcsCycles = cycles - 32 + 4 // 32 init cycles, among which 4 frontend working cycles
-                val ipc = if (pcsCycles > 0) insts.toDouble / pcsCycles.toDouble else 0.0
-                
+                val pcsCycles =
+                    cycles - 32 + 4 // 32 init cycles, among which 4 frontend working cycles
+                val ipc =
+                    if (pcsCycles > 0) insts.toDouble / pcsCycles.toDouble
+                    else 0.0
+
                 println(f"IPC Performance:")
                 println(f"  Total Instructions:   $insts")
                 println(f"  Total PCS Cycles:     $pcsCycles")
@@ -350,8 +353,9 @@ object E2EUtils {
             if (common.Configurables.Profiling.RollbackTime) {
                 val events = p.totalRollbackEvents.get.peek().litValue
                 val cycles = p.totalRollbackCycles.get.peek().litValue
-                val avg = if (events > 0) cycles.toDouble / events.toDouble else 0.0
-                
+                val avg =
+                    if (events > 0) cycles.toDouble / events.toDouble else 0.0
+
                 println(f"Rollback Performance:")
                 println(f"  Total Rollback Events: $events")
                 println(f"  Total Rollback Cycles: $cycles")
@@ -382,49 +386,78 @@ object E2EUtils {
                 val countIssueMult = p.countIssueMult.get.peek().litValue
                 val countLSU = p.countLSU.get.peek().litValue
                 val countWriteback = p.countWriteback.get.peek().litValue
-                
+
                 // Dependency Waits
                 val waitDepALU = p.waitDepALU.get.peek().litValue
                 val waitDepBRU = p.waitDepBRU.get.peek().litValue
                 val waitDepMult = p.waitDepMult.get.peek().litValue
 
                 // Fetch new stall signals
-                val fetcherStallBuffer = p.fetcherStallBuffer.get.peek().litValue
-                val decoderStallDispatch = p.decoderStallDispatch.get.peek().litValue
-                val dispatcherStallFreeList = p.dispatcherStallFreeList.get.peek().litValue
-                val dispatcherStallROB = p.dispatcherStallROB.get.peek().litValue
-                val dispatcherStallIssue = p.dispatcherStallIssue.get.peek().litValue
-                val issueALUStallOperands = p.issueALUStallOperands.get.peek().litValue
+                val fetcherStallBuffer =
+                    p.fetcherStallBuffer.get.peek().litValue
+                val decoderStallDispatch =
+                    p.decoderStallDispatch.get.peek().litValue
+                val dispatcherStallFreeList =
+                    p.dispatcherStallFreeList.get.peek().litValue
+                val dispatcherStallROB =
+                    p.dispatcherStallROB.get.peek().litValue
+                val dispatcherStallIssue =
+                    p.dispatcherStallIssue.get.peek().litValue
+                val issueALUStallOperands =
+                    p.issueALUStallOperands.get.peek().litValue
                 val issueALUStallPort = p.issueALUStallPort.get.peek().litValue
-                val issueBRUStallOperands = p.issueBRUStallOperands.get.peek().litValue
+                val issueBRUStallOperands =
+                    p.issueBRUStallOperands.get.peek().litValue
                 val issueBRUStallPort = p.issueBRUStallPort.get.peek().litValue
-                val issueMultStallOperands = p.issueMultStallOperands.get.peek().litValue
-                val issueMultStallPort = p.issueMultStallPort.get.peek().litValue
+                val issueMultStallOperands =
+                    p.issueMultStallOperands.get.peek().litValue
+                val issueMultStallPort =
+                    p.issueMultStallPort.get.peek().litValue
                 val lsuStallCommit = p.lsuStallCommit.get.peek().litValue
 
                 def formatUtil(name: String, busy: BigInt): Unit = {
-                    val rate = if (cycle > 0) (busy.toDouble / cycle.toDouble) * 100.0 else 0.0
+                    val rate =
+                        if (cycle > 0) (busy.toDouble / cycle.toDouble) * 100.0
+                        else 0.0
                     println(f"  $name%-12s: $busy%8d / $cycle%8d ($rate%.2f%%)")
                 }
-                
-                def formatUtilWithThroughput(name: String, busy: BigInt, processed: BigInt): Unit = {
-                    val rate = if (cycle > 0) (busy.toDouble / cycle.toDouble) * 100.0 else 0.0
-                    val throughput = if (busy > 0) processed.toDouble / busy.toDouble else 0.0
-                    println(f"  $name%-12s: $busy%8d / $cycle%8d ($rate%.2f%%) [TP: $throughput%.2f instr/busy-cycle]")
+
+                def formatUtilWithThroughput(
+                    name: String,
+                    busy: BigInt,
+                    processed: BigInt
+                ): Unit = {
+                    val rate =
+                        if (cycle > 0) (busy.toDouble / cycle.toDouble) * 100.0
+                        else 0.0
+                    val throughput =
+                        if (busy > 0) processed.toDouble / busy.toDouble
+                        else 0.0
+                    println(
+                      f"  $name%-12s: $busy%8d / $cycle%8d ($rate%.2f%%) [TP: $throughput%.2f instr/busy-cycle]"
+                    )
                 }
 
                 def formatSubUtil(name: String, busy: BigInt): Unit = {
-                    val rate = if (cycle > 0) (busy.toDouble / cycle.toDouble) * 100.0 else 0.0
-                    println(f"    $name%-18s: $busy%8d / $cycle%8d ($rate%.2f%%)")
+                    val rate =
+                        if (cycle > 0) (busy.toDouble / cycle.toDouble) * 100.0
+                        else 0.0
+                    println(
+                      f"    $name%-18s: $busy%8d / $cycle%8d ($rate%.2f%%)"
+                    )
                 }
 
                 formatUtilWithThroughput("Fetcher", fetcher, countFetcher)
                 formatSubUtil("Stall-Buffer", fetcherStallBuffer)
-                
+
                 formatUtilWithThroughput("Decoder", decoder, countDecoder)
                 formatSubUtil("Stall-Dispatch", decoderStallDispatch)
 
-                formatUtilWithThroughput("Dispatcher", dispatcher, countDispatcher)
+                formatUtilWithThroughput(
+                  "Dispatcher",
+                  dispatcher,
+                  countDispatcher
+                )
                 formatSubUtil("Stall-FreeList", dispatcherStallFreeList)
                 formatSubUtil("Stall-ROB", dispatcherStallROB)
                 formatSubUtil("Stall-Issue", dispatcherStallIssue)
@@ -432,20 +465,31 @@ object E2EUtils {
                 formatUtil("Issue-ALU", issueALU)
                 formatSubUtil("Stall-Operands", issueALUStallOperands)
                 formatSubUtil("Stall-Port", issueALUStallPort)
-                val avgWaitALU = if(countIssueALU > 0) waitDepALU.toDouble / countIssueALU.toDouble else 0.0
+                val avgWaitALU =
+                    if (countIssueALU > 0)
+                        waitDepALU.toDouble / countIssueALU.toDouble
+                    else 0.0
                 println(f"    Avg Dep Latency   : $avgWaitALU%.2f cycles/instr")
 
                 formatUtil("Issue-BRU", issueBRU)
                 formatSubUtil("Stall-Operands", issueBRUStallOperands)
                 formatSubUtil("Stall-Port", issueBRUStallPort)
-                val avgWaitBRU = if(countIssueBRU > 0) waitDepBRU.toDouble / countIssueBRU.toDouble else 0.0
+                val avgWaitBRU =
+                    if (countIssueBRU > 0)
+                        waitDepBRU.toDouble / countIssueBRU.toDouble
+                    else 0.0
                 println(f"    Avg Dep Latency   : $avgWaitBRU%.2f cycles/instr")
 
                 formatUtil("Issue-Mult", issueMult)
                 formatSubUtil("Stall-Operands", issueMultStallOperands)
                 formatSubUtil("Stall-Port", issueMultStallPort)
-                val avgWaitMult = if(countIssueMult > 0) waitDepMult.toDouble / countIssueMult.toDouble else 0.0
-                println(f"    Avg Dep Latency   : $avgWaitMult%.2f cycles/instr")
+                val avgWaitMult =
+                    if (countIssueMult > 0)
+                        waitDepMult.toDouble / countIssueMult.toDouble
+                    else 0.0
+                println(
+                  f"    Avg Dep Latency   : $avgWaitMult%.2f cycles/instr"
+                )
 
                 formatUtil("ALU", alu)
                 formatUtil("BRU", bru)
@@ -458,33 +502,67 @@ object E2EUtils {
 
                 println(f"Average Queue/Buffer Depth:")
                 // Fetch Depth
-                val fetchD = if(cycle > 0) p.fetchQueueDepth.get.peek().litValue.toDouble / cycle.toDouble else 0.0
+                val fetchD =
+                    if (cycle > 0)
+                        p.fetchQueueDepth.get
+                            .peek()
+                            .litValue
+                            .toDouble / cycle.toDouble
+                    else 0.0
                 println(f"  Fetch Queue : $fetchD%.2f")
 
                 // Issue ALU Depth
-                val issueALUD = if(cycle > 0) p.issueALUDepth.get.peek().litValue.toDouble / cycle.toDouble else 0.0
-                val issueBRUD = if(cycle > 0) p.issueBRUDepth.get.peek().litValue.toDouble / cycle.toDouble else 0.0
-                val issueMultD = if(cycle > 0) p.issueMultDepth.get.peek().litValue.toDouble / cycle.toDouble else 0.0
+                val issueALUD =
+                    if (cycle > 0)
+                        p.issueALUDepth.get
+                            .peek()
+                            .litValue
+                            .toDouble / cycle.toDouble
+                    else 0.0
+                val issueBRUD =
+                    if (cycle > 0)
+                        p.issueBRUDepth.get
+                            .peek()
+                            .litValue
+                            .toDouble / cycle.toDouble
+                    else 0.0
+                val issueMultD =
+                    if (cycle > 0)
+                        p.issueMultDepth.get
+                            .peek()
+                            .litValue
+                            .toDouble / cycle.toDouble
+                    else 0.0
                 println(f"  Issue ALU   : $issueALUD%.2f")
                 println(f"  Issue BRU   : $issueBRUD%.2f")
                 println(f"  Issue Mult  : $issueMultD%.2f")
 
                 // LSU Depth
-                val lsuD = if(cycle > 0) p.lsuQueueDepth.get.peek().litValue.toDouble / cycle.toDouble else 0.0
+                val lsuD =
+                    if (cycle > 0)
+                        p.lsuQueueDepth.get
+                            .peek()
+                            .litValue
+                            .toDouble / cycle.toDouble
+                    else 0.0
                 println(f"  LSU Buffer  : $lsuD%.2f")
 
                 // ROB Depth
-                val robD = if(cycle > 0) p.robDepth.get.peek().litValue.toDouble / cycle.toDouble else 0.0
+                val robD =
+                    if (cycle > 0)
+                        p.robDepth.get.peek().litValue.toDouble / cycle.toDouble
+                    else 0.0
                 println(f"  ROB         : $robD%.2f")
-                
+
                 println(f"Speculation Stats:")
                 val retired = p.totalInstructions.get.peek().litValue
-                val dispatched = countDispatcher // Use Dispatch count as proxy for total speculative dispatched
-                val squashed = if(dispatched > retired) dispatched - retired else 0
+                val dispatched =
+                    countDispatcher // Use Dispatch count as proxy for total speculative dispatched
+                val squashed =
+                    if (dispatched > retired) dispatched - retired else 0
                 println(f"  Total Dispatched    : $dispatched")
                 println(f"  Total Retired       : $retired")
                 println(f"  Squashed Instructions: $squashed")
-
 
                 formatUtil("Writeback", writeback)
                 formatUtil("ROB-Commit", rob)

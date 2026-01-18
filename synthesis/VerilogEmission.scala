@@ -42,7 +42,7 @@ object VerilogEmission {
 
         val firtoolOpts = Array(
           "-disable-all-randomization",
-          "-preserve-values=named",  // Preserves signal names for timing reports [web:1][web:9]
+          "-preserve-values=named", // Preserves signal names for timing reports [web:1][web:9]
           // "-strip-debug-info",    // Removed to allow debugging
           "--repl-seq-mem",
           "--repl-seq-mem-file=mems.conf"

@@ -204,7 +204,7 @@ class BoomCoreProfileBundle extends Bundle {
     val busyALU = optfield(Utilization, UInt(32.W))
     val busyBRU = optfield(Utilization, UInt(32.W))
     val busyMult = optfield(Utilization, UInt(32.W))
-    
+
     val busyLSU = optfield(Utilization, UInt(32.W))
     val lsuStallCommit = optfield(Utilization, UInt(32.W))
 
