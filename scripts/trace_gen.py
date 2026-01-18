@@ -51,7 +51,7 @@ def compile_c(c_file, output_elf):
 
     cmd = [
         GCC,
-        "-march=rv32i",
+        "-march=rv32im",
         "-mabi=ilp32",
         "-O0",
         "-ffreestanding",
