@@ -76,11 +76,11 @@ class StoreQueue(entries: Int) extends CycleAwareModule with QueueControlLogic {
         e.broadcasted := false.B
         buffer(tail) := e
         onEnqueue()
-        printf(p"[SQ] Enqueue: robTag=${e.robTag} addrTag=${e.addrPreg} addrReady=${e.addrReady} dataPreg=${e.dataPreg} dataReady=${e.dataReady}\n")
+        printf(p"[SQ] Enqueue: robTag=${e.robTag} addrTag=${e.addrPreg} addrReady=${e.addrReady} addrD=${e.addrVal} dataPreg=${e.dataPreg} dataReady=${e.dataReady} dataD=${e.dataVal}\n")
     }
 
     // CDB Broadcast Handling
-    when(io.broadcastIn.valid) {
+    when(io.broadcastIn.valid && io.broadcastIn.bits.writeEn) {
         val tag = io.broadcastIn.bits.pdst
         val value = io.broadcastIn.bits.data
         

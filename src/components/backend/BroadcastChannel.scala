@@ -34,10 +34,16 @@ class BroadcastChannel extends CycleAwareModule {
     arbiter.io.out.ready := true.B
 
     when(
-      Configurables.Elaboration.printOnBroadcast.B && io.broadcastOut.valid && io.broadcastOut.bits.pdst =/= 0.U
+      Configurables.Elaboration.printOnBroadcast.B && io.broadcastOut.valid
     ) {
-        printf(
-          p"CDB: pdst=${io.broadcastOut.bits.pdst} data=0x${Hexadecimal(io.broadcastOut.bits.data)}\n"
-        )
+        when(io.broadcastOut.bits.writeEn){
+          printf(
+            p"CDB: rob=${io.broadcastOut.bits.robTag} pdst=${io.broadcastOut.bits.pdst} data=0x${Hexadecimal(io.broadcastOut.bits.data)}\n"
+          )
+        }.otherwise{
+          printf(
+            p"CDB: rob=${io.broadcastOut.bits.robTag} (no write)\n"
+          )
+        }
     }
 }

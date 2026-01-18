@@ -78,13 +78,13 @@ class LoadStoreAdaptor extends CycleAwareModule {
     src1Data := io.prfRead.data1
     src2Data := io.prfRead.data2
 
-    when(io.broadcastIn.valid) {
+    when(io.broadcastIn.valid && io.broadcastIn.bits.writeEn) {
         val bcastTag = io.broadcastIn.bits.pdst
-        when(io.issueIn.bits.src1 === bcastTag) {
+        when(io.issueIn.bits.src1 === bcastTag && !io.issueIn.bits.src1Ready) {
             src1Ready := true.B
             src1Data := io.broadcastIn.bits.data
         }
-        when(io.issueIn.bits.src2 === bcastTag) {
+        when(io.issueIn.bits.src2 === bcastTag && !io.issueIn.bits.src2Ready) {
             src2Ready := true.B
             src2Data := io.broadcastIn.bits.data
         }

@@ -86,7 +86,7 @@ class LoadBuffer(numEntriesLQ: Int, numEntriesSQ: Int)
         for (i <- 0 until numEntriesLQ) {
             when(valids(i)) {
                 // Address ready
-                when(buffer(i).addrPreg === b.pdst) {
+                when(buffer(i).addrPreg === b.pdst && !buffer(i).addrReady && io.broadcastIn.bits.writeEn) {
                     buffer(i).addrReady := true.B
                     buffer(i).addrVal := b.data
                 }
