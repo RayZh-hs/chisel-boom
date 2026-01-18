@@ -272,6 +272,13 @@ class LoadBuffer(numEntriesLQ: Int, numEntriesSQ: Int)
         killMask(i) := valids(i) && io.flush.checkKilled(buffer(i).robTag)
     }
     when(io.flush.valid) {
+        //for (i <- 0 until numEntriesLQ) {
+        //    when(valids(i) && buffer(i).sleeping && io.flush.checkKilled(buffer(i).wakeTag)) {
+        //        buffer(i).sleeping := false.B
+        //    }
+        //}
+        // Not needed since wakeTag can only be from older stores
+        // So if it is killed, the load itself is also killed
         onFlush(killMask)
     }
 

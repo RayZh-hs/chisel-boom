@@ -119,7 +119,7 @@ class StoreQueue(entries: Int) extends CycleAwareModule with QueueControlLogic {
     // Broadcast & Commit
     val readyMask = Wire(Vec(numEntries, Bool()))
     for(i <- 0 until numEntries){
-        when(buffer(i).robTag === io.robHead) {
+        when(valids(i) && buffer(i).robTag === io.robHead && buffer(i).broadcasted && !buffer(i).committed) {
             buffer(i).committed := true.B
         }
         readyMask(i) := valids(i) && buffer(i).addrComputed && buffer(i).dataReady && !buffer(i).broadcasted

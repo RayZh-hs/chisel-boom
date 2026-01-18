@@ -66,14 +66,19 @@ class ReOrderBuffer extends CycleAwareModule {
     val tailPrev2 = prevPtr2(tail)
     val tailNext = nextPtr(tail)
 
+    val ptrMatch = head === tail
+    val isFull = ptrMatch && maybeFull
+    val isEmpty = ptrMatch && !maybeFull
+    val currentCount = Mux(isFull, entries.U, Mux(tail >= head, tail - head, entries.U + tail - head))
+
     val isRollingBack = RegInit(false.B)
     val targetTail = Reg(UInt(ROB_WIDTH.W))
 
     val rollbackDone = tail === targetTail
 
     val canPop2 =
-        isRollingBack && (tail =/= targetTail) && (tailPrev =/= targetTail)
-    val canPop1 = isRollingBack && !rollbackDone && !canPop2
+        isRollingBack && (tail =/= targetTail) && (tailPrev =/= targetTail) && currentCount >= 2.U
+    val canPop1 = isRollingBack && !rollbackDone && !canPop2 && !isEmpty
     val doPopTail = canPop1 || canPop2
 
     when(isRollingBack && rollbackDone) {
@@ -83,10 +88,6 @@ class ReOrderBuffer extends CycleAwareModule {
         isRollingBack := true.B
         targetTail := nextPtr(io.brUpdate.bits.robTag)
     }
-
-    val ptrMatch = head === tail
-    val isFull = ptrMatch && maybeFull
-    val isEmpty = ptrMatch && !maybeFull
 
     io.count.foreach { c =>
         c := Mux(
