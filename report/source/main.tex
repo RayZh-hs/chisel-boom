@@ -52,7 +52,7 @@
 
 \section{Overview}
 
-In the past month we have implemented, as the course project of Computer Architecture, a fully out-of-order RISC-V CPU named Boom Lite\footnote{The source code is available at \url{https://github.com/RayZh-hs/chisel-boom/}}.
+In the past month we have implemented, as the course project of Computer Architecture, a fully out-of-order RISC-V CPU named Boom Lite\footnote{The source code is available at \url{https://github.com/RayZh-hs/chisel-boom/}.}.
 
 The CPU's architecture is inspired by the Berkeley Out-of-Order Machine (BOOM)\cite{Celio:EECS-2015-167}, though we made considerable simplifications and modifications to the original design to fit our time constraints. The final result is a CPU with more than 10 stages that accomplishes:
 
@@ -152,11 +152,32 @@ Nothing is stored in the issue buffer itself but is directly passed on the the f
 
 All functional units broadcast results to the CDB, which is responsible for writing back to the Physical Register. It adopts a round robin arbitration scheme among functional units.
 
-Commit is done asynchronously, the same in standard BOOM Design\footnote{An overview of standard BOOM architecture can be found here: \url{https://docs.boom-core.org/en/latest/sections/intro-overview/boom-pipeline.html}}. When a store instruction is committed, in the in-order memory version of Boom Lite, the Committer alerts the front of the Memory Unit to perform the memory write. We will discuss the OoO memory design in the next subsection.
+Commit is done asynchronously, the same in standard BOOM Design\footnote{An overview of standard BOOM architecture can be found here: \url{https://docs.boom-core.org/en/latest/sections/intro-overview/boom-pipeline.html}.}. When a store instruction is committed, in the in-order memory version of Boom Lite, the Committer alerts the front of the Memory Unit to perform the memory write. We will discuss the OoO memory design in the next subsection.
 
 \subsubsection{Out-of-Order Memory Access}
 
-% TODO: LSQ Information
+\begin{figure*}[h!]
+	\centering
+	\includegraphics[width=\textwidth]{figures/ooo-memory.png}
+	\caption{OoO Memory Access Diagram}
+	\label{fig:lsq}
+\end{figure*}
+
+This is an experimental design refactor that has not yet been merged into the main branch. View it on the \texttt{feature/lsq} branch\footnote{\url{https://github.com/RayZh-hs/chisel-boom/tree/feature/lsq}.}.
+
+Our Load Store Queue implements partial out-of-order execution and features store-to-load forwarding. It consists of a Load Queue and a Store Queue, connected via the Load Store Adaptor.
+
+The Store Queue functions as a circular buffer following a Reservation Station style. Unlike other issue buffers, it captures and stores data upon broadcast. The Address Generation Unit (AGU) within the SQ calculates the effective address once the base is ready to facilitate store-to-load forwarding. A store is marked ready to commit when both address and data are available. It is first broadcast to the ROB for commit; once the ROB confirms the commit, the store is sent to the DCache.
+
+The Load Queue is a non-ordered Reservation Station style buffer that issues loads speculatively. Upon enqueue, it records the current Store Queue tail to track program order.
+
+Every cycle, the unit selects a ready load and checks for collisions against prior stores. Data bypassing is performed, in the process of which memory overlap issues are resolved.
+
+\subsubsection{Memory Mapped I/O}
+
+Our design fully employs MMIO to handle peripheral interactions. The stable release supports the \texttt{Exit} and \texttt{Put} devices, while a new \texttt{Get} device has been added in the \texttt{feature/mmio} branch\footnote{\url{https://github.com/RayZh-hs/chisel-boom/tree/feature/mmio}. This branch is spawned from \texttt{feature/lsq}.}.
+
+Before making their way into DCache and therefore DRAM, memory accesses are checked against the MMIO address map, and those in the target range are sent to the MMIO Router. The router then dispatches the requests to the corresponding device modules, returning data to the CPU if necessary.
 
 \pagebreak
 \bibliographystyle{plain}
