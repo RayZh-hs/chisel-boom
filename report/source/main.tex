@@ -24,7 +24,6 @@
 \usepackage{xcolor}
 \usepackage{hyperref}
 
-
 \input{structure.tex} % Include the file specifying the document structure and custom commands
 
 %----------------------------------------------------------------------------------------
@@ -55,7 +54,7 @@
 
 In the past month we have implemented, as the course project of Computer Architecture, a fully out-of-order RISC-V CPU named Boom Lite\footnote{The source code is available at \url{https://github.com/RayZh-hs/chisel-boom/}}.
 
-The CPU's architecture is inspired by the Berkeley Out-of-Order Machine (BOOM)\cite{Celio:EECS-2015-167}, though we made considerable simplifications to the original design to fit our time constraints. The final result is a CPU that that accomplishes:
+The CPU's architecture is inspired by the Berkeley Out-of-Order Machine (BOOM)\cite{Celio:EECS-2015-167}, though we made considerable simplifications and modifications to the original design to fit our time constraints. The final result is a CPU with more than 10 stages that accomplishes:
 
 \begin{enumerate}
 	\item Full support for the RV32I instruction set, including \texttt{JAL}, \texttt{JALR}, and bit-masked memory access.
@@ -71,6 +70,29 @@ The CPU is written in Chisel, and has been synthesized to Verilog using Chisel's
 \section{Design Details}
 
 
+\section{Architecture}
+
+\subsection{Frontend Design}
+
+\begin{figure*}[h!]
+	\centering
+	\includegraphics[width=\textwidth]{figures/frontend.png}
+	\caption{Boom Lite Frontend Diagram}
+	\label{fig:frontend}
+\end{figure*}
+
+The frontend of Boom Lite consists of 5 stages, as shown in Figure \ref{fig:frontend}. The Fetch stage spans two cycles, the first of which fetches the instruction from ICache as well as consult the low-latency BTB for branch prediction. The second Fetch Stage gathers the fetched instruction and BTB feedback. If BTB predicts a taken branch, the PC is updated and the next-cycle fetch result will be killed.
+
+The instruction is then passed on to RAS (Return Address Stack) Adaptor and the Decoder simultaneously. The Decoder simply performs combinational logic to retrieve fields from the instruction. The RAS Adaptor picks out \texttt{JAL} and \texttt{JALR} instructions, and takes action on the RAS.
+According to common ABI patterns, \texttt{CALL} and \texttt{RET} commands are speculated and the RAS modified thus. The component produces surprisingly sound prediction results, as was discovered in the profiling phase. If the predicted destination conflicts with BTB predictions, the former is disregarded and the frontend before the decoder flushed. The results from the two components are merged in the PDP (Pre-Dispatch Plexer), and the PC, Decoded Bundle, Predicted Target and RAS Stack Pointer are passed on to Rename \& Dispatch phases.
+
+The Rename phase consults the Free List for currently available physical registers and updates the Map Table (i.e. RAT, the Register Alias Table) accordingly, producing physical register indices for source and destination registers as well as documenting the stale pdst. The renamer also tracks the ROB ID for each instruction (which is deterministic since ROB is in-order enqueued).
+
+The result is piped into a selective router known as the Dispatch Router, routing instructions to various Issue Buffers according to their types. We will cover the four issue buffers in the Backend Design section.
+
+It is worth noting that the PC is \textbf{not} stored in the ROB. In fact, unless routed to the Branch Unit, the PC is discarded after the Dispatch phase. This design choice makes our ROB and normal issue buffers extremely small and efficient, having no need to pass around 32-bit information around.
+
+\pagebreak
 \bibliographystyle{plain}
 \bibliography{references}
 

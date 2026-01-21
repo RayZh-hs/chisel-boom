@@ -66,16 +66,45 @@
 
 \usepackage{fourier-otf} % Use the Adobe Utopia font for the document
 
+\usepackage{caption}
+\DeclareCaptionFont{lmss}{\fontfamily{lmss}\selectfont}
+
+\captionsetup{
+  	font={small,lmss},
+  	labelfont={small,lmss}
+}
+
 %----------------------------------------------------------------------------------------
-%	SECTION TITLES
+%	SECTION TITLES (KOMA-Script)
 %----------------------------------------------------------------------------------------
 
-\usepackage{sectsty} % Allows customising section commands
+% Section titles: centered, small caps
+\setkomafont{section}{
+  	\LARGE\centering\normalfont\scshape
+}
 
-\sectionfont{\vspace{6pt}\centering\normalfont\scshape} % \section{} styling
-\subsectionfont{\normalfont\bfseries} % \subsection{} styling
-\subsubsectionfont{\normalfont\itshape} % \subsubsection{} styling
-\paragraphfont{\normalfont\scshape} % \paragraph{} styling
+% Subsection titles: normal font
+% Subsection titles: bold
+\setkomafont{subsection}{
+  	\Large\normalfont\bfseries
+}
+
+% Subsubsection titles: italic
+\setkomafont{subsubsection}{
+    \normalfont\itshape
+}
+
+% Paragraph titles: small caps
+\setkomafont{paragraph}{
+    \normalfont\scshape
+}
+
+% Spacing before section titles (replaces \vspace hack)
+\RedeclareSectionCommand[
+    afterskip=2.5ex
+]{section}
+
+\setparsizes{0pt}{0.75\baselineskip}{\parfillskip}
 
 %----------------------------------------------------------------------------------------
 %	HEADERS AND FOOTERS
