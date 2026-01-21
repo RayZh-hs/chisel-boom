@@ -94,7 +94,7 @@ class Cache(conf: CacheConfig) extends Module {
 
     val isReplay = (state === sReplayRead)
     val read_index = Mux(isReplay, reg_index, port_index)
-    val read_enable = (state === sIdle && io.port.valid) || isReplay
+    val read_enable = (io.port.valid && io.port.ready) || isReplay
 
     // Single Read Calls
     val tagRead = tags.read(read_index, read_enable)
@@ -112,7 +112,11 @@ class Cache(conf: CacheConfig) extends Module {
     tags_wdata := DontCare
 
     // Logic
-    io.port.ready := (state === sIdle)
+    val hitAndRead = Wire(Bool())
+    val reqFire = io.port.valid && io.port.ready
+    hitAndRead := false.B
+
+    io.port.ready := (state === sIdle) || hitAndRead
 
     when(io.port.valid && io.port.ready) {
         reqReg.addr := io.port.addr
@@ -165,7 +169,10 @@ class Cache(conf: CacheConfig) extends Module {
                   dataRead(aligned_offset.asUInt)
                 )
                 io.port.respValid := true.B
-                state := sIdle
+                when(!reqFire){
+                    state := sIdle
+                }
+                hitAndRead := true.B
             }
         }.otherwise {
             val dirty = tagRead.dirty && tagRead.valid
