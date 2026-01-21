@@ -180,6 +180,175 @@ Our design fully employs MMIO to handle peripheral interactions. The stable rele
 Before making their way into DCache and therefore DRAM, memory accesses are checked against the MMIO address map, and those in the target range are sent to the MMIO Router. The router then dispatches the requests to the corresponding device modules, returning data to the CPU if necessary.
 
 \pagebreak
+\section{Performance}
+
+We tested Boom Lite on a suite of benchmarks, among which are CPU Simulator Testcases from PPCA. An overview of the performance is shown below\footnote{Benchmarked on stable commit \texttt{d27697ced3bfbb90460d24d4375a2dbd9fc8dbca}. All optimizations except OoO memory access applied.}.
+
+\begin{table}[h!]
+    \centering
+    % Load required package in preamble: \usepackage{multirow}
+    \renewcommand{\arraystretch}{1.3} % Adds vertical breathing room
+    \setlength{\tabcolsep}{12pt}      % Adds horizontal breathing room
+    
+    \begin{tabular}{|c|l|r|}
+        \hline
+        \textbf{Category} & \textbf{Metric} & \textbf{Value} \\
+        \hline
+        \hline
+        % Block 1: 3 Rows
+        \multirow{3}{*}{Branch Prediction} 
+          & Total Branches & 1,015,143 \\
+          & Total Mispredictions & 98,814 \\
+          & \textbf{Misprediction Rate} & \textbf{9.73\%} \\
+        \hline
+        % Block 2: 3 Rows (Avg IPC is the last item here)
+        \multirow{3}{*}{IPC \& Timing} 
+          & Total Instructions & 5,466,223 \\
+          & Total Cycles & 14,414,332 \\
+          & \textbf{Average IPC} & \textbf{0.7010} \\
+        \hline
+        % Block 3: 6 Rows (Includes Rollback Time based on your image)
+        \multirow{6}{*}{Queue Depths (Avg)} 
+          & Fetch Queue & 1.15 \\
+          & Issue ALU & 4.19 \\
+          & Issue BRU & 2.48 \\
+          & LSU Buffer & 5.23 \\
+          & ROB & 21.94 \\
+          & Avg. Rollback Time & 13.26 cycles \\
+        \hline
+        % Block 4: 4 Rows
+        \multirow{4}{*}{Speculation} 
+          & Total Dispatched & 7,850,082 \\
+          & Squashed Instr. & 2,383,859 \\
+          & Writeback Rate & 39.99\% \\
+          & ROB Commit Rate & 37.92\% \\
+        \hline
+    \end{tabular}
+    \caption{General Performance Statistics}
+    \label{tab:perf-stats}
+\end{table}
+
+Note that the average IPC is calculated as the average number of IPC instead of the ratio of total instructions to total cycles. The few testcases with the most cycles tend to have abnormally low IPC, skewing the overall ratio, and dominating the instruction count. In fact, we observed that the average of per-cycle IPC is around 0.7010, while the overall ratio is only 0.3792, whereas only 2 testcases have IPC below 0.4.
+
+Branch Prediction results outperform our expectations. The addition of the RAS significantly reduced mispredictions, resulting in a drop from 14.83\% to 9.73\%. We believe that by introducing a global/local history predictor, the rate can be further reduced to around 5\%.
+
+We think the overall performance is acceptable for a single-issue OoO CPU, although the IPC can still be improved. In order to identify the bottleneck, we profiled the stages of the pipeline, and the results are shown below.
+
+\begin{table}[h!]
+    \centering
+    % Increase padding for a cleaner look with vertical lines
+    \renewcommand{\arraystretch}{1.2}
+    \setlength{\tabcolsep}{8pt}
+
+    \begin{tabular}{|l|l|r|r|}
+        \hline
+        \textbf{Pipeline Stage} & \textbf{Event / Stall Reason} & \textbf{Count / Cycles} & \textbf{Utilization} \\
+        \hline
+        \hline
+        \textbf{Fetcher} & \textit{Total Active} & 14,415,034 & 100.00\% \\
+        & Stall: Buffer & 4,215,922 & 29.25\% \\
+        \hline
+        \textbf{Decoder} & \textit{Total Active} & 12,233,822 & 84.87\% \\
+        & Stall: Dispatch & 4,548,627 & 31.55\% \\
+        \hline
+        \textbf{Dispatcher} & \textit{Total Active} & 7,850,082 & 54.46\% \\
+        & Stall: FreeList & 1,557,644 & 10.81\% \\
+        & Stall: ROB & 1,095,108 & 7.60\% \\
+        & Stall: Issue & 1,831,193 & 12.70\% \\
+        \hline
+        \textbf{Issue-ALU} & \textit{Total Active} & 1,782,905 & 12.37\% \\
+        & Stall: Operands & 7,610,318 & 52.79\% \\
+        \hline
+        \textbf{Issue-BRU} & \textit{Total Active} & 1,016,658 & 7.05\% \\
+        & Stall: Operands & 8,787,193 & 60.96\% \\
+        \hline
+        \textbf{Issue-Mult} & \textit{Total Active} & 606 & 0.00\% \\
+        & Stall: Operands & 37,285 & 0.26\% \\
+        \hline
+        \textbf{LSU (Memory)} & \textit{Total Active} & 9,331,346 & 64.73\% \\
+        & Stall: Commit & 666,588 & 4.62\% \\
+        \hline
+        \textbf{ROB Commit} & \textit{Total Active} & 5,466,223 & 37.92\% \\
+        \hline
+    \end{tabular}
+    \caption{Pipeline stage utilization and stall analysis}
+    \label{tab:stage-util}
+\end{table}
+
+After identifying that memory operations are the bottleneck for some testcases, we implemented the OoO memory access design described in the Architecture section. In addition, we applied several optimizations, which we will further discuss in the next major section. Several memory-intensive benchmarks, including the Matrix Multiplication testcase, saw significant IPC improvements.
+
+\subsubsection{Matrix Multiplication}
+
+\begin{table}[h!]
+	\centering
+	\renewcommand{\arraystretch}{1.2}
+	\setlength{\tabcolsep}{10pt}
+	\begin{tabular}{|c|l|r|}
+		\hline
+		\textbf{Category} & \textbf{Metric} & \textbf{Value} \\
+		\hline
+		\hline
+		% Branch Prediction
+		Branch Prediction & Misprediction Rate & 10.46\% \\
+		\hline
+		% IPC & Timing
+		IPC \& Timing & {IPC} & {0.5396} \\
+		\hline
+		% Queue Depths
+		\multirow{5}{*}{Queue Depths (Avg)} 
+		  & Fetch Queue & 1.38 \\
+		  & Issue ALU & 1.44 \\
+		  & Issue BRU & 0.09 \\
+		  & LSU Buffer & 5.43 \\
+		  & ROB & 7.41 \\
+		\hline
+	\end{tabular}
+	\caption{Matrix Multiplication: General Performance Statistics}
+	\label{tab:matmul-perf}
+\end{table}
+
+Matrix Multiplication is a highly memory-intensive benchmark, involving tight-looped loads and stores. With the OoO memory access design and optimizations applied, we observed a significant IPC improvement from 0.3722 to 0.5396.
+
+\subsubsection{Add to 100}
+
+\begin{table}[h!]
+	\centering
+	\renewcommand{\arraystretch}{1.2}
+	\setlength{\tabcolsep}{10pt}
+	\begin{tabular}{|c|l|r|}
+		\hline
+		\textbf{Category} & \textbf{Metric} & \textbf{Value} \\
+		\hline
+		\hline
+		% Branch Prediction
+		Branch Prediction & Misprediction Rate & 2.73\% \\
+		\hline
+		% IPC & Timing
+		IPC \& Timing & {IPC} & {0.5566} \\
+		\hline
+		% Queue Depths
+		\multirow{5}{*}{Queue Depths (Avg)} 
+		  & Fetch Queue & 1.20 \\
+		  & Issue ALU & 0.44 \\
+		  & Issue BRU & 0.17 \\
+		  & LSU Buffer & 5.89 \\
+		  & ROB & 4.28 \\
+		\hline
+	\end{tabular}
+	\caption{Add to 100: General Performance Statistics}
+	\label{tab:add100-perf}
+\end{table}
+
+Add to 100 is a simple benchmark that sums numbers from 1 to 100. It is not memory-intensive, and the overall performance exceeds that of Matrix Multiplication.
+
+Note that the branch misprediction rate is significantly lower here since a simple BTB suffices for the large-constant loop structure.
+
+\pagebreak
+\section{Optimization}
+
+Throughout the development of Boom Lite, we have applied several optimizations to improve performance and efficiency. Some succeeded whereas others did not yield expected results. Below is a summary of some notable ones we have tried.
+
+\pagebreak
 \bibliographystyle{plain}
 \bibliography{references}
 
