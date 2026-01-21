@@ -103,3 +103,16 @@ object MemOpWidth extends ChiselEnum {
 object RegBusyStatus extends ChiselEnum {
     val free, busy, ready = Value
 }
+
+object MDUFunc {
+    // Multiplication
+    val MUL = 0.U(3.W)
+    val MULH = 1.U(3.W)
+    val MULHSU = 2.U(3.W)
+    val MULHU = 3.U(3.W)
+    // Division / Remainder
+    val DIV = 4.U(3.W)
+    val DIVU = 5.U(3.W)
+    val REM = 6.U(3.W)
+    val REMU = 7.U(3.W)
+}

@@ -48,7 +48,12 @@ class DispatchRouter extends Module {
     }
 
     val queue = Module(
-      new Queue(new DispatcherQueueEntry, entries = 2, pipe = false, flow = false)
+      new Queue(
+        new DispatcherQueueEntry,
+        entries = 2,
+        pipe = false,
+        flow = false
+      )
     )
 
     // Wiring Input -> Queue
@@ -57,7 +62,7 @@ class DispatchRouter extends Module {
     queue.io.enq.bits.rasSP := io.instInput.bits.rasSP
     queue.io.enq.bits.robTag := io.robTagIn
     io.instInput.ready := queue.io.enq.ready
-    
+
     // Reset queue on flush
     queue.reset := reset.asBool || io.flush
 

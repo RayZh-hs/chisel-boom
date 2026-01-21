@@ -29,10 +29,7 @@ object RunHexDump extends App {
     }
 
     val normalizedPath =
-        if (
-          try { isByteAligned(hexFile) }
-          catch { case _: Throwable => false }
-        ) {
+        if (isByteAligned(hexFile)) {
             println(
               s"Hex file $hexFile is byte-aligned. Converting to word-aligned format."
             )
@@ -59,10 +56,11 @@ object RunHexDump extends App {
 
     def isByteAligned(path: Path): Boolean = {
         val lines = Files.readAllLines(path)
-        // Grab first non-empty line starting with hex digits
-        val hexDigits = "[0-9a-fA-F]+".r
+        // Grab first non-empty line not starting with # or @
         val firstHexLine = lines.asScala.collectFirst {
-            case line: String if hexDigits.findFirstIn(line).isDefined => line
+            case line: String if line.trim.nonEmpty && !line
+                .startsWith("#") && !line.startsWith("@") =>
+                line
         }
         firstHexLine match {
             case Some(line: String) =>

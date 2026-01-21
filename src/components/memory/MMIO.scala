@@ -71,14 +71,15 @@ trait MMIOInterface {
 
 class PrintDevice extends CycleAwareModule with MMIOInterface {
     val debugOut = IO(Decoupled(UInt(32.W)))
+    val stopPrinting = IO(Input(Bool()))
 
     // A large enough queue to buffer output
     // The testbench should drain this frequently enough
-    val queue = Module(new Queue(UInt(32.W), 256))
+    val queue = Module(new Queue(UInt(32.W), 4096))
     chisel3.assert(queue.io.enq.ready, "PrintDevice queue is full!")
     val write = io.req.valid && !io.req.bits.isLoad
 
-    queue.io.enq.valid := write
+    queue.io.enq.valid := write && !stopPrinting
     queue.io.enq.bits := io.req.bits.data
 
     // Connect to output
@@ -90,9 +91,11 @@ class PrintDevice extends CycleAwareModule with MMIOInterface {
 
 class ExitDevice extends CycleAwareModule with MMIOInterface {
     val exitOut = IO(Output(Valid(UInt(32.W))))
+    val stopPrinting = IO(Output(Bool()))
 
     val stopping = RegInit(false.B)
     val exitCode = Reg(UInt(32.W))
+    stopPrinting := stopping
 
     exitOut.valid := stopping
     exitOut.bits := exitCode

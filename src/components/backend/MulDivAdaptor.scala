@@ -40,27 +40,27 @@ class MulDivAdaptor extends Module {
 
     // Stage 1: Issue Logic & Operand Fetch
     fetch.io.issueIn <> io.issueIn
-    io.prfRead       <> fetch.io.prfRead
-    fetch.io.flush   := io.flush
+    io.prfRead <> fetch.io.prfRead
+    fetch.io.flush := io.flush
 
     val s1Valid = fetch.io.out.valid
-    val s1Info  = fetch.io.out.bits.info
-    val s1Op1   = fetch.io.out.bits.op1
-    val s1Op2   = fetch.io.out.bits.op2
+    val s1Info = fetch.io.out.bits.info
+    val s1Op1 = fetch.io.out.bits.op1
+    val s1Op2 = fetch.io.out.bits.op2
 
     // Stage 2: Mul / Div Execution
-    mult.io.req.valid   := s1Valid
+    mult.io.req.valid := s1Valid
     mult.io.req.bits.fn := s1Info.info.multOp.asUInt
-    mult.io.req.bits.a  := s1Op1
-    mult.io.req.bits.b  := s1Op2
+    mult.io.req.bits.a := s1Op1
+    mult.io.req.bits.b := s1Op2
 
     val dispatchFire = s1Valid && mult.io.req.ready && !s2_valid
     fetch.io.out.ready := mult.io.req.ready && !s2_valid
 
     when(dispatchFire) {
-        s2_valid  := true.B 
-        s2_pdst   := s1Info.pdst
-        s2_rob    := s1Info.robTag
+        s2_valid := true.B
+        s2_pdst := s1Info.pdst
+        s2_rob := s1Info.robTag
         s2_killed := false.B
     }
 
