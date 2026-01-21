@@ -67,9 +67,6 @@ The CPU's architecture is inspired by the Berkeley Out-of-Order Machine (BOOM)\c
 
 The CPU is written in Chisel, and has been synthesized to Verilog using Chisel's built-in FIRRTL compiler. The CPU achieved a clock frequency of over 517MHz on ASAP7 Demo, occupying under 15,000 um$^2$ of area.
 
-\section{Design Details}
-
-
 \section{Architecture}
 
 \subsection{Frontend Design}
@@ -81,16 +78,85 @@ The CPU is written in Chisel, and has been synthesized to Verilog using Chisel's
 	\label{fig:frontend}
 \end{figure*}
 
-The frontend of Boom Lite consists of 5 stages, as shown in Figure \ref{fig:frontend}. The Fetch stage spans two cycles, the first of which fetches the instruction from ICache as well as consult the low-latency BTB for branch prediction. The second Fetch Stage gathers the fetched instruction and BTB feedback. If BTB predicts a taken branch, the PC is updated and the next-cycle fetch result will be killed.
+The frontend of Boom Lite consists of 5 stages, as is shown in Figure \ref{fig:frontend}. We will provide a brief overview of the stages below.
+
+\subsubsection{Instruction Fetch}
+
+The Fetch stage spans two cycles, the first of which fetches the instruction from ICache as well as consult the low-latency BTB for branch prediction. The second Fetch Stage gathers the fetched instruction and BTB feedback. If BTB predicts a taken branch, the PC is updated and the next-cycle fetch result will be killed.
+
+\subsubsection{RAS \& Instruction Decode}
 
 The instruction is then passed on to RAS (Return Address Stack) Adaptor and the Decoder simultaneously. The Decoder simply performs combinational logic to retrieve fields from the instruction. The RAS Adaptor picks out \texttt{JAL} and \texttt{JALR} instructions, and takes action on the RAS.
 According to common ABI patterns, \texttt{CALL} and \texttt{RET} commands are speculated and the RAS modified thus. The component produces surprisingly sound prediction results, as was discovered in the profiling phase. If the predicted destination conflicts with BTB predictions, the former is disregarded and the frontend before the decoder flushed. The results from the two components are merged in the PDP (Pre-Dispatch Plexer), and the PC, Decoded Bundle, Predicted Target and RAS Stack Pointer are passed on to Rename \& Dispatch phases.
+
+\subsubsection{Rename \& Dispatch}
 
 The Rename phase consults the Free List for currently available physical registers and updates the Map Table (i.e. RAT, the Register Alias Table) accordingly, producing physical register indices for source and destination registers as well as documenting the stale pdst. The renamer also tracks the ROB ID for each instruction (which is deterministic since ROB is in-order enqueued).
 
 The result is piped into a selective router known as the Dispatch Router, routing instructions to various Issue Buffers according to their types. We will cover the four issue buffers in the Backend Design section.
 
 It is worth noting that the PC is \textbf{not} stored in the ROB. In fact, unless routed to the Branch Unit, the PC is discarded after the Dispatch phase. This design choice makes our ROB and normal issue buffers extremely small and efficient, having no need to pass around 32-bit information around.
+
+\subsubsection{Notes on Branch Prediction}
+
+As is mentioned above, the RAS stack pointer is passed down to the Dispatcher. This pointer is only passed to the Branch Unit, which, on misprediction recovery, will flag the old stack pointer to be restored. This will not eliminate the possibility of RAS being modified between the mispredicted branch and the recovery, but since it is speculative the approach is acceptable. We referenced various sources on the design and recovery of RAS\cite{desmet2005correct}\cite{skadron1998improving} before agreeing on this design.
+
+Note that there are three cycles between Fetch Stage 1 and Decode, both sides included. This gives time for a full-fledged Global History Lookup Predictor to be implemented, and reusing the wiring of the plexer, but we had not yet implemented it. Had we done so the frontend would have resembled closely to a full TAGE predictor, which is the pattern adopted in BOOM.
+
+\pagebreak
+\subsection{Backend Design}
+
+\begin{figure*}[h!]
+	\centering
+	\includegraphics[width=\textwidth]{figures/backend.png}
+	\caption{Boom Lite Backend Diagram}
+	\label{fig:backend}
+\end{figure*}
+
+The backend of Boom Lite follows a fairly standard out-of-order architecture, as is shown in Figure \ref{fig:backend}.
+
+\subsubsection{The Re-Order Buffer}
+
+In our Boom Lite design, the ROB is a circular buffer whose entries have minimal information.
+
+% Code Block
+\begin{verbatim}
+class ROBEntry extends Bundle {
+    val ldst = UInt(5.W)
+    val pdst = UInt(PREG_WIDTH.W)
+    val stalePdst = UInt(PREG_WIDTH.W)
+    val isStore = Bool()
+    val ready = Bool()
+}
+\end{verbatim}
+
+Considering that there should be around 64 Physical Registers, the entire entry only takes up 19 bits, making it extremely area-efficient.
+
+On misprediction, the ROB rolls back 2 entries at a time, comparing entries it contains with the mispredicted branch's ROB ID. Note that since everything is decoupled, all other units are still functional, alleviating the performance penalty.
+
+\subsubsection{Issue Buffers \& Functional Pipelines}
+
+There are four issue buffers in Boom Lite, each catering to different instruction types.
+
+\begin{enumerate}
+	\item \textbf{ALU (Arithmetic Logic Unit) Pipeline}: Handles RV32I arithmetic and logic instructions. Functional units have a 1-cycle latency.
+	\item \textbf{MDU (Multiply Divide Unit) Pipeline}: Handles RV32M multiplication and division instructions. Multiplication is done using a Wallace tree multiplier, taking 3 cycles. Division is done using a restoring division algorithm where two bits are produced per cycle, taking 16 cycles in total.
+	\item \textbf{BRU (Branch Unit)}: Handles all branch instructions. Similar to ALU, the functional unit has a 1-cycle latency. The unit signals misprediction on sight to the Misprediction Line, triggering flush and ROB rollback.
+	\item \textbf{LSU (Load Store Unit) Pipeline}: This unit has been replaced later with LSQ (Load Store Queue) to support OoO memory access. It controls all memory access instructions.
+\end{enumerate}
+
+Before the execution of every instruction by the functional unit, all Issue Buffers share a common Data extraction trait which reads data from the Physical Register File.
+Nothing is stored in the issue buffer itself but is directly passed on the the functional unit for processing.
+
+\subsubsection{Broadcasting \& Commit}
+
+All functional units broadcast results to the CDB, which is responsible for writing back to the Physical Register. It adopts a round robin arbitration scheme among functional units.
+
+Commit is done asynchronously, the same in standard BOOM Design\footnote{An overview of standard BOOM architecture can be found here: \url{https://docs.boom-core.org/en/latest/sections/intro-overview/boom-pipeline.html}}. When a store instruction is committed, in the in-order memory version of Boom Lite, the Committer alerts the front of the Memory Unit to perform the memory write. We will discuss the OoO memory design in the next subsection.
+
+\subsubsection{Out-of-Order Memory Access}
+
+% TODO: LSQ Information
 
 \pagebreak
 \bibliographystyle{plain}

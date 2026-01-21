@@ -21,8 +21,6 @@
 
 \usepackage{amsmath, amsfonts, amsthm} % Math packages
 
-\usepackage{listings} % Code listings, with syntax highlighting
-
 \usepackage[english]{babel} % English language hyphenation
 
 \usepackage{graphicx} % Required for inserting images
@@ -36,7 +34,7 @@
 
 \setlength\parindent{0pt} % Removes all indentation from paragraphs
 
-\usepackage{enumitem} % Required for list customisation
+\usepackage{enumitem} % Required for list customization
 \setlist{noitemsep} % No spacing between list items
 
 %----------------------------------------------------------------------------------------
@@ -103,6 +101,13 @@
 \RedeclareSectionCommand[
     afterskip=2.5ex
 ]{section}
+\RedeclareSectionCommand[
+    afterskip=1ex
+]{subsection}
+\RedeclareSectionCommand[
+  beforeskip=1.5ex,
+  afterskip=0.2ex
+]{subsubsection}
 
 \setparsizes{0pt}{0.75\baselineskip}{\parfillskip}
 
