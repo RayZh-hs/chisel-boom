@@ -1,0 +1,75 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Wenneker Assignment
+% LaTeX Template
+% Version 2.0 (12/1/2019)
+%
+% This template originates from:
+% http://www.LaTeXTemplates.com
+%
+% Authors:
+% Vel (vel@LaTeXTemplates.com)
+% Frits Wenneker
+%
+% License:
+% CC BY-NC-SA 3.0 (http://creativecommons.org/licenses/by-nc-sa/3.0/)
+% 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%----------------------------------------------------------------------------------------
+%	PACKAGES AND OTHER DOCUMENT CONFIGURATIONS
+%----------------------------------------------------------------------------------------
+
+\documentclass[12pt]{scrartcl} % Font size
+
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+
+\input{structure.tex} % Include the file specifying the document structure and custom commands
+
+%----------------------------------------------------------------------------------------
+%	TITLE SECTION
+%----------------------------------------------------------------------------------------
+
+\title{	
+	\normalfont\normalsize
+	\textsc{Shanghai Jiao Tong University}\\
+	\vspace{25pt}
+	\rule{\linewidth}{0.5pt}\\ % Thin top horizontal rule
+	\vspace{20pt}
+	{\huge Boom Lite CPU Report}\\ % The assignment title
+	\vspace{12pt}
+	\rule{\linewidth}{2pt}\\ % Thick bottom horizontal rule
+	\vspace{12pt}
+}
+
+\author{Ruihang Zhang \quad Yuetian Wang}
+
+\date{\normalsize\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Overview}
+
+In the past year we have implemented, as the course project of Computer Architecture, a fully out-of-order RISC-V CPU named Boom Lite\footnote{The source code is available at \url{https://github.com/RayZh-hs/chisel-boom/}}.
+
+The CPU's architecture is inspired by the Berkeley Out-of-Order Machine (BOOM)\cite{Celio:EECS-2015-167}, though we made considerable simplifications to the original design to fit our time constraints. The final result is a CPU that that accomplishes:
+
+\begin{enumerate}
+	\item Full support for the RV32I instruction set, including \texttt{JAL}, \texttt{JALR}, and bit-masked memory access.
+	\item Full support for the M extension, using Wallace tree multipliers and restoring division algorithms.
+	\item Unified memory system based on DRAM, along with ICache and DCache support.
+	\item Multi-hierarchy branch predictor, combining a two-bit saturating BTB and a RAS-based predictor.
+	\item RAT-based OoO implementation to cut down on data movements.
+	\item Partial OoO memory access as well as MMIO IO support.
+\end{enumerate}
+
+The CPU is written in Chisel, and has been synthesized to Verilog using Chisel's built-in FIRRTL compiler. The CPU achieved a clock frequency of over 517MHz on ASAP7 Demo, occupying under 15,000 um$^2$ of area.
+We will detail on how we optimized the design to minimize area in the following sections.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
