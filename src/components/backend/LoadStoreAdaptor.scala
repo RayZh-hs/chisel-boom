@@ -303,7 +303,7 @@ class LoadWritebackBuffer(entries: Int) extends Module {
     val willFreeSlot = io.deq.ready && !empty
     
     // Note: We maintain the original constraint that we don't enqueue during a flush
-    io.enq.ready := (hasFree || willFreeSlot) && !io.flush.valid 
+    io.enq.ready := hasFree || willFreeSlot
 
     // Select Write Destination:
     // If we have free slots, pick the lowest one.
