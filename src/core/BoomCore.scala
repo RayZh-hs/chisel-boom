@@ -355,7 +355,6 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     // extend exitDevice.exitOut.valid to exited
     val exitSignal = RegInit(false.B)
     exitSignal := exitDevice.exitOut.valid || exitSignal
-    println("is any enabled: " + isAnyEnabled)
     if (isAnyEnabled) {
         BoringUtils.addSource(exitSignal, "exited")
     }
