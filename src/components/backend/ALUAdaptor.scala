@@ -30,12 +30,12 @@ class ALUAdaptor extends Module {
     io.prfRead <> fetch.io.prfRead
     fetch.io.flush := io.flush
 
-    // --- Stage 3: Writeback/Broadcast Registers ---
+    // Stage 3: Writeback/Broadcast Registers
     val s3Valid = RegInit(false.B)
     val s3Bits = Reg(new IssueBufferEntry(new ALUInfo))
     val s3Result = Reg(UInt(32.W))
 
-    // --- Pipeline Control ---
+    // Pipeline Control
     // The Fetch stage output (S2) acts as the input to the ALU.
     // The ALU is combinational, results are latched into S3.
     val s3Ready = io.broadcastOut.ready || !s3Valid
@@ -43,9 +43,6 @@ class ALUAdaptor extends Module {
     // We signal the fetch stage to proceed if S3 can accept data
     fetch.io.out.ready := s3Ready
 
-    // --- ALU Execution Logic (Technically Stage 2) ---
-    // The fetch stage provides latched operands.
-    // If the instruction uses an immediate, we mux it here.
     val s2Info = fetch.io.out.bits.info
     val op1 = fetch.io.out.bits.op1
     val op2 = Mux(s2Info.useImm, s2Info.imm, fetch.io.out.bits.op2)
@@ -54,7 +51,6 @@ class ALUAdaptor extends Module {
     alu.io.inB := op2
     alu.io.aluOp := s2Info.info.aluOp
 
-    // --- Stage 3 Transition ---
     when(s3Ready) {
         val flushS2 = io.flush.checkKilled(s2Info.robTag)
 
@@ -66,13 +62,13 @@ class ALUAdaptor extends Module {
         s3Valid := false.B
     }
 
-    // --- Broadcast Output ---
+    // Handle Broadcast Output
     io.broadcastOut.valid := s3Valid && !io.flush.checkKilled(s3Bits.robTag)
     io.broadcastOut.bits.pdst := s3Bits.pdst
     io.broadcastOut.bits.robTag := s3Bits.robTag
     io.broadcastOut.bits.data := s3Result
     io.broadcastOut.bits.writeEn := true.B
 
-    // --- Busy Signal ---
+    // Handle Busy Signal
     io.busy.foreach(_ := fetch.io.busy || s3Valid)
 }
