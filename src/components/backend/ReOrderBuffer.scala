@@ -5,6 +5,7 @@ import chisel3.util._
 import common._
 import common.Configurables._
 import utility.CycleAwareModule
+import utility.ExitAwarenessProfiling
 
 class ROBEntry extends Bundle {
     val ldst = UInt(5.W)
@@ -30,7 +31,7 @@ class ROBEntry extends Bundle {
   *   rollback up to 2 entries per cycle to handle branch mispredictions more
   *   efficiently.
   */
-class ReOrderBuffer extends CycleAwareModule {
+class ReOrderBuffer extends CycleAwareModule with ExitAwarenessProfiling {
     val io = IO(new Bundle {
         val dispatch = Flipped(Decoupled(new DispatchToROBBundle))
         val broadcastInput = Flipped(Decoupled(new BroadcastBundle))
@@ -89,14 +90,6 @@ class ReOrderBuffer extends CycleAwareModule {
         targetTail := nextPtr(io.brUpdate.bits.robTag)
     }
 
-    io.count.foreach { c =>
-        c := Mux(
-          isFull,
-          entries.U,
-          Mux(tail >= head, tail - head, entries.U + tail - head)
-        )
-    }
-
     val doEnq = io.dispatch.fire && !isRollingBack
     val doDeq = io.commit.fire
 
@@ -146,8 +139,6 @@ class ReOrderBuffer extends CycleAwareModule {
     io.rollback(1).bits.pdst := entryToRollback2.pdst
     io.rollback(1).bits.stalePdst := entryToRollback2.stalePdst
 
-    io.isRollingBack.foreach(_ := isRollingBack)
-
     // Commit
     val headEntry = robRam(head)
     // We can commit if: Not empty AND ready AND (not rolling back OR hasn't reached the bad instructions)
@@ -192,5 +183,15 @@ class ReOrderBuffer extends CycleAwareModule {
               p"ROB: Mispredict detected at tag=${io.brUpdate.bits.robTag}\n"
             )
         }
+    }
+
+    // Profiling
+    io.isRollingBack.foreach(_ := isRollingBack && !exited)
+    io.count.foreach { c =>
+        c := Mux(
+          isFull,
+          entries.U,
+          Mux(tail >= head, tail - head, entries.U + tail - head)
+        )
     }
 }

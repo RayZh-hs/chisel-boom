@@ -10,6 +10,7 @@ import components.structures._
 import components.memory._
 import common._
 import common.Configurables._
+import common.Configurables.Profiling.isAnyEnabled
 
 /** Boom Core
   *
@@ -351,10 +352,19 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
     }
 
     // # Debug & Profiling
+    // extend exitDevice.exitOut.valid to exited
+    val exitSignal = RegInit(false.B)
+    exitSignal := exitDevice.exitOut.valid || exitSignal
+    println("is any enabled: " + isAnyEnabled)
+    if (isAnyEnabled) {
+        BoringUtils.addSource(exitSignal, "exited")
+    }
+    dontTouch(exitSignal)
     if (Configurables.Profiling.branchMispredictionRate) {
         val totalBranches = WireInit(0.U(32.W))
         val totalMispredicts = WireInit(0.U(32.W))
 
+        // Fixed in unit: Accept only when not exited
         BoringUtils.addSink(totalBranches, "total_branches")
         BoringUtils.addSink(totalMispredicts, "branch_mispredictions")
         io.profiler.totalBranches.get := totalBranches
@@ -368,10 +378,12 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         val instructionCount = RegInit(0.U(64.W))
         val cycleCount = RegInit(0.U(64.W))
 
-        when(rob.io.commit.valid && rob.io.commit.ready) {
-            instructionCount := instructionCount + 1.U
+        when (!exitSignal) {
+            when(rob.io.commit.valid && rob.io.commit.ready) {
+                instructionCount := instructionCount + 1.U
+            }
+            cycleCount := cycleCount + 1.U
         }
-        cycleCount := cycleCount + 1.U
 
         io.profiler.totalInstructions.get := instructionCount
         io.profiler.totalCycles.get := cycleCount
@@ -463,84 +475,86 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         val waitDepMultSum = RegInit(0.U(64.W))
 
         // Counter Updates
-        when(fetcher.io.ifOut.fire) { countFetcherSum := countFetcherSum + 1.U }
-        when(decoder.io.out.fire) { countDecoderSum := countDecoderSum + 1.U }
-        when(dispatcher.io.instOutput.fire) {
-            countDispatcherSum := countDispatcherSum + 1.U
-        }
-        when(aluIB.io.out.fire) { countIssueALUSum := countIssueALUSum + 1.U }
-        when(bruIB.io.out.fire) { countIssueBRUSum := countIssueBRUSum + 1.U }
-        when(multIB.io.out.fire) {
-            countIssueMultSum := countIssueMultSum + 1.U
-        }
-        // LSU entry: dispatch fires to LSQ
-        when(lsAdaptor.io.issueIn.fire) { countLSUSum := countLSUSum + 1.U }
-        when(bc.io.broadcastOut.valid) {
-            countWritebackSum := countWritebackSum + 1.U
-        }
+        when(!exitSignal) {
+            when(fetcher.io.ifOut.fire) { countFetcherSum := countFetcherSum + 1.U }
+            when(decoder.io.out.fire) { countDecoderSum := countDecoderSum + 1.U }
+            when(dispatcher.io.instOutput.fire) {
+                countDispatcherSum := countDispatcherSum + 1.U
+            }
+            when(aluIB.io.out.fire) { countIssueALUSum := countIssueALUSum + 1.U }
+            when(bruIB.io.out.fire) { countIssueBRUSum := countIssueBRUSum + 1.U }
+            when(multIB.io.out.fire) {
+                countIssueMultSum := countIssueMultSum + 1.U
+            }
+            // LSU entry: dispatch fires to LSQ
+            when(lsAdaptor.io.issueIn.fire) { countLSUSum := countLSUSum + 1.U }
+            when(bc.io.broadcastOut.valid) {
+                countWritebackSum := countWritebackSum + 1.U
+            }
 
-        waitDepALUSum := waitDepALUSum + aluIB.io.waitDepCount.get
-        waitDepBRUSum := waitDepBRUSum + bruIB.io.waitDepCount.get
-        waitDepMultSum := waitDepMultSum + multIB.io.waitDepCount.get
+            waitDepALUSum := waitDepALUSum + aluIB.io.waitDepCount.get
+            waitDepBRUSum := waitDepBRUSum + bruIB.io.waitDepCount.get
+            waitDepMultSum := waitDepMultSum + multIB.io.waitDepCount.get
 
-        when(fetcherBusy) { fetcherBusyCount := fetcherBusyCount + 1.U }
-        when(decoderBusy) { decoderBusyCount := decoderBusyCount + 1.U }
-        when(dispatcherBusy) {
-            dispatcherBusyCount := dispatcherBusyCount + 1.U
-        }
-        when(issueALUBusy) { issueALUBusyCount := issueALUBusyCount + 1.U }
-        when(issueBRUBusy) { issueBRUBusyCount := issueBRUBusyCount + 1.U }
-        when(issueMultBusy) { issueMultBusyCount := issueMultBusyCount + 1.U }
-        when(aluBusy) { aluBusyCount := aluBusyCount + 1.U }
-        when(bruBusy) { bruBusyCount := bruBusyCount + 1.U }
-        when(multBusy) { multBusyCount := multBusyCount + 1.U }
-        when(lsuBusy) { lsuBusyCount := lsuBusyCount + 1.U }
-        when(writebackBusy) { writebackBusyCount := writebackBusyCount + 1.U }
-        when(robBusy) { robBusyCount := robBusyCount + 1.U }
+            when(fetcherBusy) { fetcherBusyCount := fetcherBusyCount + 1.U }
+            when(decoderBusy) { decoderBusyCount := decoderBusyCount + 1.U }
+            when(dispatcherBusy) {
+                dispatcherBusyCount := dispatcherBusyCount + 1.U
+            }
+            when(issueALUBusy) { issueALUBusyCount := issueALUBusyCount + 1.U }
+            when(issueBRUBusy) { issueBRUBusyCount := issueBRUBusyCount + 1.U }
+            when(issueMultBusy) { issueMultBusyCount := issueMultBusyCount + 1.U }
+            when(aluBusy) { aluBusyCount := aluBusyCount + 1.U }
+            when(bruBusy) { bruBusyCount := bruBusyCount + 1.U }
+            when(multBusy) { multBusyCount := multBusyCount + 1.U }
+            when(lsuBusy) { lsuBusyCount := lsuBusyCount + 1.U }
+            when(writebackBusy) { writebackBusyCount := writebackBusyCount + 1.U }
+            when(robBusy) { robBusyCount := robBusyCount + 1.U }
 
-        when(fetcherStallBuffer) {
-            fetcherStallBufferCount := fetcherStallBufferCount + 1.U
-        }
-        when(decoderStallDispatch) {
-            decoderStallDispatchCount := decoderStallDispatchCount + 1.U
-        }
-        when(dispatcherStallFreeList) {
-            dispatcherStallFreeListCount := dispatcherStallFreeListCount + 1.U
-        }
-        when(dispatcherStallROB) {
-            dispatcherStallROBCount := dispatcherStallROBCount + 1.U
-        }
-        when(dispatcherStallIssue) {
-            dispatcherStallIssueCount := dispatcherStallIssueCount + 1.U
-        }
-        when(issueALUStallOperands) {
-            issueALUStallOperandsCount := issueALUStallOperandsCount + 1.U
-        }
-        when(issueALUStallPort) {
-            issueALUStallPortCount := issueALUStallPortCount + 1.U
-        }
-        when(issueBRUStallOperands) {
-            issueBRUStallOperandsCount := issueBRUStallOperandsCount + 1.U
-        }
-        when(issueBRUStallPort) {
-            issueBRUStallPortCount := issueBRUStallPortCount + 1.U
-        }
-        when(issueMultStallOperands) {
-            issueMultStallOperandsCount := issueMultStallOperandsCount + 1.U
-        }
-        when(issueMultStallPort) {
-            issueMultStallPortCount := issueMultStallPortCount + 1.U
-        }
-        when(lsuStallCommit) {
-            lsuStallCommitCount := lsuStallCommitCount + 1.U
-        }
+            when(fetcherStallBuffer) {
+                fetcherStallBufferCount := fetcherStallBufferCount + 1.U
+            }
+            when(decoderStallDispatch) {
+                decoderStallDispatchCount := decoderStallDispatchCount + 1.U
+            }
+            when(dispatcherStallFreeList) {
+                dispatcherStallFreeListCount := dispatcherStallFreeListCount + 1.U
+            }
+            when(dispatcherStallROB) {
+                dispatcherStallROBCount := dispatcherStallROBCount + 1.U
+            }
+            when(dispatcherStallIssue) {
+                dispatcherStallIssueCount := dispatcherStallIssueCount + 1.U
+            }
+            when(issueALUStallOperands) {
+                issueALUStallOperandsCount := issueALUStallOperandsCount + 1.U
+            }
+            when(issueALUStallPort) {
+                issueALUStallPortCount := issueALUStallPortCount + 1.U
+            }
+            when(issueBRUStallOperands) {
+                issueBRUStallOperandsCount := issueBRUStallOperandsCount + 1.U
+            }
+            when(issueBRUStallPort) {
+                issueBRUStallPortCount := issueBRUStallPortCount + 1.U
+            }
+            when(issueMultStallOperands) {
+                issueMultStallOperandsCount := issueMultStallOperandsCount + 1.U
+            }
+            when(issueMultStallPort) {
+                issueMultStallPortCount := issueMultStallPortCount + 1.U
+            }
+            when(lsuStallCommit) {
+                lsuStallCommitCount := lsuStallCommitCount + 1.U
+            }
 
-        fetchQueueDepthSum := fetchQueueDepthSum + fetchQueueDepth
-        issueALUDepthSum := issueALUDepthSum + issueALUDepth
-        issueBRUDepthSum := issueBRUDepthSum + issueBRUDepth
-        issueMultDepthSum := issueMultDepthSum + issueMultDepth
-        lsuQueueDepthSum := lsuQueueDepthSum + lsuQueueDepth
-        robDepthSum := robDepthSum + robDepth
+            fetchQueueDepthSum := fetchQueueDepthSum + fetchQueueDepth
+            issueALUDepthSum := issueALUDepthSum + issueALUDepth
+            issueBRUDepthSum := issueBRUDepthSum + issueBRUDepth
+            issueMultDepthSum := issueMultDepthSum + issueMultDepth
+            lsuQueueDepthSum := lsuQueueDepthSum + lsuQueueDepth
+            robDepthSum := robDepthSum + robDepth
+        }
 
         io.profiler.busyFetcher.get := fetcherBusyCount
         io.profiler.busyDecoder.get := decoderBusyCount
@@ -606,8 +620,8 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         val rollbackEvents = RegInit(0.U(32.W))
         val rollbackCycles = RegInit(0.U(32.W))
 
-        when(mispredict) { rollbackEvents := rollbackEvents + 1.U }
-        when(rob.io.isRollingBack.get) {
+        when(mispredict && !exitSignal) { rollbackEvents := rollbackEvents + 1.U }
+        when(rob.io.isRollingBack.get && !exitSignal) {
             rollbackCycles := rollbackCycles + 1.U
         }
 
@@ -625,14 +639,16 @@ class BoomCore(val hexFile: String) extends CycleAwareModule {
         val icacheMisses = RegInit(0.U(64.W))
         val dramAccesses = RegInit(0.U(64.W))
 
-        when(memory.io.cacheEvents.hit) { dcacheHits := dcacheHits + 1.U }
-        when(memory.io.cacheEvents.miss) { dcacheMisses := dcacheMisses + 1.U }
-        when(icache.io.events.hit) { icacheHits := icacheHits + 1.U }
-        when(icache.io.events.miss) { icacheMisses := icacheMisses + 1.U }
-        when(dramArb.io.out.valid && dramArb.io.out.ready) {
-            dramAccesses := dramAccesses + 1.U
+        when (!exitSignal) {
+            when(memory.io.cacheEvents.hit) { dcacheHits := dcacheHits + 1.U }
+            when(memory.io.cacheEvents.miss) { dcacheMisses := dcacheMisses + 1.U }
+            when(icache.io.events.hit) { icacheHits := icacheHits + 1.U }
+            when(icache.io.events.miss) { icacheMisses := icacheMisses + 1.U }
+            when(dramArb.io.out.valid && dramArb.io.out.ready) {
+                dramAccesses := dramAccesses + 1.U
+            }
         }
-
+        
         io.profiler.dcacheHits.get := dcacheHits
         io.profiler.dcacheMisses.get := dcacheMisses
         io.profiler.icacheHits.get := icacheHits

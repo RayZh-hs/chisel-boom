@@ -8,12 +8,13 @@ import components.structures.BranchUnit
 import components.structures.{BRUInfo, IssueBufferEntry}
 import utility.CycleAwareModule
 import chisel3.util.experimental.BoringUtils
+import utility.ExitAwarenessProfiling
 
 /** BRU Adaptor
   *
   * Bridges an Issue Buffer to the Branch Unit execution unit.
   */
-class BRUAdaptor extends CycleAwareModule {
+class BRUAdaptor extends CycleAwareModule with ExitAwarenessProfiling {
     val io = IO(new Bundle {
         val issueIn = Flipped(Decoupled(new IssueBufferEntry(new BRUInfo)))
         val broadcastOut = Decoupled(new BroadcastBundle)
@@ -113,7 +114,7 @@ class BRUAdaptor extends CycleAwareModule {
         val totalBranchCounter = RegInit(0.U(32.W))
         val mispredictCounter = RegInit(0.U(32.W))
 
-        when(io.brUpdate.valid) {
+        when(io.brUpdate.valid && !exited) {
             totalBranchCounter := totalBranchCounter + 1.U
             when(io.brUpdate.mispredict) {
                 mispredictCounter := mispredictCounter + 1.U
