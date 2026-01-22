@@ -438,7 +438,7 @@ Introducing a 2-bit saturating counter for each BTB entry improved the accuracy 
 
 \subsection{Cache}
 
-After migrating to unified DRAM, read and write has become more expensive when they cover consecutive bytes. Adding a cache revived the project to nearly the performance from before the DRAM refactor.
+After migrating to unified DRAM, read and write has become more expensive when they cover consecutive bytes. The DRAM + Cache system does not improve performance in the simulation since all the memory accesses are 1-cycle only in the simulator, but in real-world scenarios the cache would greatly reduce memory access latency. In sight of this, we only verified the correctness of the cache system without further optimizations.
 
 \subsection{Load Store Queues}
 
