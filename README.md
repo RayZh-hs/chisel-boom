@@ -8,8 +8,8 @@
 
 <div align="center">
 
-[![Scala](https://img.shields.io/badge/Scala-2.13.12-red)](https://www.scala-lang.org/)
-[![Chisel](https://img.shields.io/badge/Chisel-6.5.0-blue)](https://www.chisel-lang.org/)
+[![Scala](https://img.shields.io/badge/Scala-2.13.18-red)](https://www.scala-lang.org/)
+[![Chisel](https://img.shields.io/badge/Chisel-7.6.0-blue)](https://www.chisel-lang.org/)
 [![CI](https://github.com/RayZh-hs/chisel-boom/actions/workflows/ci.yml/badge.svg)](https://github.com/RayZh-hs/chisel-boom/actions/workflows/ci.yml)
 
 </div>
